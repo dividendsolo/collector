@@ -91,8 +91,8 @@
   .picks label:hover { background: var(--hover); }
   .picks input { accent-color: var(--blue); margin-top: 3px; }
   .picks .desc { color: var(--faint); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-  td a.plain { color: inherit; text-decoration: none; }
-  td a.plain:hover { color: var(--blue-2); }
+  a.plain { color: inherit; text-decoration: none; }
+  a.plain:hover { color: var(--blue-2); }
   .health { list-style: none; margin: 0; padding: 0; }
   .health li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--line); }
   .health li:first-child { border-top: 0; }
@@ -147,6 +147,26 @@
   th, td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
   th { font-size: 12px; font-weight: 400; color: var(--faint); background: var(--panel-2); }
   td.wide { white-space: normal; min-width: 220px; }
+  /* Projects: a full-page table that wraps inside its cells instead of scrolling sideways. */
+  table.fit th, table.fit td { white-space: normal; padding: 9px 10px; }
+  table.fit th:first-child, table.fit td:first-child { padding-left: 16px; }
+  table.fit th:last-child, table.fit td:last-child { padding-right: 16px; }
+  table.fit .pill { white-space: nowrap; }
+  table.fit .desc { max-width: 320px; }
+  /* Phones: Project, Status, and Health only; the project page has the rest. */
+  @media (max-width: 700px) {
+    table.fit tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)), table.fit .desc { display: none; }
+  }
+  table.fit tr.row { cursor: pointer; }
+  table.fit tr.row:hover td { background: var(--hover); }
+  table.fit .chev { width: 12px; height: 12px; margin-left: 6px; color: var(--faint); vertical-align: -1px; opacity: 0; transition: opacity .12s ease; }
+  table.fit tr.row:hover .chev { opacity: 1; }
+  .crumbs { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .crumbs a { color: inherit; text-decoration: none; }
+  .crumbs a:hover { color: var(--text); }
+  .facts { display: flex; flex-wrap: wrap; gap: 12px 40px; margin: 0; padding: 14px 16px; }
+  .facts dt { font-size: 12px; color: var(--faint); }
+  .facts dd { margin: 2px 0 0; }
   tbody tr:last-child td { border-bottom: 0; }
   tbody tr:hover td { background: var(--hover); }
   tr.off td { color: var(--faint); }
@@ -202,6 +222,7 @@
   <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
   <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 3v18l2-1.5L9 21l2-1.5 2 1.5 2-1.5 2 1.5 2-1.5V3l-2 1.5L15 3l-2 1.5L11 3 9 4.5 7 3z"/><path d="M9 9h6M9 13h6"/></symbol>
   <symbol id="i-brief" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
   <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 17a9 9 0 1 1 17.4 0"/></symbol>
 </svg>
 <div class="app">
@@ -287,15 +308,15 @@
       </section>
       </div>
       <div class="page" data-page="projects" hidden>
-      <div class="page-head"><h1>Projects</h1><p>Each repo you chose: its live site, last push, open work, and CI.</p></div>
+      <div class="page-head"><h1>Projects</h1><p>Each repo you chose and its live site. Open a project for its own page.</p></div>
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-layers"/></svg><h2>Projects</h2><span class="count" id="proj-count">0</span>
           <span class="sub" id="proj-at"></span>
           <div class="tools"><button class="btn" id="pick-open">Choose repos</button></div></div>
         <div class="wrap">
-          <table>
+          <table class="fit">
             <thead><tr>
-              <th>Project</th><th>Live</th><th>Last push</th><th class="num">Issues</th><th class="num">PRs</th><th>CI</th><th>Agent now</th>
+              <th>Project</th><th>Repo</th><th>Type</th><th>Status</th><th>Hosting</th><th>URL</th><th>Health</th>
             </tr></thead>
             <tbody id="projects"></tbody>
           </table>
@@ -307,6 +328,12 @@
             <button class="btn ghost" id="pick-cancel">Cancel</button><button class="btn primary" id="pick-save">Save</button></div></div>
         <ul class="picks" id="picks"><li class="sub">Loading repos from GitHub…</li></ul>
       </section>
+      </div>
+      <div class="page" data-page="project" hidden>
+      <div class="page-head"><div class="crumbs"><a href="#/projects">&larr; All projects</a></div><h1 id="proj-title">Project</h1><p id="proj-desc"></p></div>
+      <section class="panel"><dl class="facts" id="proj-facts"></dl></section>
+      <div class="tiles" id="proj-tiles"></div>
+      <section class="panel"><div class="soon"><b>Monthly spend, revenue, and users come next.</b><span>Each project's own numbers will live on this page.</span></div></section>
       </div>
       <div class="page" data-page="domains" hidden>
       <div class="page-head"><h1>Domains</h1><p>Each domain, its registrar, and when it expires.</p></div>
@@ -348,7 +375,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function ago(iso) {
   if (!iso) return "—";
-  const s = Math.round((Date.now() - new Date(iso)) / 1000);
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
   if (s < 60) return `${s} s ago`;
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
@@ -518,17 +545,27 @@ async function checkServices() {
 
 // Projects: the repos chosen in the picker, with details from the GitHub REST API (refreshed every 5 min on the server).
 let projectData = null;
+let currentRepo = null;  // the repo of the open project page, if any
 let lastServices = [];
-// A project's live site: its GitHub homepage, or else the service whose name matches the repo name (zero-phase = ZeroPhase).
-const flat = (x) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+// A project's live site comes from the server (p.live); its status pill comes from the last service check.
 function liveSite(p) {
-  const svc = lastServices.find((x) => (p.homepage && x.url.replace(/\/$/, "") === p.homepage.replace(/\/$/, "")) || flat(x.name) === flat(p.name));
-  return { url: (svc && svc.url) || p.homepage || "", svc };
+  const url = p.live || p.homepage || "";
+  const svc = lastServices.find((x) => x.url.replace(/\/$/, "") === url.replace(/\/$/, ""));
+  return { url, svc };
 }
 const ciLabel = (c) => !c ? ["", "—"] : c.status !== "completed" ? ["agent", "Running"]
   : c.conclusion === "success" ? ["ok", "Passing"] : c.conclusion === "failure" ? ["failed", "Failing"] : ["warning", c.conclusion || "—"];
+// Production: the project has a live site. Development: no live site yet. Archived: the repo is archived.
+function projectStatus(p, live) {
+  const [cls, word] = p.archived ? ["", "Archived"] : live.url ? ["ok", "Production"] : ["warning", "Development"];
+  // Text only: the dot belongs to Health, which is live.
+  return cls === "warning" ? `<span class="pill warning">${word}</span>` : word;
+}
+// Lets a long name break after each separator (dividendsolo/<wbr>abide) instead of widening the table.
+const wrapAt = (text, sep) => text.split(sep).map(esc).join(`${sep}<wbr>`);
 function renderProjects() {
   if (!projectData) return;
+  renderProject();
   const list = projectData.projects;
   document.getElementById("proj-count").textContent = list.length;
   document.getElementById("proj-at").textContent = projectData.at ? `read ${ago(new Date(projectData.at * 1000))}` : "";
@@ -538,18 +575,52 @@ function renderProjects() {
     const [cls, word] = ciLabel(p.ci);
     const agents = runningIn(p.name);
     const live = liveSite(p);
-    return `<tr>
-      <td class="wide"><a class="plain" href="${esc(p.url)}" target="_blank" rel="noopener"><b>${esc(p.name)}</b></a>${p.private ? ` <span class="sub">private</span>` : ""}
-        ${p.description ? `<div class="sub">${esc(p.description)}</div>` : ""}</td>
-      <td>${live.url ? `<a class="plain" href="${esc(live.url)}" target="_blank" rel="noopener">${esc(live.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : `<span class="sub">—</span>`}
-        ${live.svc ? `<span class="pill ${svcLabel[live.svc.status][0]}"><span class="dot"></span>${svcLabel[live.svc.status][1]}</span>` : ""}</td>
-      <td class="sub">${ago(p.pushed_at)}</td>
-      <td class="num mono"><a class="plain" href="${esc(p.url)}/issues" target="_blank" rel="noopener">${p.issues}</a></td>
-      <td class="num mono"><a class="plain" href="${esc(p.url)}/pulls" target="_blank" rel="noopener">${p.prs}</a></td>
-      <td>${p.ci ? `<a class="plain" href="${esc(p.ci.url)}" target="_blank" rel="noopener" title="${esc(p.ci.name)}"><span class="pill ${cls}"><span class="dot"></span>${word}</span></a>` : `<span class="sub">—</span>`}</td>
-      <td>${agents.length ? agents.map((r) => `<span class="pill agent">#${r.card} ${esc(r.kind)}</span>`).join(" ") : `<span class="sub">—</span>`}</td>
+    return `<tr class="row" data-repo="${esc(p.repo)}">
+      <td><a class="plain name" href="#/projects/${esc(p.repo)}"><b>${esc(p.title || p.name)}</b></a><svg class="i chev"><use href="#i-chev"/></svg>${p.description ? `<div class="sub desc">${esc(p.description)}</div>` : ""}</td>
+      <td><a class="plain mono" href="${esc(p.url)}" target="_blank" rel="noopener">${wrapAt(p.repo, "/")}</a></td>
+      <td>${p.private ? "Private" : "Public"}</td>
+      <td>${projectStatus(p, live)}</td>
+      <td>${(live.svc && live.svc.hosting) || p.hosting ? esc((live.svc && live.svc.hosting) || p.hosting) : live.url ? "Self-hosted" : `<span class="sub">—</span>`}</td>
+      <td>${live.url ? `<a class="plain" href="${esc(live.url)}" target="_blank" rel="noopener">${wrapAt(live.url.replace(/^https?:\/\//, "").replace(/\/$/, ""), ".")}</a>` : `<span class="sub">—</span>`}
+</td>
+      <td>${live.svc ? `<span class="pill ${svcLabel[live.svc.status][0]}"><span class="dot"></span>${svcLabel[live.svc.status][1]}</span>` : `<span class="sub">—</span>`}</td>
     </tr>`;
   }).join("") : `<tr><td colspan="7"><div class="soon"><b>No projects chosen yet.</b><span>Choose the repos to show. Collector reads them through your gh login.</span></div></td></tr>`;
+}
+document.getElementById("projects").onclick = (e) => {
+  const row = e.target.closest("tr.row");
+  if (row && !e.target.closest("a")) location.hash = `#/projects/${row.dataset.repo}`;
+};
+function renderProject() {
+  if (!currentRepo) return;
+  const p = ((projectData && projectData.projects) || []).find((x) => x.repo === currentRepo);
+  document.getElementById("proj-title").textContent = p ? p.title || p.name : currentRepo;
+  document.getElementById("crumb").textContent = `Projects / ${p ? p.title || p.name : currentRepo}`;
+  document.getElementById("proj-desc").textContent = p ? p.description || "" : "Loading…";
+  if (!p) return (document.getElementById("proj-facts").innerHTML = document.getElementById("proj-tiles").innerHTML = "");
+  if (p.error) return (document.getElementById("proj-facts").innerHTML = `<div class="err">${esc(p.error)}</div>`);
+  const live = liveSite(p);
+  const fact = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+  document.getElementById("proj-facts").innerHTML = [
+    fact("Repo", `<a class="plain mono" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.repo)}</a>`),
+    fact("Type", p.private ? "Private" : "Public"),
+    fact("Status", projectStatus(p, live)),
+    fact("Hosting", esc((live.svc && live.svc.hosting) || p.hosting || (live.url ? "Self-hosted" : "—"))),
+    fact("URL", live.url ? `<a class="plain" href="${esc(live.url)}" target="_blank" rel="noopener">${esc(live.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "—"),
+    fact("Health", live.svc ? `<span class="pill ${svcLabel[live.svc.status][0]}"><span class="dot"></span>${svcLabel[live.svc.status][1]}</span> <span class="sub">${live.svc.ms} ms</span>` : "—"),
+  ].join("");
+  const [cls, word] = ciLabel(p.ci);
+  const agents = ((last && last.machines) || []).flatMap((m) => m.running || []).filter((r) => r.repo === p.name);
+  const tile = (href, label, value, hint, bad) => `<a class="tile ${bad ? "bad" : ""}" ${href ? `href="${esc(href)}" target="_blank" rel="noopener"` : ""}>
+      <span class="label">${label}</span><span class="value">${value}</span><span class="hint">${hint}</span></a>`;
+  document.getElementById("proj-tiles").innerHTML = [
+    tile(`${p.url}/commits`, "Last push", ago(p.pushed_at), new Date(p.pushed_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }), false),
+    tile(`${p.url}/issues`, "Open issues", p.issues, "on GitHub", false),
+    tile(`${p.url}/pulls`, "Open PRs", p.prs, "on GitHub", false),
+    tile(p.ci && p.ci.url, "CI on main", word, p.ci ? esc(p.ci.name) : "no CI runs", cls === "failed"),
+    tile(null, "Agent now", agents.length ? agents.map((r) => `#${r.card}`).join(" ") : "—",
+         agents.length ? agents.map((r) => `${esc(r.kind)} · ${esc(r.name || "")}`).join(", ") : "no agent works on it", false),
+  ].join("");
 }
 async function loadProjects() {
   try { projectData = await (await fetch("/api/projects")).json(); renderProjects(); } catch {}
@@ -648,10 +719,15 @@ setInterval(async () => {
 const links = [...document.querySelectorAll(".rail a.item")];
 function route() {
   const name = location.hash.replace(/^#\/?/, "") || "dashboard";
-  const page = document.querySelector(`.page[data-page="${name}"]`) ? name : "dashboard";
+  // #/projects/<owner>/<repo> is one project's own page; the sidebar keeps Projects lit.
+  const repo = name.match(/^projects\/([\w.-]+\/[\w.-]+)$/);
+  currentRepo = repo ? repo[1] : null;
+  const page = repo ? "project" : document.querySelector(`.page[data-page="${name}"]`) ? name : "dashboard";
+  const lit = repo ? "projects" : page;
   document.querySelectorAll(".page").forEach((p) => (p.hidden = p.dataset.page !== page));
-  for (const a of links) a.toggleAttribute("aria-current", a.dataset.page === page), a.dataset.page === page && a.setAttribute("aria-current", "page");
-  document.getElementById("crumb").textContent = links.find((a) => a.dataset.page === page).querySelector(".label").textContent;
+  for (const a of links) a.toggleAttribute("aria-current", a.dataset.page === lit), a.dataset.page === lit && a.setAttribute("aria-current", "page");
+  document.getElementById("crumb").textContent = links.find((a) => a.dataset.page === lit).querySelector(".label").textContent;
+  if (repo) renderProject();
   scrollTo(0, 0);
 }
 addEventListener("hashchange", route);

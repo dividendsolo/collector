@@ -13,8 +13,10 @@ The Dashboard answers these questions at a glance:
 3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
 4. **Cron jobs:** every scheduled job on every machine, with its schedule, last run, result, and runs in the last hour.
 
-The **Projects** page shows the repos you choose: live site, last push, open issues and PRs, CI on the default branch,
-and the card an agent works on now.
+The **Projects** page shows the repos you choose: product name, repo, type, status, hosting, live URL, and health.
+Each project opens its own page with the last push, open issues and PRs, CI on the default branch, and the card an
+agent works on now. Hosting comes from the live site's headers, the last GitHub deployment, or a host file in the
+repo (`.kamal`, `config/deploy.yml`, `fly.toml`, `vercel.json`, and others).
 
 It reads only. It never changes a job or a card. Its one write is your repo choice, saved to `config.json`.
 
@@ -65,7 +67,7 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 - **Agent runs:** processes that work in a card worktree, `<repo>/.worktrees/build-<card>` or `review-<card>`. A Hermes
   process (`hermes -p <profile> chat`) makes the row an agent; anything else is the work script.
 - **Models:** the agent's open session in the profile's `state.db` (Hermes), read only.
-- **Projects:** the GitHub REST API through `gh`, about three calls per repo every five minutes.
+- **Projects:** the GitHub REST API through `gh`, about five calls per repo every five minutes.
 - **Remote machines:** the server sends `collect.py` over SSH (`ssh <host> python3 -`) on each refresh, so nothing is
   installed there.
 

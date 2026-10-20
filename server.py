@@ -75,15 +75,31 @@ def check(service):
     try:
         req = urllib.request.Request(service["url"], headers={"User-Agent": "collector-health-check"})
         with urllib.request.urlopen(req, timeout=10) as r:
-            code = r.status
+            code, headers = r.status, r.headers
         error = None
     except urllib.error.HTTPError as e:
-        code, error = e.code, f"HTTP {e.code}"
+        code, error, headers = e.code, f"HTTP {e.code}", e.headers
     except Exception as e:
-        code, error = None, str(getattr(e, "reason", e))[:140]
+        code, error, headers = None, str(getattr(e, "reason", e))[:140], {}
     ms = int((time.time() - start) * 1000)
     status = "down" if error else "slow" if ms > SLOW_SECONDS * 1000 else "online"
-    return dict(service, status=status, code=code, ms=ms, error=error, checked_at=int(time.time()))
+    return dict(service, status=status, code=code, ms=ms, error=error, checked_at=int(time.time()),
+                hosting=host_from_headers(headers or {}))
+
+
+# The response header each host adds to every answer.
+HOST_HEADERS = (("x-vercel-id", "Vercel"), ("fly-request-id", "Fly.io"), ("x-nf-request-id", "Netlify"),
+                ("x-railway-request-id", "Railway"), ("x-render-origin-server", "Render"))
+# Files at a repo's root that name its host.
+HOST_FILES = ((".kamal", "Self-hosted (Kamal)"), ("fly.toml", "Fly.io"), ("vercel.json", "Vercel"), ("netlify.toml", "Netlify"),
+              ("railway.json", "Railway"), ("railway.toml", "Railway"), ("render.yaml", "Render"))
+
+
+def host_from_headers(headers):
+    for name, host in HOST_HEADERS:
+        if headers.get(name):
+            return host
+    return None
 
 
 def check_services():
@@ -95,7 +111,7 @@ def check_services():
     return _services
 
 
-PROJECT_SECONDS = 300  # project details use about 3 REST calls per repo; five minutes keeps that small
+PROJECT_SECONDS = 300  # project details use about 5 REST calls per repo; five minutes keeps that small
 _projects = {"at": 0, "key": None, "list": []}
 _repos = {"at": 0, "list": []}
 
@@ -124,21 +140,46 @@ def project(repo):
     pulls, _ = run(["gh", "api", f"repos/{repo}/pulls?state=open&per_page=100"], timeout=15)
     runs, _ = run(["gh", "api", f"repos/{repo}/actions/runs?branch={info['default_branch']}&event=push&per_page=1"], timeout=15)
     last = ((runs or {}).get("workflow_runs") or [None])[0]
+    # Hosting: the bot that made the newest deployment (vercel[bot]), or a host's file at the repo root.
+    deploys, _ = run(["gh", "api", f"repos/{repo}/deployments?per_page=1"], timeout=15)
+    tree, _ = run(["gh", "api", f"repos/{repo}/git/trees/{info['default_branch']}?recursive=1"], timeout=20)
+    bot = ((deploys or [{}])[0].get("creator") or {}).get("login", "") if deploys else ""
+    # Every file and folder name in the repo, so an app in a subfolder (web/config/deploy.yml) counts too.
+    names = {p.rsplit("/", 1)[-1] for p in (x["path"] for x in (tree or {}).get("tree", []))}
+    paths = {x["path"] for x in (tree or {}).get("tree", [])}
+    if any(p == "config/deploy.yml" or p.endswith("/config/deploy.yml") for p in paths):
+        names.add(".kamal")
+    hosting = bot.removesuffix("[bot]").capitalize() if bot.endswith("[bot]") and bot != "github-actions[bot]" else \
+        next((host for name, host in HOST_FILES if name in names), None)
     prs = len(pulls or [])
     return {
         "repo": repo, "name": info["name"], "url": info["html_url"], "description": info.get("description") or "",
         "homepage": info.get("homepage") or "", "private": info["private"], "pushed_at": info["pushed_at"],
+        "archived": info["archived"], "hosting": hosting,
         "issues": info["open_issues_count"] - prs, "prs": prs,
         "ci": {"status": last["status"], "conclusion": last["conclusion"], "name": last["name"], "url": last["html_url"]} if last else None,
     }
 
 
+def flat(name):
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
 def projects(force=False):
-    chosen = config().get("projects") or []
+    cfg = config()
+    chosen = cfg.get("projects") or []
     if force or _projects["key"] != chosen or time.time() - _projects["at"] > PROJECT_SECONDS:
         with ThreadPoolExecutor(max(len(chosen), 1)) as pool:
             _projects["list"] = list(pool.map(project, chosen))
         _projects.update(at=time.time(), key=chosen)
+    # A project's live site: the service with the repo's name (zero-phase = ZeroPhase), else its GitHub homepage.
+    # The product name comes from the same service (ZeroPhase); without one, the repo name in title case.
+    sites = {flat(x["name"]): x for x in cfg.get("services") or []}
+    for p in _projects["list"]:
+        if "name" in p:
+            site = sites.get(flat(p["name"])) or {}
+            p["live"] = site.get("url") or p["homepage"]
+            p["title"] = site.get("name") or p["name"].replace("-", " ").title()
     return {"at": int(_projects["at"]), "projects": _projects["list"]}
 
 
