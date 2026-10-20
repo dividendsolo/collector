@@ -4,88 +4,179 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Collector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* Tokens follow Supabase Studio's dark theme (packages/ui: --surface 0.19, elevation step 0.025,
+     foreground 0.95, muted level 0.8, tertiary 0.65, primary oklch(0.76 0.15 h), 30% brand borders),
+     with the brand hue moved from Supabase green to blue. */
   :root {
-    --bg: #fafaf9; --surface: #ffffff; --text: #1c1917; --muted: #78716c; --line: #e7e5e4;
-    --red: #b91c1c; --red-bg: #fef2f2; --amber: #92400e; --amber-bg: #fffbeb;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0c0a09; --surface: #1c1917; --text: #f5f5f4; --muted: #a8a29e; --line: #292524;
-      --red: #fca5a5; --red-bg: #2a1212; --amber: #fcd34d; --amber-bg: #261d0b;
-    }
+    --hue: 255;
+    --bg: oklch(0.19 0.0025 var(--hue)); --panel: oklch(0.215 0.0025 var(--hue)); --panel-2: oklch(0.24 0.0025 var(--hue));
+    --hover: oklch(0.255 0.003 var(--hue));
+    --line: oklch(0.29 0.003 var(--hue)); --line-2: oklch(0.34 0.003 var(--hue));
+    --text: oklch(0.95 0.003 var(--hue)); --muted: oklch(0.8 0.003 var(--hue)); --faint: oklch(0.67 0.003 var(--hue));
+    --blue: oklch(0.76 0.15 var(--hue)); --blue-2: oklch(0.82 0.12 var(--hue));
+    --blue-bg: oklch(0.76 0.15 var(--hue) / 0.10); --blue-line: oklch(0.76 0.15 var(--hue) / 0.30);
+    --glow: 0 0 0 1px oklch(0.76 0.15 var(--hue) / 0.25), 0 0 16px oklch(0.76 0.15 var(--hue) / 0.22);
+    --red: oklch(0.68 0.16 25); --red-bg: oklch(0.55 0.14 25 / 0.12); --red-line: oklch(0.55 0.14 25 / 0.35);
+    --amber: oklch(0.8 0.14 75); --amber-bg: oklch(0.8 0.14 75 / 0.10); --amber-line: oklch(0.8 0.14 75 / 0.30);
+    --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --radius: 6px;
+    --sidebar: 0px; /* the sidebar slot: set a width when the sidebar lands */
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; }
-  main { max-width: 1400px; margin: 0 auto; padding: 32px 24px 64px; }
-  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-  h1 { font-size: 28px; margin: 0; }
-  h2 { font-size: 20px; margin: 40px 0 12px; }
-  .muted { color: var(--muted); }
-  .note { padding: 12px 16px; border-radius: 8px; margin: 8px 0; }
-  .note.error { background: var(--red-bg); color: var(--red); }
-  .note.warn { background: var(--amber-bg); color: var(--amber); }
-  td.long { color: var(--amber); font-weight: 600; }
-  td.state { font-weight: 600; color: var(--muted); }
-  td.state.failed { color: var(--red); }
-  td.state.warning { color: var(--amber); }
-  td.stuck { color: var(--red); font-weight: 600; }
-  .ok { padding: 12px 16px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
-  .stats { display: flex; gap: 16px; flex-wrap: wrap; }
-  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; min-width: 200px; }
-  .stat b { display: block; font-size: 28px; }
-  .wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { flex: none; width: var(--sidebar); border-right: 1px solid var(--line); background: var(--bg); }
+  .sidebar:empty { display: none; }
+  .shell { flex: 1; min-width: 0; }
+
+  .topbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+            height: 48px; padding: 0 24px; border-bottom: 1px solid var(--line); background: oklch(0.19 0.0025 var(--hue) / 0.85); backdrop-filter: blur(8px); }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+  .mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--blue-2);
+          background: var(--blue-bg); border: 1px solid var(--blue-line); box-shadow: var(--glow); }
+  .mark svg.i { width: 13px; height: 13px; }
+  .crumb { color: var(--faint); font-weight: 400; }
+  .live { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .live b { font: 500 12px var(--mono); color: var(--text); font-variant-numeric: tabular-nums; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 8px var(--blue); animation: pulse 2s ease-in-out infinite; }
+  .live.busy .pulse { animation-duration: 0.6s; }
+  .live.down .pulse { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+  .content { max-width: 1440px; margin: 0 auto; padding: 32px 24px 64px; display: grid; gap: 20px; }
+  .page-head h1 { margin: 0; font-size: 22px; font-weight: 400; letter-spacing: -0.01em; }
+  .page-head p { margin: 4px 0 0; color: var(--faint); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .panel-head { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  .panel-head h2 { margin: 0; font-size: 13px; font-weight: 500; }
+  .panel-head .i { color: var(--muted); }
+  .count { font: 500 11px var(--mono); color: var(--muted); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 0 7px; }
+  .count.hot { color: var(--red); background: var(--red-bg); border-color: var(--red-line); }
+  .panel-head .tools { margin-left: auto; }
+
+  .alerts { display: grid; }
+  .alert { display: flex; gap: 12px; align-items: flex-start; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .alert:last-child { border-bottom: 0; }
+  .alert .n { font: 500 11px/20px var(--mono); color: var(--faint); min-width: 16px; }
+  .alert .i { margin-top: 3px; }
+  .alert.error .i { color: var(--red); }
+  .alert.warn .i { color: var(--amber); }
+  .empty { display: flex; align-items: center; gap: 10px; padding: 14px 16px; color: var(--muted); }
+  .empty .i { color: var(--blue); filter: drop-shadow(0 0 6px var(--blue)); }
+
+  .wrap { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-weight: 600; color: var(--muted); white-space: nowrap; }
-  tr:last-child td { border-bottom: 0; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tr.off td { color: var(--muted); }
-  .filter { display: flex; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
-  .filter button { font: inherit; padding: 8px 14px; min-height: 44px; border-radius: 8px; cursor: pointer;
-                   border: 1px solid var(--line); background: var(--surface); color: var(--text); }
-  .filter button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+  th, td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+  th { font-size: 12px; font-weight: 400; color: var(--faint); background: var(--panel-2); }
+  td.wide { white-space: normal; min-width: 220px; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover td { background: var(--hover); }
+  tr.off td { color: var(--faint); }
+  td.num, th.num { text-align: right; }
+  .mono { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .sub { color: var(--faint); font-size: 12px; }
+  .err { color: var(--muted); font-size: 12px; max-width: 420px; white-space: normal; }
+  td.long { color: var(--amber); }
+  td.stuck { color: var(--red); }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
+          border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted); }
+  .pill .i { width: 12px; height: 12px; }
+  .pill.agent { color: var(--blue-2); background: var(--blue-bg); border-color: var(--blue-line); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  .pill.ok .dot { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+  .pill.failed { color: var(--red); background: var(--red-bg); border-color: var(--red-line); }
+  .pill.failed .dot { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .pill.warning { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-line); }
+  .pill.warning .dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .pill.ok { color: var(--text); }
+
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--panel-2); }
+  .seg button { font: 500 12px var(--sans); height: 26px; padding: 0 10px; border: 0; border-radius: 5px; cursor: pointer; background: transparent; color: var(--muted); }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--hover); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .stat { padding: 14px 16px; border-right: 1px solid var(--line); display: grid; gap: 6px; }
+  .stat:last-child { border-right: 0; }
+  .stat .label { color: var(--muted); font-size: 12px; }
+  .stat .value { font: 500 20px var(--mono); letter-spacing: -0.02em; }
+  .stat .value small { font-size: 12px; color: var(--faint); font-weight: 400; }
+  .bar { width: 160px; height: 3px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+  .bar.low span { background: var(--red); box-shadow: 0 0 8px var(--red); }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>Collector</h1>
-    <span class="muted"><span id="updated">Loading…</span><span id="countdown" style="font-variant-numeric: tabular-nums"></span></span>
-  </header>
+<svg width="0" height="0" style="position: absolute">
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><path d="m5 8 4 4-4 4M12 16h7"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 17a9 9 0 1 1 17.4 0"/></symbol>
+</svg>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="mark"><svg class="i"><use href="#i-logo"/></svg></span>Collector<span class="crumb">/ overview</span></div>
+      <div class="live" id="live"><span class="pulse"></span><span id="updated">Loading…</span><b id="countdown"></b></div>
+    </header>
+    <main class="content">
+      <div class="page-head"><h1>Overview</h1><p id="summary">Every cron job and agent run on your machines.</p></div>
+      <section class="panel" id="attention">
+        <div class="panel-head"><svg class="i"><use href="#i-alert"/></svg><h2>Needs attention</h2><span class="count" id="warn-count">0</span></div>
+        <div class="alerts" id="warnings"></div>
+      </section>
 
-  <h2>Needs attention</h2>
-  <div id="warnings"></div>
+      <section class="panel" id="running-now">
+        <div class="panel-head"><svg class="i"><use href="#i-play"/></svg><h2>Running now</h2><span class="count" id="run-count">0</span></div>
+        <div class="wrap">
+          <table>
+            <thead><tr>
+              <th>Type</th><th>Name / profile</th><th>Task</th><th>Machine</th><th>Card</th><th>Repo</th><th class="num">Running for</th>
+            </tr></thead>
+            <tbody id="running"></tbody>
+          </table>
+        </div>
+      </section>
 
-  <h2>Running now</h2>
-  <div class="wrap">
-    <table>
-      <thead><tr>
-        <th>Type</th><th>Name / profile</th><th>Task</th><th>Machine</th><th>Card</th><th>Repo</th><th class="num">Running for</th>
-      </tr></thead>
-      <tbody id="running"></tbody>
-    </table>
+      <section class="panel" id="cron-jobs">
+        <div class="panel-head"><svg class="i"><use href="#i-clock"/></svg><h2>Cron jobs</h2><span class="count" id="job-count">0</span>
+          <div class="tools"><div class="seg" id="filter">
+            <button data-f="all" aria-pressed="true">All</button>
+            <button data-f="problems" aria-pressed="false">Problems</button>
+          </div></div>
+        </div>
+        <div class="wrap">
+          <table>
+            <thead><tr>
+              <th>Status</th><th>Machine</th><th>Job</th><th>What it does</th><th>Schedule</th><th>Runs</th>
+              <th>Last run</th><th>Result</th><th class="num">Runs, 1 h</th>
+            </tr></thead>
+            <tbody id="jobs"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="github-limit">
+        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>GitHub API limit</h2></div>
+        <div class="stats" id="github"></div>
+      </section>
+    </main>
   </div>
-
-  <h2>Cron jobs</h2>
-  <div class="filter" id="filter">
-    <button data-f="all" aria-pressed="true">All</button>
-    <button data-f="problems" aria-pressed="false">Problems only</button>
-  </div>
-  <div class="wrap">
-    <table>
-      <thead><tr>
-        <th>Status</th><th>Machine</th><th>Job</th><th>What it does</th><th>Schedule</th><th>Runs</th>
-        <th>Last run</th><th>Result</th><th class="num">Runs, last hour</th>
-      </tr></thead>
-      <tbody id="jobs"></tbody>
-    </table>
-  </div>
-
-  <h2>GitHub API limit</h2>
-  <div class="stats" id="github"></div>
-</main>
+</div>
 <script>
 let filter = "all";
 let zones = {};
@@ -100,7 +191,8 @@ function ago(iso) {
   if (s < 60) return `${s} s ago`;
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-  return `${Math.round(s / 86400)} days ago`;
+  const days = Math.round(s / 86400);
+  return `${days} ${days === 1 ? "day" : "days"} ago`;
 }
 
 function duration(s) {
@@ -158,56 +250,74 @@ function render(d) {
       bar.insertBefore(b, problems);
     }
   }
-  document.getElementById("updated").textContent = `Updated ${new Date(d.at * 1000).toLocaleTimeString()} · `;
+  document.getElementById("updated").textContent = `Updated ${new Date(d.at * 1000).toLocaleTimeString()}`;
+  document.getElementById("live").className = "live";
 
   const w = d.warnings;
+  const wc = document.getElementById("warn-count");
+  wc.textContent = w.length;
+  wc.className = w.length ? "count hot" : "count";
   document.getElementById("warnings").innerHTML = w.length
-    ? w.map((x, i) => `<div class="note ${x.level}"><b>${i + 1}.</b> ${esc(x.text)}</div>`).join("")
-    : `<div class="ok">Nothing needs attention.</div>`;
+    ? w.map((x, i) => `<div class="alert ${x.level}"><span class="n">${i + 1}</span><svg class="i"><use href="#i-alert"/></svg><span>${esc(x.text)}</span></div>`).join("")
+    : `<div class="empty"><svg class="i"><use href="#i-check"/></svg>Nothing needs attention.</div>`;
 
   const running = d.machines.flatMap((m) => (m.running || []).map((r) => ({ ...r, machine: m.name })))
     .sort((a, b) => b.seconds - a.seconds);
+  document.getElementById("run-count").textContent = running.length;
+  const jobsAll = d.machines.reduce((n, m) => n + (m.jobs || []).length, 0);
+  document.getElementById("summary").textContent =
+    `${d.machines.length} machines · ${jobsAll} cron jobs · ${running.length} running now`;
   document.getElementById("running").innerHTML = running.length
     ? running.map((r) => `
     <tr>
-      <td>${r.type}</td><td>${esc(r.name || "unknown")}</td><td>${r.kind}${r.feature ? ` (${esc(r.feature)})` : ""}</td><td>${esc(r.machine)}</td>
-      <td>#${r.card}</td><td>${esc(r.repo)}</td><td class="num ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}">${duration(r.seconds)}</td>
+      <td><span class="pill ${r.type}"><svg class="i"><use href="#i-${r.type === "agent" ? "bot" : "term"}"/></svg>${r.type}</span></td>
+      <td class="mono">${esc(r.name || "unknown")}</td>
+      <td>${r.kind}${r.feature ? ` <span class="sub">${esc(r.feature)}</span>` : ""}</td><td>${esc(r.machine)}</td>
+      <td class="mono">#${r.card}</td><td>${esc(r.repo)}</td>
+      <td class="num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}">${duration(r.seconds)}</td>
     </tr>`).join("")
-    : `<tr><td colspan="7" class="muted">No agent or script is running.</td></tr>`;
+    : `<tr><td colspan="7" class="sub">No agent or script is running.</td></tr>`;
 
   const rank = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
   const rows = d.machines.flatMap((m) => m.jobs || [])
     .map((j) => ({ ...j, s: status(j) }))
     .filter((j) => filter === "all" || (filter === "problems" ? rank[j.s] < 2 : j.machine === filter))
     .sort((a, b) => rank[a.s] - rank[b.s] || a.machine.localeCompare(b.machine) || a.name.localeCompare(b.name));
+  document.getElementById("job-count").textContent = rows.length;
   document.getElementById("jobs").innerHTML = rows.map((j) => `
     <tr class="${j.enabled ? "" : "off"}">
-      <td class="state ${j.s.toLowerCase()}">${j.s}</td><td>${esc(j.machine)}</td><td>${esc(j.name)}<div class="muted">${esc(j.scheduler)}</div></td>
-      <td>${esc(j.what)}</td><td>${esc(schedule(j.schedule, j.machine))}</td>
-      <td>${j.agent ? "agent" : "script"}</td><td>${ago(j.last_run_at)}</td>
-      <td>${esc(j.enabled ? (j.last_status || "—") : j.state)}${j.last_error ? `<div class="muted">${esc(j.last_error.slice(0, 120))}</div>` : ""}</td>
-      <td class="num">${j.runs_1h ?? "—"}</td>
+      <td><span class="pill ${j.s.toLowerCase()}"><span class="dot"></span>${j.s}</span></td><td>${esc(j.machine)}</td>
+      <td><span class="mono">${esc(j.name)}</span><div class="sub">${esc(j.scheduler)}</div></td>
+      <td class="wide">${esc(j.what)}</td><td>${esc(schedule(j.schedule, j.machine))}</td>
+      <td class="sub">${j.agent ? "agent" : "script"}</td><td class="sub">${ago(j.last_run_at)}</td>
+      <td>${esc(j.enabled ? (j.last_status || "—") : j.state)}${j.last_error ? `<div class="err">${esc(j.last_error.slice(0, 120))}</div>` : ""}</td>
+      <td class="num mono">${j.runs_1h ?? "—"}</td>
     </tr>`).join("");
 
   const g = d.github || {};
   document.getElementById("github").innerHTML = g.error
-    ? `<div class="note error">${esc(g.error)}</div>`
+    ? `<div class="alert error"><svg class="i"><use href="#i-alert"/></svg><span>${esc(g.error)}</span></div>`
     : ["graphql", "core"].map((k) => {
         const x = g[k];
         const reset = new Date(x.reset * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        return `<div class="stat"><span class="muted">${k === "graphql" ? "GraphQL (board reads)" : "REST"}</span><b>${x.limit - x.used} left</b><span class="muted">of ${x.limit} · resets ${reset}</span></div>`;
+        const pct = Math.round((x.used / x.limit) * 100);
+        return `<div class="stat"><span class="label">${k === "graphql" ? "GraphQL (board reads)" : "REST"}</span>
+          <span class="value">${x.used.toLocaleString()} <small>of ${x.limit.toLocaleString()} used · resets ${reset}</small></span>
+          <div class="bar ${pct > 90 ? "low" : ""}"><span style="width: ${pct}%"></span></div></div>`;
       }).join("");
 }
 
 let next = 0;
 async function tick() {
   next = 0;
-  document.getElementById("countdown").textContent = "refreshing…";
+  document.getElementById("countdown").textContent = "";
+  document.getElementById("live").className = "live busy";
   try {
     const r = await fetch("/api/state", { cache: "no-store" });
     render(await r.json());
   } catch (e) {
-    document.getElementById("updated").textContent = `Could not reach the Collector server: ${e.message} · `;
+    document.getElementById("updated").textContent = `Could not reach the Collector server: ${e.message}`;
+    document.getElementById("live").className = "live down";
   }
   next = 15;
   countdown();
@@ -215,7 +325,7 @@ async function tick() {
 
 function countdown() {
   if (!next) return;
-  document.getElementById("countdown").textContent = `refreshes in ${next} s`;
+  document.getElementById("countdown").textContent = `${next}s`;
   if (--next === 0) tick();
 }
 
