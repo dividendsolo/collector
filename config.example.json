@@ -41,6 +41,16 @@
       "url": "https://api.example.com/health"
     }
   ],
+  "vendors": [
+    {
+      "name": "GitHub",
+      "url": "https://www.githubstatus.com"
+    },
+    {
+      "name": "Vercel",
+      "url": "https://www.vercel-status.com"
+    }
+  ],
   "domains": [
     "example.com"
   ],

@@ -499,7 +499,12 @@
       </section>
       </div>
       <div class="page" data-page="apis" hidden>
-      <div class="page-head"><h1>APIs</h1><p>The APIs and AI providers your jobs depend on, and how much of each is left.</p></div>
+      <div class="page-head"><h1>APIs</h1><p>The outside services your jobs depend on: whether they are up, and how much of each is left.</p></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Vendor status</h2><span class="count" id="vendor-count">0</span>
+          <span class="sub" style="margin-left: 8px">from each vendor's status page, checked every 5 minutes</span></div>
+        <ul class="health" id="vendors"><li><div class="sub">Checking…</div></li></ul>
+      </section>
       <section class="panel" id="github-limit">
         <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>GitHub API limit</h2></div>
         <div class="stats" id="github"></div>
@@ -843,6 +848,32 @@ async function loadTickets() {
       <td><span class="pill ok">${esc(lane)}</span></td>
       <td colspan="5" style="color: var(--muted)">${n} ${n === 1 ? "ticket" : "tickets"} wait for a triage session</td>
     </tr>`).join("");
+}
+
+// Vendor status: open incidents from each vendor's status page. Outages first, then incidents, then the rest.
+const VENDOR_PILL = { critical: ["failed", "Critical outage"], major: ["failed", "Major outage"], minor: ["warning", "Minor incident"],
+  ok: ["ok", "Operational"] };
+async function loadVendors() {
+  let d;
+  try {
+    d = await (await fetch("/api/vendors")).json();
+  } catch {
+    return;
+  }
+  const rank = { critical: 0, major: 1, minor: 2, ok: 3, "no feed": 4 };
+  const list = [...d.vendors].sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
+  document.getElementById("vendor-count").textContent = list.length;
+  document.getElementById("vendors").innerHTML = list.length ? list.map((v) => {
+    const pill = VENDOR_PILL[v.state];
+    const incidents = v.incidents.map((i) =>
+      `<div class="sub"><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}</a> · ${esc(i.impact)}</div>`).join("");
+    return `<li>
+      <div><div class="name">${esc(v.name)}</div>
+        <div class="sub"><a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.url.replace(/^https?:\/\//, ""))}</a></div>${incidents}</div>
+      <div class="right">${pill ? `<span class="pill ${pill[0]}"><span class="dot"></span>${pill[1]}</span>`
+        : `<span class="sub">No status feed</span>`}</div>
+    </li>`;
+  }).join("") : `<li><div class="sub">No vendors in config.json yet.</div></li>`;
 }
 
 async function loadDomains() {
@@ -1280,6 +1311,8 @@ loadDomains();
 setInterval(loadDomains, 60000);
 loadTickets();
 setInterval(loadTickets, 60000);
+loadVendors();
+setInterval(loadVendors, 60000);
 setInterval(countdown, 1000);
 </script>
 </body>

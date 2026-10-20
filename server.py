@@ -552,6 +552,44 @@ def flat(name):
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
+VENDOR_SECONDS = 300
+_vendors = {"at": 0, "list": []}
+_vendors_lock = threading.Lock()
+
+
+def vendor(v):
+    """One vendor's status page. Statuspage sites (most vendors) publish /api/v2/summary.json: the open incidents
+    and their impact. A page with no feed shows as a link only."""
+    url = v["url"].rstrip("/")
+    row = {"name": v["name"], "url": url, "state": "no feed", "incidents": []}
+    try:
+        req = urllib.request.Request(url + "/api/v2/summary.json", headers={"User-Agent": "collector"})
+        d = json.load(urllib.request.urlopen(req, timeout=10))
+    except Exception:
+        return row
+    row["incidents"] = [{"name": i["name"], "impact": i.get("impact") or "none", "url": i.get("shortlink") or url}
+                        for i in d.get("incidents") or [] if i.get("status") != "resolved"]
+    worst = max([IMPACT[i["impact"]] for i in row["incidents"]] + [0])
+    row["state"] = ["ok", "minor", "major", "critical"][worst]
+    return row
+
+
+IMPACT = {"none": 0, "minor": 1, "major": 2, "critical": 3}
+
+
+def vendors():
+    """Every vendor in config.json "vendors", checked every five minutes."""
+    listed = config().get("vendors") or []
+    with _vendors_lock:
+        if time.time() - _vendors["at"] > VENDOR_SECONDS or len(_vendors["list"]) != len(listed):
+            with ThreadPoolExecutor(max(len(listed), 1)) as pool:
+                _vendors["list"] = list(pool.map(vendor, listed))
+            _vendors["at"] = time.time()
+            with _lock:
+                _cache["at"] = 0  # the next /api/state carries an outage into Needs attention
+        return {"at": _vendors["at"], "vendors": _vendors["list"]}
+
+
 TICKET_SECONDS = 120
 TICKET_TYPES = ("bug", "enhancement", "tech-debt")
 _tickets = {"at": 0, "list": [], "error": None}
@@ -732,6 +770,10 @@ def warnings(machines, limit, cfg, checked=()):
     tix = cfg.get("tickets") or {}
     if _tickets["error"]:
         out.append({"level": "warn", "text": f"Could not list tickets: {_tickets['error']}"})
+    for v in _vendors["list"]:  # minor incidents stay on the APIs page; a major one is an alert
+        for i in v["incidents"]:
+            if IMPACT.get(i["impact"], 0) >= 2:
+                out.append({"level": "error", "text": f"{v['name']}: {i['name']} ({i['impact']} outage)", "url": i["url"]})
     order = {"error": 0, "warn": 1}
     return sorted(out, key=lambda w: order[w["level"]])
 
@@ -786,6 +828,8 @@ class Handler(BaseHTTPRequestHandler):
             body, kind = json.dumps(check_services()).encode(), "application/json"
         elif self.path == "/api/projects":
             body, kind = json.dumps(projects()).encode(), "application/json"
+        elif self.path == "/api/vendors":
+            body, kind = json.dumps(vendors()).encode(), "application/json"
         elif self.path == "/api/tickets":
             body, kind = json.dumps(tickets()).encode(), "application/json"
         elif self.path == "/api/domains":
