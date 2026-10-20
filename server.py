@@ -4,6 +4,7 @@
 Reads only. Each refresh runs collect.py on every machine in config.json (locally, or over SSH),
 adds the GitHub API limit, and works out the warnings. No database, no agent, no dependencies.
 """
+import base64
 import json
 import re
 import shlex
@@ -111,7 +112,7 @@ def check_services():
     return _services
 
 
-PROJECT_SECONDS = 300  # project details use about 5 REST calls per repo; five minutes keeps that small
+PROJECT_SECONDS = 300  # project details use about 7 REST calls per repo; five minutes keeps that small
 _projects = {"at": 0, "key": None, "list": []}
 _repos = {"at": 0, "list": []}
 
@@ -131,6 +132,80 @@ def all_repos():
     found.sort(key=lambda r: r["pushedAt"], reverse=True)
     _repos.update(at=time.time(), list=found)
     return found
+
+
+# Tech stack: (category, chip, test). A test is a package name in package.json, a gem in a Gemfile, or a file
+# name anywhere in the repo ("file:..."); a trailing * matches a package scope ("@radix-ui/*"). Order inside a category is the order the chips show.
+STACK = (
+    ("Language", "TypeScript", "file:tsconfig.json"), ("Language", "Ruby", "file:Gemfile"),
+    ("Language", "Python", "file:pyproject.toml"), ("Language", "Python", "file:requirements.txt"),
+    ("Language", "Go", "file:go.mod"),
+    ("Runtime", "Bun", "file:bun.lock"), ("Runtime", "Bun", "file:bun.lockb"), ("Runtime", "pnpm", "file:pnpm-lock.yaml"),
+    ("Runtime", "npm", "file:package-lock.json"),
+    ("Framework", "Next.js", "next"), ("Framework", "Rails", "gem:rails"), ("Framework", "React", "react"),
+    ("Framework", "Vite", "vite"), ("Framework", "Astro", "astro"), ("Framework", "SvelteKit", "@sveltejs/kit"),
+    ("Framework", "Remix", "@remix-run/react"), ("Framework", "Expo", "expo"), ("Framework", "Hono", "hono"),
+    ("Framework", "Hotwire", "gem:turbo-rails"), ("Framework", "Stimulus", "gem:stimulus-rails"),
+    ("Database", "Supabase", "@supabase/supabase-js"), ("Database", "Supabase", "@supabase/ssr"),
+    ("Database", "Postgres", "postgres"), ("Database", "Postgres", "pg"), ("Database", "Postgres", "gem:pg"),
+    ("Database", "Neon", "@neondatabase/serverless"), ("Database", "SQLite", "better-sqlite3"),
+    ("Database", "SQLite", "gem:sqlite3"), ("Database", "Turso", "@libsql/client"), ("Database", "MongoDB", "mongodb"),
+    ("Database", "Redis", "@upstash/redis"), ("Database", "Redis", "ioredis"), ("Database", "Redis", "gem:redis"),
+    ("ORM", "Drizzle", "drizzle-orm"), ("ORM", "Mongoose", "mongoose"), ("ORM", "Prisma", "@prisma/client"), ("ORM", "Kysely", "kysely"),
+    ("Jobs", "Solid Queue", "gem:solid_queue"), ("Jobs", "Sidekiq", "gem:sidekiq"), ("Jobs", "Inngest", "inngest"),
+    ("Auth", "Clerk", "@clerk/nextjs"), ("Auth", "Auth.js", "next-auth"), ("Auth", "Auth.js", "@auth/core"),
+    ("Auth", "Better Auth", "better-auth"),
+    ("UI", "Tailwind", "tailwindcss"), ("UI", "Tailwind", "gem:tailwindcss-rails"), ("UI", "shadcn/ui", "file:components.json"),
+    ("UI", "Radix", "radix-ui"), ("UI", "Radix", "@radix-ui/*"), ("UI", "Recharts", "recharts"), ("UI", "Motion", "motion"), ("UI", "Motion", "framer-motion"),
+    ("UI", "MapLibre", "maplibre-gl"), ("UI", "D3", "d3"), ("UI", "Importmap", "gem:importmap-rails"),
+    ("Payments", "Stripe", "stripe"), ("Payments", "Stripe", "gem:stripe"), ("Payments", "Polar", "@polar-sh/sdk"),
+    ("Email", "Resend", "resend"), ("Email", "React Email", "@react-email/components"),
+    ("AI", "Anthropic SDK", "@anthropic-ai/sdk"), ("AI", "OpenAI SDK", "openai"), ("AI", "AI SDK", "ai"),
+    ("Analytics", "Vercel Analytics", "@vercel/analytics"), ("Analytics", "PostHog", "posthog-js"),
+    ("Analytics", "DataFast", "@datafast/*"), ("Monitoring", "Sentry", "@sentry/nextjs"), ("Security", "Arcjet", "@arcjet/next"),
+    ("Testing", "Vitest", "vitest"), ("Testing", "Playwright", "@playwright/test"), ("Testing", "Jest", "jest"),
+    ("Testing", "Capybara", "gem:capybara"),
+    ("Tooling", "Biome", "@biomejs/biome"), ("Tooling", "ESLint", "eslint"), ("Tooling", "RuboCop", "gem:rubocop"),
+    ("Tooling", "RuboCop", "gem:rubocop-rails-omakase"),
+)
+
+
+def read_file(repo, path):
+    data, _ = run(["gh", "api", f"repos/{repo}/contents/{path}"], timeout=15)
+    try:
+        return base64.b64decode(data["content"]).decode("utf-8", "replace") if data else ""
+    except (KeyError, TypeError, ValueError):
+        return ""
+
+
+def tech_stack(repo, paths, hosting):
+    """Chips grouped by category, read from the repo's package.json and Gemfile files (root and one folder down)."""
+    names = {p.rsplit("/", 1)[-1] for p in paths}
+    near = lambda f: [p for p in paths if p == f or (p.count("/") == 1 and p.endswith("/" + f) and "node_modules" not in p)]
+    deps, gems = set(), set()
+    for path in near("package.json")[:3]:
+        try:
+            pkg = json.loads(read_file(repo, path) or "{}")
+        except ValueError:
+            continue
+        for key in ("dependencies", "devDependencies"):
+            deps |= set(pkg.get(key) or {})
+    for path in near("Gemfile")[:2]:
+        gems |= set(re.findall(r"^\s*gem\s+['\"]([\w-]+)['\"]", read_file(repo, path), re.M))
+    if any(p.endswith(".py") for p in paths):
+        names.add("pyproject.toml")
+    found = {}
+    for category, chip, test in STACK:
+        kind, _, name = test.rpartition(":")
+        if name.endswith("*"):
+            hit = any(d.startswith(name[:-1]) for d in deps)
+        else:
+            hit = name in names if kind == "file" else name in gems if kind == "gem" else name in deps
+        if hit and chip not in found.setdefault(category, []):
+            found[category].append(chip)
+    if hosting:
+        found["Hosting"] = [hosting]
+    return [{"category": c, "items": items} for c, items in found.items() if items]
 
 
 def project(repo):
@@ -158,6 +233,7 @@ def project(repo):
         "archived": info["archived"], "hosting": hosting,
         "issues": info["open_issues_count"] - prs, "prs": prs,
         "ci": {"status": last["status"], "conclusion": last["conclusion"], "name": last["name"], "url": last["html_url"]} if last else None,
+        "stack": tech_stack(repo, paths, hosting),
     }
 
 
