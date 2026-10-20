@@ -73,7 +73,10 @@
   .soon { padding: 28px 16px; display: grid; gap: 6px; justify-items: start; color: var(--muted); }
   .soon b { color: var(--text); font-weight: 500; }
   .panel { scroll-margin-top: 64px; }
-  .pair { display: grid; gap: 20px; align-items: start; }
+  /* Widgets side by side are always the same height: the shorter one stretches to match. */
+  .pair { display: grid; gap: 20px; align-items: stretch; }
+  .pair > .panel { display: flex; flex-direction: column; }
+  .stack { display: grid; gap: 20px; min-width: 0; }
   @media (min-width: 900px) { .pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .panel-head .more { margin-left: auto; font-size: 12px; color: var(--muted); text-decoration: none; }
   .panel-head .more:hover { color: var(--text); }
@@ -93,6 +96,11 @@
   .picks .desc { color: var(--faint); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
   a.plain { color: inherit; text-decoration: none; }
   a.plain:hover { color: var(--blue-2); }
+  tr.total td { font-weight: 600; border-bottom: 0; background: var(--panel-2); }
+  .spend-total:empty { display: none; }
+  .spend-total { display: grid; gap: 2px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .spend-total .value { font: 500 24px var(--mono); letter-spacing: -0.02em; }
+  .spend-total small { font-size: 13px; color: var(--muted); margin-left: 6px; }
   .health { list-style: none; margin: 0; padding: 0; }
   .health li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--line); }
   .health li:first-child { border-top: 0; }
@@ -249,7 +257,6 @@
     <main class="content">
       <div class="page" data-page="dashboard">
       <div class="page-head"><h1>Dashboard</h1><p id="summary">Every cron job and agent run on your machines.</p></div>
-      <div class="tiles" id="tiles"></div>
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-play"/></svg><h2>Running now</h2><span class="count" data-run-count>0</span></div>
         <div class="wrap">
@@ -261,15 +268,21 @@
           </table>
         </div>
       </section>
-      <div class="pair">
       <section class="panel" id="attention">
         <div class="panel-head"><svg class="i"><use href="#i-alert"/></svg><h2>Needs attention</h2><span class="count" id="warn-count">0</span></div>
         <div class="alerts" id="warnings"></div>
       </section>
+      <div class="pair">
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Service health</h2><span class="count" id="svc-count">0</span>
           <a class="more" href="#/services">All services &rarr;</a></div>
+        <div class="spend-total" id="health-total"></div>
         <ul class="health" id="health"></ul>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-receipt"/></svg><h2>Monthly spend</h2>
+          <a class="more" href="#/subscriptions">All subscriptions &rarr;</a></div>
+        <div id="spend"></div>
       </section>
       </div>
       </div>
@@ -355,8 +368,18 @@
       <section class="panel"><div class="soon"><b>AI providers come next.</b><span>Credits, tokens, and limits for each provider (collector#1).</span></div></section>
       </div>
       <div class="page" data-page="subscriptions" hidden>
-      <div class="page-head"><h1>Subscriptions</h1><p>What you pay for each month.</p></div>
-      <section class="panel"><div class="soon"><b>No source connected yet.</b><span>Collector will read billing from each vendor that has an API.</span></div></section>
+      <div class="page-head"><h1>Subscriptions</h1><p>What you pay for, largest first. Annual charges count as one twelfth a month.</p></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-receipt"/></svg><h2>Subscriptions</h2><span class="count" id="subs-count">0</span>
+          <span class="sub">from config.json</span></div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Billing</th><th class="num">Charge</th><th class="num">Per month</th><th class="num">Per year</th></tr></thead>
+            <tbody id="subs"></tbody>
+            <tfoot id="subs-total"></tfoot>
+          </table>
+        </div>
+      </section>
       </div>
       <div class="page" data-page="proposals" hidden>
       <div class="page-head"><h1>Proposals</h1><p>Open client proposals and their value.</p></div>
@@ -423,6 +446,7 @@ function status(j) {
 function render(d) {
   last = d;
   renderProjects();
+  renderSpend(d.subscriptions || []);
   zones = Object.fromEntries(d.machines.map((m) => [m.name, m.tz]));
   const bar = document.getElementById("filter");
   const names = d.machines.map((m) => m.name);
@@ -485,14 +509,6 @@ function render(d) {
   tc.textContent = failing || "";
   tc.className = failing ? "tag hot" : "tag";
   const gq = (d.github || {}).graphql;
-  const tile = (href, icon, label, value, hint, bad) =>
-    `<a class="tile ${bad ? "bad" : ""}" href="${href}"><span class="label"><svg class="i"><use href="#i-${icon}"/></svg>${label}</span>
-      <span class="value">${value}</span><span class="hint">${hint}</span></a>`;
-  document.getElementById("tiles").innerHTML = [
-    tile("#/cron", "clock", "Cron jobs", allJobs.length, failing ? `${failing} failing` : "all OK", failing > 0),
-    tile("#/cron", "server", "Machines", d.machines.length, d.machines.map((m) => m.name).join(" · "), d.machines.some((m) => m.error)),
-    gq ? tile("#/apis", "activity", "GitHub GraphQL", `${Math.round((gq.used / gq.limit) * 100)}%`, `${gq.used.toLocaleString()} of ${gq.limit.toLocaleString()} used`, gq.used / gq.limit > 0.9) : "",
-  ].join("");
   document.getElementById("jobs").innerHTML = rows.map((j) => `
     <tr class="${j.enabled ? "" : "off"}">
       <td><span class="pill ${j.s.toLowerCase()}"><span class="dot"></span>${j.s}</span></td><td>${esc(j.machine)}</td>
@@ -516,6 +532,33 @@ function render(d) {
       }).join("");
 }
 
+// Monthly spend: the subscriptions in config.json, each turned into a monthly amount (annual / 12).
+function renderSpend(subs) {
+  const active = subs.filter((x) => (x.status || "active") === "active");
+  const monthly = (x) => (x.billing === "annual" ? x.amount / 12 : x.amount);
+  const money = (n, cur) => new Intl.NumberFormat([], { style: "currency", currency: cur || "USD" }).format(n);
+  const totals = {};
+  for (const x of active) totals[x.currency || "USD"] = (totals[x.currency || "USD"] || 0) + monthly(x);
+  const sorted = [...active].sort((a, b) => monthly(b) - monthly(a));
+  const top = sorted.slice(0, 5);
+  // The Subscriptions page: every active subscription and the totals.
+  document.getElementById("subs-count").textContent = active.length;
+  document.getElementById("subs").innerHTML = sorted.length ? sorted.map((x) => `<tr>
+      <td>${esc(x.name)}</td><td>${x.billing === "annual" ? "Annual" : "Monthly"}</td>
+      <td class="num mono">${money(x.amount, x.currency)}</td><td class="num mono">${money(monthly(x), x.currency)}</td>
+      <td class="num mono">${money(monthly(x) * 12, x.currency)}</td></tr>`).join("")
+    : `<tr><td colspan="5"><div class="soon"><b>No subscriptions yet.</b><span>Add them to config.json under "subscriptions".</span></div></td></tr>`;
+  document.getElementById("subs-total").innerHTML = Object.entries(totals).map(([cur, n]) => `<tr class="total">
+      <td>Total${Object.keys(totals).length > 1 ? ` (${cur})` : ""}</td><td></td><td></td>
+      <td class="num mono">${money(n, cur)}</td><td class="num mono">${money(n * 12, cur)}</td></tr>`).join("");
+  document.getElementById("spend").innerHTML = active.length ? `
+    <div class="spend-total">${Object.entries(totals).map(([cur, n]) => `<span class="value">${money(n, cur)}<small>/mo</small></span>`).join("")}
+      <span class="sub">${active.length} active subscriptions · ${money(Object.values(totals)[0] * 12, Object.keys(totals)[0])} a year</span></div>
+    <ul class="health">${top.map((x) => `<li><div><div class="name">${esc(x.name)}</div><div class="sub">${x.billing === "annual" ? `${money(x.amount, x.currency)} a year` : "monthly"}</div></div>
+      <span class="mono">${money(monthly(x), x.currency)}</span></li>`).join("")}</ul>`
+    : `<div class="soon"><b>No subscriptions yet.</b><span>Add them to config.json under "subscriptions".</span></div>`;
+}
+
 // Service health: checked when the page loads, then once a minute.
 const svcLabel = { online: ["ok", "Online"], slow: ["warning", "Slow"], down: ["failed", "Down"] };
 function renderServices(svc) {
@@ -526,7 +569,15 @@ function renderServices(svc) {
   // Down first, then slow, then online; fastest first inside each.
   const order = { down: 0, slow: 1, online: 2 };
   const sorted = [...svc].sort((a, b) => order[a.status] - order[b.status] || a.ms - b.ms);
-  document.getElementById("health").innerHTML = rows(sorted.slice(0, 6));
+  document.getElementById("health").innerHTML = rows(sorted.slice(0, 5));
+  // Summary block, the same shape as Monthly spend's, so the two widgets' rows line up.
+  const up = svc.filter((x) => x.status !== "down").length;
+  const avg = svc.length ? Math.round(svc.reduce((n, x) => n + x.ms, 0) / svc.length) : 0;
+  const slowest = [...svc].sort((a, b) => b.ms - a.ms)[0];
+  document.getElementById("health-total").innerHTML = svc.length
+    ? `<span class="value">${up} of ${svc.length}<small>online</small></span>
+       <span class="sub">average ${avg} ms · slowest ${esc(slowest.name)} at ${slowest.ms} ms</span>`
+    : `<span class="sub">No services in config.json yet.</span>`;
   document.getElementById("health-all").innerHTML = rows(sorted);
   document.getElementById("svc-count").textContent = document.getElementById("svc-count-all").textContent = svc.length;
 }

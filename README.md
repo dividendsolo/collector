@@ -11,7 +11,9 @@ The Dashboard answers these questions at a glance:
    A build turns amber after 30 minutes and red after an hour.
    The table also shows the model each agent calls now (a fallback model shows too).
 3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
-4. **Cron jobs:** every scheduled job on every machine, with its schedule, last run, result, and runs in the last hour.
+4. **Monthly spend:** your subscriptions, with annual charges counted as a twelfth a month. The Subscriptions page
+   lists them all.
+5. **Cron jobs:** every scheduled job on every machine, with its schedule, last run, result, and runs in the last hour.
 
 The **Projects** page shows the repos you choose: product name, repo, type, status, hosting, live URL, and health.
 Each project opens its own page with the last push, open issues and PRs, CI on the default branch, and the card an
@@ -57,6 +59,7 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 | `work_script` | A script that picks up cards and starts agents. `jobs` are the cron jobs that start it, `log` is its log (each start writes `=== tick <time> ===`), `name` is the name shown when it runs a step itself, and `max_starts_10m` is the loop alarm. |
 | `verify_label` | The Docker label prefix your verify tool puts on its containers (`<prefix>.run`, `<prefix>.commit`). A running verify shows as the card's current task. |
 | `services` | Sites to check once a minute: `[{"name": "My app", "url": "https://example.com"}]`. A project whose repo name matches a service name shows that service's status. |
+| `subscriptions` | What you pay for: `[{"name": "Hosting", "amount": 20, "billing": "monthly", "currency": "USD"}]`. `billing` is `monthly` or `annual`. |
 | `projects` | The repos on the Projects page, as `owner/repo`. The "Choose repos" button writes this key. |
 | `repos_dir` | The folder that holds your repos (default `~/code`). |
 

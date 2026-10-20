@@ -40,5 +40,19 @@
       "name": "My API",
       "url": "https://api.example.com/health"
     }
+  ],
+  "subscriptions": [
+    {
+      "name": "Hosting",
+      "amount": 20,
+      "billing": "monthly",
+      "currency": "USD"
+    },
+    {
+      "name": "Domain",
+      "amount": 12,
+      "billing": "annual",
+      "currency": "USD"
+    }
   ]
 }

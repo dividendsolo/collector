@@ -244,7 +244,7 @@ def snapshot():
             data, err = fut.result()
             machines.append(dict(data or {}, name=t["name"], error=err))
         limit = limit.result()
-    return {"at": int(time.time()), "machines": machines, "github": limit,
+    return {"at": int(time.time()), "machines": machines, "github": limit, "subscriptions": cfg.get("subscriptions") or [],
             "warnings": warnings(machines, limit, cfg, _services)}
 
 
