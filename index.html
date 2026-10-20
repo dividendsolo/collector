@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collector</title>
+<style>
+  :root {
+    --bg: #fafaf9; --surface: #ffffff; --text: #1c1917; --muted: #78716c; --line: #e7e5e4;
+    --red: #b91c1c; --red-bg: #fef2f2; --amber: #92400e; --amber-bg: #fffbeb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0a09; --surface: #1c1917; --text: #f5f5f4; --muted: #a8a29e; --line: #292524;
+      --red: #fca5a5; --red-bg: #2a1212; --amber: #fcd34d; --amber-bg: #261d0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; }
+  main { max-width: 1400px; margin: 0 auto; padding: 32px 24px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 28px; margin: 0; }
+  h2 { font-size: 20px; margin: 40px 0 12px; }
+  .muted { color: var(--muted); }
+  .note { padding: 12px 16px; border-radius: 8px; margin: 8px 0; }
+  .note.error { background: var(--red-bg); color: var(--red); }
+  .note.warn { background: var(--amber-bg); color: var(--amber); }
+  td.long { color: var(--amber); font-weight: 600; }
+  td.state { font-weight: 600; color: var(--muted); }
+  td.state.failed { color: var(--red); }
+  td.state.warning { color: var(--amber); }
+  td.stuck { color: var(--red); font-weight: 600; }
+  .ok { padding: 12px 16px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; min-width: 200px; }
+  .stat b { display: block; font-size: 28px; }
+  .wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.off td { color: var(--muted); }
+  .filter { display: flex; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+  .filter button { font: inherit; padding: 8px 14px; min-height: 44px; border-radius: 8px; cursor: pointer;
+                   border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+  .filter button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Collector</h1>
+    <span class="muted"><span id="updated">Loading…</span><span id="countdown" style="font-variant-numeric: tabular-nums"></span></span>
+  </header>
+
+  <h2>Needs attention</h2>
+  <div id="warnings"></div>
+
+  <h2>Running now</h2>
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th>Type</th><th>Name / profile</th><th>Task</th><th>Machine</th><th>Card</th><th>Repo</th><th class="num">Running for</th>
+      </tr></thead>
+      <tbody id="running"></tbody>
+    </table>
+  </div>
+
+  <h2>Cron jobs</h2>
+  <div class="filter" id="filter">
+    <button data-f="all" aria-pressed="true">All</button>
+    <button data-f="problems" aria-pressed="false">Problems only</button>
+  </div>
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th>Status</th><th>Machine</th><th>Job</th><th>What it does</th><th>Schedule</th><th>Runs</th>
+        <th>Last run</th><th>Result</th><th class="num">Runs, last hour</th>
+      </tr></thead>
+      <tbody id="jobs"></tbody>
+    </table>
+  </div>
+
+  <h2>GitHub API limit</h2>
+  <div class="stats" id="github"></div>
+</main>
+<script>
+let filter = "all";
+let zones = {};
+let last = null;
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function ago(iso) {
+  if (!iso) return "—";
+  const s = Math.round((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return `${s} s ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} days ago`;
+}
+
+function duration(s) {
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
+}
+
+function schedule(raw, machine) {
+  if (!raw) return "—";
+  if (raw.startsWith("{") || raw.startsWith("[")) {
+    const list = [].concat(JSON.parse(raw));
+    const t = `${String(list[0].Hour ?? 0).padStart(2, "0")}:${String(list[0].Minute ?? 0).padStart(2, "0")}`;
+    const days = list.map((c) => (c.Weekday === undefined ? "daily" : DAYS[c.Weekday % 7]));
+    return `${days.length === 5 && days[0] === "Mon" ? "weekdays" : days.join(", ")} ${t}`;
+  }
+  const f = raw.split(" ");
+  if (f.length !== 5) return raw;
+  const [min, hour, , , dow] = f;
+  // A machine in another time zone than the first one gets its zone after each time.
+  const zone = zones[machine];
+  const tz = zone && zone !== Object.values(zones)[0] ? ` ${zone}` : "";
+  if (raw === "* * * * *") return "every minute";
+  if (min.startsWith("*/") && hour === "*") return `every ${min.slice(2)} min`;
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour)) {
+    const t = `${hour.padStart(2, "0")}:${min.padStart(2, "0")}${tz}`;
+    if (dow === "*") return `daily ${t}`;
+    if (dow === "1-5") return `weekdays ${t}`;
+    if (/^\d$/.test(dow)) return `${DAYS[+dow]} ${t}`;
+  }
+  return raw;
+}
+
+function status(j) {
+  if (!j.enabled) return j.state === "completed" ? "Done" : "Paused";
+  if (!j.last_status || j.last_status.startsWith("ok")) return "OK";
+  if (j.last_status === "delivery_failed") return "Warning";
+  return "Failed";
+}
+
+function render(d) {
+  last = d;
+  zones = Object.fromEntries(d.machines.map((m) => [m.name, m.tz]));
+  const bar = document.getElementById("filter");
+  const names = d.machines.map((m) => m.name);
+  if (bar.dataset.machines !== names.join("|")) {
+    bar.dataset.machines = names.join("|");
+    bar.querySelectorAll("button.machine").forEach((b) => b.remove());
+    const problems = bar.querySelector('[data-f="problems"]');
+    for (const n of names) {
+      const b = document.createElement("button");
+      b.className = "machine";
+      b.dataset.f = n;
+      b.textContent = n;
+      b.setAttribute("aria-pressed", String(filter === n));
+      bar.insertBefore(b, problems);
+    }
+  }
+  document.getElementById("updated").textContent = `Updated ${new Date(d.at * 1000).toLocaleTimeString()} · `;
+
+  const w = d.warnings;
+  document.getElementById("warnings").innerHTML = w.length
+    ? w.map((x, i) => `<div class="note ${x.level}"><b>${i + 1}.</b> ${esc(x.text)}</div>`).join("")
+    : `<div class="ok">Nothing needs attention.</div>`;
+
+  const running = d.machines.flatMap((m) => (m.running || []).map((r) => ({ ...r, machine: m.name })))
+    .sort((a, b) => b.seconds - a.seconds);
+  document.getElementById("running").innerHTML = running.length
+    ? running.map((r) => `
+    <tr>
+      <td>${r.type}</td><td>${esc(r.name || "unknown")}</td><td>${r.kind}${r.feature ? ` (${esc(r.feature)})` : ""}</td><td>${esc(r.machine)}</td>
+      <td>#${r.card}</td><td>${esc(r.repo)}</td><td class="num ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}">${duration(r.seconds)}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="7" class="muted">No agent or script is running.</td></tr>`;
+
+  const rank = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
+  const rows = d.machines.flatMap((m) => m.jobs || [])
+    .map((j) => ({ ...j, s: status(j) }))
+    .filter((j) => filter === "all" || (filter === "problems" ? rank[j.s] < 2 : j.machine === filter))
+    .sort((a, b) => rank[a.s] - rank[b.s] || a.machine.localeCompare(b.machine) || a.name.localeCompare(b.name));
+  document.getElementById("jobs").innerHTML = rows.map((j) => `
+    <tr class="${j.enabled ? "" : "off"}">
+      <td class="state ${j.s.toLowerCase()}">${j.s}</td><td>${esc(j.machine)}</td><td>${esc(j.name)}<div class="muted">${esc(j.scheduler)}</div></td>
+      <td>${esc(j.what)}</td><td>${esc(schedule(j.schedule, j.machine))}</td>
+      <td>${j.agent ? "agent" : "script"}</td><td>${ago(j.last_run_at)}</td>
+      <td>${esc(j.enabled ? (j.last_status || "—") : j.state)}${j.last_error ? `<div class="muted">${esc(j.last_error.slice(0, 120))}</div>` : ""}</td>
+      <td class="num">${j.runs_1h ?? "—"}</td>
+    </tr>`).join("");
+
+  const g = d.github || {};
+  document.getElementById("github").innerHTML = g.error
+    ? `<div class="note error">${esc(g.error)}</div>`
+    : ["graphql", "core"].map((k) => {
+        const x = g[k];
+        const reset = new Date(x.reset * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        return `<div class="stat"><span class="muted">${k === "graphql" ? "GraphQL (board reads)" : "REST"}</span><b>${x.limit - x.used} left</b><span class="muted">of ${x.limit} · resets ${reset}</span></div>`;
+      }).join("");
+}
+
+let next = 0;
+async function tick() {
+  next = 0;
+  document.getElementById("countdown").textContent = "refreshing…";
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    render(await r.json());
+  } catch (e) {
+    document.getElementById("updated").textContent = `Could not reach the Collector server: ${e.message} · `;
+  }
+  next = 15;
+  countdown();
+}
+
+function countdown() {
+  if (!next) return;
+  document.getElementById("countdown").textContent = `refreshes in ${next} s`;
+  if (--next === 0) tick();
+}
+
+document.getElementById("filter").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  filter = b.dataset.f;
+  document.querySelectorAll("#filter button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  if (last) render(last);
+});
+
+// Hot reload: the page reloads itself when any Collector file changes.
+let seen = null;
+setInterval(async () => {
+  try {
+    const v = await (await fetch("/api/version", { cache: "no-store" })).text();
+    if (seen && v !== seen) location.reload();
+    seen = v;
+  } catch {}
+}, 1000);
+
+tick();
+setInterval(countdown, 1000);
+</script>
+</body>
+</html>

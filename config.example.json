@@ -1,0 +1,34 @@
+{
+  "machines": [
+    {
+      "name": "laptop"
+    },
+    {
+      "name": "vps",
+      "ssh": "user@vps-host"
+    }
+  ],
+  "launchd_prefixes": [
+    "com.example."
+  ],
+  "ok_exits": {
+    "com.example.weekly-report": {
+      "3": "ok (opened a PR)"
+    }
+  },
+  "work_script": {
+    "label": "Work script",
+    "name": "pickup.py",
+    "jobs": [
+      "pickup"
+    ],
+    "log": "~/.hermes/scratch/pickup.log",
+    "max_starts_10m": 15
+  },
+  "verify_label": "my-verify",
+  "repos_dir": "~/code",
+  "jobs": {
+    "pickup": "Reads the board and starts a build or review agent if a card waits",
+    "nightly-backup": "Backs up the production database"
+  }
+}
