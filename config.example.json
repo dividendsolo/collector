@@ -41,6 +41,9 @@
       "url": "https://api.example.com/health"
     }
   ],
+  "domains": [
+    "example.com"
+  ],
   "subscriptions": [
     {
       "name": "Hosting",

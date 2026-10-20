@@ -112,6 +112,148 @@ def check_services():
     return _services
 
 
+DOMAIN_SECONDS = 12 * 3600  # registry dates change once a year; twice a day is plenty
+_domains = {"at": 0, "list": []}
+_domains_lock = threading.Lock()
+
+
+def rdap(name):
+    """Registrar and dates from the public RDAP registry (no account, no key). None when the registry has no RDAP."""
+    try:
+        req = urllib.request.Request(f"https://rdap.org/domain/{name}", headers={"Accept": "application/rdap+json"})
+        j = json.load(urllib.request.urlopen(req, timeout=15))
+    except (OSError, ValueError):  # a 404 can mean "no RDAP for this TLD" (.io): whois decides
+        return None
+    events = {e.get("eventAction"): (e.get("eventDate") or "")[:10] for e in j.get("events") or []}
+    registrar = next((x[3] for e in j.get("entities") or [] if "registrar" in (e.get("roles") or [])
+                      for x in (e.get("vcardArray") or [None, []])[1] if x[0] == "fn"), None)
+    registrar = registrar.strip().rstrip(".") if registrar else None
+    if not events.get("expiration"):
+        return None
+    return {"registered": True, "registrar": registrar, "expires": events.get("expiration"), "since": events.get("registration")}
+
+
+def whois(name):
+    """The fallback for registries without RDAP (.io): the whois command."""
+    try:
+        text = subprocess.run(["whois", name], capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {"error": "no RDAP and no whois answer"}
+    if re.search(r"(?im)^(no match|not found|domain not found|no data found)", text):
+        return {"registered": False}
+    exp = re.search(r"(?im)^\s*(?:registry expiry date|registrar registration expiration date|expir\w* date):\s*(\d{4}-\d{2}-\d{2})", text)
+    reg = re.search(r"(?im)^\s*registrar:\s*(.+)$", text)
+    since = re.search(r"(?im)^\s*creation date:\s*(\d{4}-\d{2}-\d{2})", text)
+    if not exp:
+        return {"registered": False} if not reg else {"error": "whois shows no expiry date"}
+    return {"registered": True, "registrar": reg.group(1).strip().rstrip(".") if reg else None,
+            "expires": exp.group(1), "since": since.group(1) if since else None}
+
+
+def cert_expiry(name):
+    """When the HTTPS certificate on the domain runs out (YYYY-MM-DD), or None."""
+    import socket, ssl
+    try:
+        with socket.create_connection((name, 443), timeout=8) as raw:
+            with ssl.create_default_context().wrap_socket(raw, server_hostname=name) as tls:
+                after = tls.getpeercert().get("notAfter")
+        return time.strftime("%Y-%m-%d", time.gmtime(ssl.cert_time_to_seconds(after))) if after else None
+    except (OSError, ValueError):
+        return None
+
+
+VERCEL_AUTH = os.path.expanduser("~/Library/Application Support/com.vercel.cli/auth.json")
+
+
+def api_json(url, token):
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}", "User-Agent": "collector"})
+    return json.load(urllib.request.urlopen(req, timeout=15))
+
+
+def vercel_renew():
+    """{domain: auto-renew} for domains bought through Vercel. Key: VERCEL_TOKEN in .env, else the Vercel CLI's own login."""
+    token = os.environ.get("VERCEL_TOKEN") or env_file().get("VERCEL_TOKEN")
+    if not token:
+        try:
+            token = json.load(open(VERCEL_AUTH)).get("token")
+        except (OSError, ValueError):
+            return {}
+    out = {}
+    try:
+        teams = [t["id"] for t in api_json("https://api.vercel.com/v2/teams", token).get("teams") or []]
+        for team in [None] + teams:
+            url = "https://api.vercel.com/v5/domains?limit=100" + (f"&teamId={team}" if team else "")
+            for d in api_json(url, token).get("domains") or []:
+                if d.get("boughtAt"):  # bought through Vercel: Vercel renews it
+                    out[d["name"]] = bool(d.get("renew"))
+    except (OSError, ValueError, KeyError):
+        pass
+    return out
+
+
+def cloudflare_renew():
+    """{domain: auto-renew} from Cloudflare Registrar. Key: CLOUDFLARE_REGISTRAR_TOKEN in .env (an API token that can
+    read the account's Registrar domains)."""
+    token = os.environ.get("CLOUDFLARE_REGISTRAR_TOKEN") or env_file().get("CLOUDFLARE_REGISTRAR_TOKEN")
+    _domains["cf_error"] = None
+    if not token:
+        return {}
+    out = {}
+    try:
+        accounts = api_json("https://api.cloudflare.com/client/v4/accounts", token).get("result") or []
+        if not accounts:
+            _domains["cf_error"] = "The token cannot see your account: add Account Settings Read, and set Account Resources to your account"
+        for acct in accounts:
+            for d in api_json(f"https://api.cloudflare.com/client/v4/accounts/{acct['id']}/registrar/domains", token).get("result") or []:
+                if "auto_renew" in d:
+                    out[d["name"]] = bool(d["auto_renew"])
+    except urllib.error.HTTPError as e:
+        _domains["cf_error"] = f"Cloudflare refused the token (HTTP {e.code}): it needs Registrar read access"
+    except (OSError, ValueError, KeyError) as e:
+        _domains["cf_error"] = f"Cloudflare did not answer: {str(e)[:120]}"
+    return out
+
+
+def days_left(day):
+    return None if not day else int((time.mktime(time.strptime(day, "%Y-%m-%d")) - time.time()) // 86400) + 1
+
+
+def check_domain(name):
+    row = {"name": name}
+    row.update(rdap(name) or whois(name))
+    if row.get("registered"):
+        row["ssl_expires"] = cert_expiry(name)
+    row["days"] = days_left(row.get("expires"))
+    row["ssl_days"] = days_left(row.get("ssl_expires"))
+    return row
+
+
+def domains(force=False):
+    """Every domain in config.json: registrar and expiry from RDAP (whois when the registry has none), and the
+    HTTPS certificate's expiry. Cached for 12 hours; a lock keeps two refreshes from running at once."""
+    listed = config().get("domains") or []
+    with _domains_lock:
+        env = os.path.join(HERE, ".env")
+        stamp = os.path.getmtime(env) if os.path.exists(env) else 0  # a new key in .env shows at once
+        if (force or time.time() - _domains["at"] > DOMAIN_SECONDS or [d["name"] for d in _domains["list"]] != listed
+                or stamp != _domains.get("env")
+                or (_domains.get("cf_error") and time.time() - _domains["at"] > 60)):  # a key fixed on Cloudflare's side
+            _domains["env"] = stamp
+            with ThreadPoolExecutor(max(len(listed), 1) + 2) as pool:
+                renew = [pool.submit(vercel_renew), pool.submit(cloudflare_renew)]
+                rows = list(pool.map(check_domain, listed))
+                known = {**renew[1].result(), **renew[0].result()}
+            for r in rows:
+                r["auto_renew"] = known.get(r["name"])
+                r["renew_source"] = ("Cloudflare" if (r.get("registrar") or "").startswith("Cloudflare") else
+                                     "Vercel" if r["name"] in renew[0].result() else None)
+            _domains["list"] = rows
+            _domains["at"] = time.time()
+    has = bool(os.environ.get("CLOUDFLARE_REGISTRAR_TOKEN") or env_file().get("CLOUDFLARE_REGISTRAR_TOKEN"))
+    return {"at": int(_domains["at"]), "domains": _domains["list"], "env_path": os.path.join(HERE, ".env"),
+            "cloudflare": {"key": "CLOUDFLARE_REGISTRAR_TOKEN", "present": has, "error": _domains.get("cf_error")}}
+
+
 PROJECT_SECONDS = 300  # project details use about 7 REST calls per repo; five minutes keeps that small
 _projects = {"at": 0, "key": None, "list": []}
 _repos = {"at": 0, "list": []}
@@ -471,16 +613,24 @@ def warnings(machines, limit, cfg, checked=()):
                 out.append({"level": "error", "text": f"{j['name']} on {m['name']}: last run {j['last_status']}"
                             + (f" ({j['last_error'][:140]})" if j.get("last_error") else "")})
             key = work_label if j["name"] in work_jobs else j.get("script")
-            if key:
-                by_script.setdefault(key, []).append(f"{j['name']} on {m['name']}")
+            if key:  # one script per machine: the foreman runs on every machine on purpose
+                by_script.setdefault((key, m["name"]), []).append(j["name"])
         ticks = m.get("work_ticks_10m")
         limit_10m = work.get("max_starts_10m", 15)
         if ticks and ticks > limit_10m:
             out.append({"level": "error", "text": f"{work_label} on {m['name']} started {ticks} times in the last 10 minutes "
                         f"(more than {limit_10m}): it is starting itself in a loop"})
-    for script, where in by_script.items():
+    for (script, machine), where in by_script.items():
         if len(where) > 1:
-            out.append({"level": "warn", "text": f"The same script ({script}) starts from {len(where)} jobs: " + ", ".join(where)})
+            out.append({"level": "warn", "text": f"The same script ({script}) starts from {len(where)} jobs on {machine}: " + ", ".join(where)})
+    for d in _domains["list"]:
+        if d.get("registered") and d.get("days") is not None and d["days"] <= 30:
+            out.append({"level": "error" if d["days"] <= 7 else "warn",
+                        "text": f"{d['name']} expires in {d['days']} days ({d['expires']}) at {d.get('registrar') or 'its registrar'}"})
+        if d.get("auto_renew") is False and d.get("days") is not None and d["days"] <= 60:
+            out.append({"level": "warn", "text": f"{d['name']} expires in {d['days']} days and auto-renew is off"})
+        if d.get("ssl_days") is not None and d["ssl_days"] <= 14:
+            out.append({"level": "error", "text": f"The HTTPS certificate of {d['name']} runs out in {d['ssl_days']} days"})
     g = limit.get("graphql")
     if g and g["limit"] - g["used"] < 500:
         out.append({"level": "error", "text": f"GitHub GraphQL limit nearly gone: {g['limit'] - g['used']} of {g['limit']} left"})
@@ -544,6 +694,8 @@ class Handler(BaseHTTPRequestHandler):
             body, kind = json.dumps(check_services()).encode(), "application/json"
         elif self.path == "/api/projects":
             body, kind = json.dumps(projects()).encode(), "application/json"
+        elif self.path == "/api/domains":
+            body, kind = json.dumps(domains()).encode(), "application/json"
         elif self.path == "/api/repos":
             body, kind = json.dumps({"repos": all_repos(), "chosen": config().get("projects") or []}).encode(), "application/json"
         elif self.path == "/api/version":

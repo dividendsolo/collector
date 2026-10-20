@@ -470,7 +470,17 @@
       </div>
       <div class="page" data-page="domains" hidden>
       <div class="page-head"><h1>Domains</h1><p>Each domain, its registrar, and when it expires.</p></div>
-      <section class="panel"><div class="soon"><b>No source connected yet.</b><span>Collector will read expiry dates from your registrar.</span></div></section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-globe"/></svg><h2>Domains</h2><span class="count" id="dom-count">0</span>
+          <span class="sub" id="dom-source">from the public registry (RDAP or whois), checked every 12 hours</span></div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Domain</th><th>Registrar</th><th>Registered</th><th>Expires</th><th class="num">Days left</th><th>Auto-renew</th><th>HTTPS certificate</th><th class="num">Days left</th></tr></thead>
+            <tbody id="domains"><tr><td colspan="8" class="sub">Checking…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel" id="dom-keys" hidden></section>
       </div>
       <div class="page" data-page="services" hidden>
       <div class="page-head"><h1>Services</h1><p>Your own services and whether they are up.</p></div>
@@ -549,6 +559,12 @@ function ago(iso) {
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
   const days = Math.round(s / 86400);
   return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
+// The task as a gerund: "building", not "build".
+const DOING = { build: "building", review: "reviewing", verify: "verifying", regate: "verifying" };
+function doing(kind) {
+  return DOING[kind] || kind;
 }
 
 function duration(s) {
@@ -634,7 +650,7 @@ function render(d) {
       <td><span class="pill ${r.type}"><svg class="i"><use href="#i-${r.type === "agent" ? "bot" : "term"}"/></svg>${r.type}</span></td>
       <td class="mono">${esc(r.name || "unknown")}</td>
       <td>${r.model ? `<span class="mono">${esc(r.model.split("/").pop())}</span>${r.provider ? ` <span class="sub">${esc(r.provider)}</span>` : ""}` : `<span class="sub">—</span>`}</td>
-      <td>${r.kind}${r.feature ? ` <span class="sub">${esc(r.feature)}</span>` : ""}</td><td>${esc(r.machine)}</td>
+      <td>${doing(r.kind)}${r.feature ? ` <span class="sub">${esc(r.feature)}</span>` : ""}</td><td>${esc(r.machine)}</td>
       <td class="mono">#${r.card}</td><td>${esc(r.repo)}</td>
       <td class="num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}">${duration(r.seconds)}</td>
     </tr>`).join("")
@@ -650,7 +666,7 @@ function render(d) {
   })).sort((a, b) => a.name.localeCompare(b.name) || a.machine.localeCompare(b.machine));
   document.getElementById("pool-count").textContent = pool.length;
   document.getElementById("pool").innerHTML = pool.map((p) => `<tr class="row" data-href="#/agents/${esc(p.machine)}/${esc(p.name)}">
-      <td>${p.busy.length ? p.busy.map((r) => `<span class="pill agent">#${r.card} ${esc(r.kind)}</span>`).join(" ") : `<span class="sub">Idle</span>`}</td>
+      <td>${p.busy.length ? p.busy.map((r) => `<span class="pill agent">#${r.card} ${esc(doing(r.kind))}</span>`).join(" ") : `<span class="sub">Idle</span>`}</td>
       <td><a class="plain mono" href="#/agents/${esc(p.machine)}/${esc(p.name)}">${esc(p.name)}</a></td>
       <td class="role">${p.note ? esc(p.note) : `<span class="sub">No note yet</span>`}</td>
       <td>Hermes</td>
@@ -773,6 +789,59 @@ async function checkServices() {
   } catch {}
 }
 
+// Domains: registrar and expiry from the public registry, soonest first. Amber at 30 days, red at 7.
+function daysCell(days, warnAt, failAt) {
+  if (days == null) return `<span class="sub">—</span>`;
+  const cls = days <= failAt ? "failed" : days <= warnAt ? "warning" : "";
+  return cls ? `<span class="pill ${cls}">${days}</span>` : `${days}`;
+}
+async function loadDomains() {
+  let d;
+  try {
+    d = await (await fetch("/api/domains")).json();
+  } catch {
+    return;
+  }
+  const list = [...d.domains].sort((a, b) => (a.days ?? 1e9) - (b.days ?? 1e9));
+  document.getElementById("dom-count").textContent = list.length;
+  document.getElementById("domains").innerHTML = list.length ? list.map((x) => x.registered ? `
+    <tr>
+      <td><a class="plain mono" href="https://${esc(x.name)}" target="_blank" rel="noopener">${esc(x.name)}</a></td>
+      <td>${esc(x.registrar || "—")}</td>
+      <td class="mono">${esc(x.since || "—")}</td>
+      <td class="mono">${esc(x.expires)}</td>
+      <td class="num mono">${daysCell(x.days, 30, 7)}</td>
+      <td>${x.auto_renew === true ? "On" : x.auto_renew === false ? `<span class="pill warning">Off</span>` : `<span class="sub">—</span>`}</td>
+      <td class="mono">${esc(x.ssl_expires || "—")}</td>
+      <td class="num mono">${daysCell(x.ssl_days, 14, 14)}</td>
+    </tr>` : `
+    <tr>
+      <td class="mono">${esc(x.name)}</td>
+      <td colspan="7">${x.error ? `<span class="pill warning">${esc(x.error)}</span>` : `<span class="pill failed">Not registered</span> <span class="sub">anyone can buy it</span>`}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="8" class="sub">No domains yet. Add them to "domains" in config.json.</td></tr>`;
+  // Auto-renew for Cloudflare domains needs one read-only Cloudflare key: the steps, and whether .env has it. Never the key.
+  const cf = d.cloudflare || {};
+  const needs = list.some((x) => x.registered && x.renew_source === "Cloudflare");
+  const box = document.getElementById("dom-keys");
+  box.hidden = !needs || (cf.present && !cf.error);
+  const [cls, word] = cf.error ? ["failed", "Refused"] : cf.present ? ["ok", "Added"] : ["warning", "Missing"];
+  box.innerHTML = `
+    <div class="panel-head"><svg class="i"><use href="#i-globe"/></svg><h2>Cloudflare key for auto-renew</h2>
+      <span class="sub mono">${esc(cf.key || "CLOUDFLARE_REGISTRAR_TOKEN")}</span>
+      <div class="tools"><span class="pill ${cls}"><span class="dot"></span>${word}</span></div></div>
+    ${cf.error ? `<div class="err">${esc(cf.error)}</div>` : ""}
+    <ol class="steps">
+      <li>Open <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">Cloudflare API tokens</a> and click <b>Create Token</b>.</li>
+      <li>At the bottom, next to <b>Create Custom Token</b>, click <b>Get started</b>.</li>
+      <li>Token name: <code>Collector</code>.</li>
+      <li>Permissions: choose <b>Account</b>, then <b>Registrar: Domains</b>, then <b>Read</b>. Click <b>+ Add more</b> and choose <b>Account</b>, then <b>Account Settings</b>, then <b>Read</b>.</li>
+      <li>Account Resources: <b>Include</b>, then your account.</li>
+      <li>Click <b>Continue to summary</b>, then <b>Create Token</b>, and copy the token.</li>
+      <li>Open <code>${esc(d.env_path || ".env")}</code>, paste the token after <code>${esc(cf.key || "CLOUDFLARE_REGISTRAR_TOKEN")}=</code> on its own line, and save. Collector reads the file at once.</li>
+    </ol>`;
+}
+
 // Projects: the repos chosen in the picker, with details from the GitHub REST API (refreshed every 5 min on the server).
 let projectData = null;
 let currentRepo = null;  // the repo of the open project page, if any
@@ -883,7 +952,7 @@ function renderProject() {
     fact("Open issues", `<a class="plain" href="${esc(p.url)}/issues" target="_blank" rel="noopener">${p.issues}</a>`),
     fact("Open PRs", `<a class="plain" href="${esc(p.url)}/pulls" target="_blank" rel="noopener">${p.prs}</a>`),
     fact("CI on main", p.ci ? `<a class="plain" href="${esc(p.ci.url)}" target="_blank" rel="noopener"><span class="pill ${cls}"><span class="dot"></span>${word}</span></a>` : "—"),
-    fact("Agent now", agents.length ? agents.map((r) => `#${r.card} ${esc(r.kind)}`).join(", ") : "—"),
+    fact("Agent now", agents.length ? agents.map((r) => `#${r.card} ${esc(doing(r.kind))}`).join(", ") : "—"),
     fact("Health", live.svc ? `<span class="pill ${svcLabel[live.svc.status][0]}"><span class="dot"></span>${svcLabel[live.svc.status][1]}</span> <span class="sub">${live.svc.ms} ms</span>` : "—"),
   ].join("");
   document.getElementById("proj-stack").innerHTML = (p.stack || []).length
@@ -1081,7 +1150,7 @@ function renderAgent() {
   document.getElementById("agent-facts").innerHTML = [
     fact("Type", "Hermes"), fact("Machine", esc(machine)),
     fact("Model", a.model ? `<span class="mono">${esc(a.model)}</span>` : "—"), fact("Provider", esc(a.provider || "—")),
-    fact("Status", a.busy.length ? a.busy.map((r) => `<span class="pill agent">#${r.card} ${esc(r.kind)} · ${esc(r.repo)}</span>`).join(" ") : "Idle"),
+    fact("Status", a.busy.length ? a.busy.map((r) => `<span class="pill agent">#${r.card} ${esc(doing(r.kind))} · ${esc(r.repo)}</span>`).join(" ") : "Idle"),
     fact("Last session", a.last_session ? ago(new Date(a.last_session * 1000)) : "never"),
   ].join("");
   document.getElementById("agent-role").innerHTML = a.role ? esc(a.role) : `<span class="sub">This profile uses the stock Hermes rules.</span>`;
@@ -1157,6 +1226,8 @@ checkServices();
 setInterval(checkServices, 60000);
 loadProjects();
 setInterval(loadProjects, 60000);
+loadDomains();
+setInterval(loadDomains, 60000);
 setInterval(countdown, 1000);
 </script>
 </body>
