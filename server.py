@@ -321,6 +321,7 @@ def snapshot():
             machines.append(dict(data or {}, name=t["name"], error=err))
         limit = limit.result()
     return {"at": int(time.time()), "machines": machines, "github": limit, "subscriptions": cfg.get("subscriptions") or [],
+            "agent_notes": cfg.get("agent_notes") or {},
             "warnings": warnings(machines, limit, cfg, _services)}
 
 

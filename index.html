@@ -170,9 +170,11 @@
   table.fit th:last-child, table.fit td:last-child { padding-right: 16px; }
   table.fit .pill { white-space: nowrap; }
   table.fit .desc { max-width: 320px; }
-  /* Phones: Project, Status, and Health only; the project page has the rest. */
+  table.fit td.role { max-width: 420px; color: var(--muted); }
+  /* Phones: Project, Status, and Health only; the project page has the rest. Agents: Status, Profile, Machine. */
   @media (max-width: 700px) {
-    table.fit tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)), table.fit .desc { display: none; }
+    table.fit:not(.pool) tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)), table.fit .desc { display: none; }
+    table.pool tr > :is(th, td):is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(7)) { display: none; }
   }
   table.fit tr.row { cursor: pointer; }
   table.fit tr.row:hover td { background: var(--hover); }
@@ -185,6 +187,7 @@
   .stack-list dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 12px;
           border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); }
+  .role-text { padding: 14px 16px; color: var(--muted); max-width: 820px; }
   .crumbs { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
   .crumbs a { color: inherit; text-decoration: none; }
   .crumbs a:hover { color: var(--text); }
@@ -256,8 +259,8 @@
     <nav class="rail" aria-label="Pages">
       <a class="home" href="#/"><svg class="i"><use href="#i-logo"/></svg><span class="label">Collector</span></a>
       <a class="item" href="#/" data-page="dashboard"><svg class="i"><use href="#i-dash"/></svg><span class="label">Dashboard</span><span class="tag" id="tag-attention"></span></a>
-      <a class="item" href="#/running" data-page="running"><svg class="i"><use href="#i-play"/></svg><span class="label">Running now</span><span class="tag" id="tag-running"></span></a>
-      <a class="item" href="#/cron" data-page="cron"><svg class="i"><use href="#i-clock"/></svg><span class="label">Cron jobs</span><span class="tag" id="tag-cron"></span></a>
+      <a class="item" href="#/agents" data-page="agents"><svg class="i"><use href="#i-bot"/></svg><span class="label">Agents</span><span class="tag" id="tag-running"></span></a>
+      <a class="item" href="#/cron" data-page="cron"><svg class="i"><use href="#i-clock"/></svg><span class="label">Cron Jobs</span><span class="tag" id="tag-cron"></span></a>
       <div class="sep" role="separator"></div>
       <a class="item" href="#/projects" data-page="projects"><svg class="i"><use href="#i-layers"/></svg><span class="label">Projects</span></a>
       <a class="item" href="#/domains" data-page="domains"><svg class="i"><use href="#i-globe"/></svg><span class="label">Domains</span></a>
@@ -305,8 +308,8 @@
       </section>
       </div>
       </div>
-      <div class="page" data-page="running" hidden>
-      <div class="page-head"><h1>Running now</h1><p>Each agent or script working on a card, with its current task.</p></div>
+      <div class="page" data-page="agents" hidden>
+      <div class="page-head"><h1>Agents</h1><p>What runs now, then every agent you can use.</p></div>
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-play"/></svg><h2>Running now</h2><span class="count" data-run-count>0</span></div>
         <div class="wrap">
@@ -318,9 +321,19 @@
           </table>
         </div>
       </section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-bot"/></svg><h2>All agents</h2><span class="count" id="pool-count">0</span>
+          <span class="sub">every Hermes profile on every machine</span></div>
+        <div class="wrap">
+          <table class="fit pool">
+            <thead><tr><th>Status</th><th>Profile</th><th>Note</th><th>Type</th><th>Model</th><th>Machine</th><th class="num">Cron jobs</th></tr></thead>
+            <tbody id="pool"></tbody>
+          </table>
+        </div>
+      </section>
       </div>
       <div class="page" data-page="cron" hidden>
-      <div class="page-head"><h1>Cron jobs</h1><p>Every scheduled job on every machine.</p></div>
+      <div class="page-head"><h1>Cron Jobs</h1><p>Every scheduled job on every machine.</p></div>
       <section class="panel" id="cron-jobs">
         <div class="panel-head"><svg class="i"><use href="#i-clock"/></svg><h2>Cron jobs</h2><span class="count" id="job-count">0</span>
           <div class="tools"><div class="seg" id="filter">
@@ -332,7 +345,7 @@
           <table>
             <thead><tr>
               <th>Status</th><th>Machine</th><th>Job</th><th>What it does</th><th>Schedule</th><th>Runs</th>
-              <th>Last run</th><th>Result</th><th class="num">Runs, 1 h</th>
+              <th>Last run</th><th>Last result</th><th class="num">Runs, 1 h</th>
             </tr></thead>
             <tbody id="jobs"></tbody>
           </table>
@@ -359,6 +372,21 @@
           <div class="tools"><input class="search" id="pick-search" type="search" placeholder="Find a repo" aria-label="Find a repo">
             <button class="btn ghost" id="pick-cancel">Cancel</button><button class="btn primary" id="pick-save">Save</button></div></div>
         <ul class="picks" id="picks"><li class="sub">Loading repos from GitHub…</li></ul>
+      </section>
+      </div>
+      <div class="page" data-page="agent" hidden>
+      <div class="page-head"><div class="crumbs"><a href="#/agents">&larr; All agents</a></div><h1 id="agent-title" class="mono-title">Agent</h1><p id="agent-desc"></p></div>
+      <section class="panel"><dl class="facts" id="agent-facts"></dl></section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-bot"/></svg><h2>Role</h2><span class="sub">the first sentence of the profile's rules</span></div>
+        <div class="role-text" id="agent-role"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-clock"/></svg><h2>Cron jobs it runs</h2></div>
+        <div class="wrap"><table>
+          <thead><tr><th>Status</th><th>Job</th><th>Schedule</th><th>Runs</th><th>Last run</th><th>Last result</th></tr></thead>
+          <tbody id="agent-crons"></tbody>
+        </table></div>
       </section>
       </div>
       <div class="page" data-page="project" hidden>
@@ -520,6 +548,26 @@ function render(d) {
     : `<tr><td colspan="8" class="sub">No agent or script is running.</td></tr>`;
   document.querySelectorAll("[data-run-rows]").forEach((e) => (e.innerHTML = runRows));
 
+  // All agents: every Hermes profile per machine, A to Z by profile, then by machine.
+  const pool = d.machines.flatMap((m) => (m.profiles || []).map((p) => {
+    const busy = running.filter((r) => r.machine === m.name && r.name === p.name);
+    const sched = p.name === "default" ? "Hermes" : `Hermes (${p.name})`;
+    const cronJobs = (m.jobs || []).filter((j) => j.scheduler === sched);
+    return { ...p, machine: m.name, busy, cronJobs, note: (d.agent_notes || {})[p.name] || shortRole(p.role) };
+  })).sort((a, b) => a.name.localeCompare(b.name) || a.machine.localeCompare(b.machine));
+  document.getElementById("pool-count").textContent = pool.length;
+  document.getElementById("pool").innerHTML = pool.map((p) => `<tr class="row" data-href="#/agents/${esc(p.machine)}/${esc(p.name)}">
+      <td>${p.busy.length ? p.busy.map((r) => `<span class="pill agent">#${r.card} ${esc(r.kind)}</span>`).join(" ") : `<span class="sub">Idle</span>`}</td>
+      <td><a class="plain mono" href="#/agents/${esc(p.machine)}/${esc(p.name)}">${esc(p.name)}</a></td>
+      <td class="role">${p.note ? esc(p.note) : `<span class="sub">No note yet</span>`}</td>
+      <td>Hermes</td>
+      <td>${p.model ? `<span class="mono">${esc(p.model.split("/").pop())}</span>${p.provider ? ` <span class="sub">${esc(p.provider)}</span>` : ""}` : `<span class="sub">—</span>`}</td>
+      <td>${esc(p.machine)}</td>
+      <td class="num mono">${cronCount(p)}</td>
+    </tr>`).join("") || `<tr><td colspan="7" class="sub">No Hermes profiles found.</td></tr>`;
+  agentPool = pool;
+  renderAgent();
+
   const rank = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
   const rows = d.machines.flatMap((m) => m.jobs || [])
     .map((j) => ({ ...j, s: status(j) }))
@@ -539,7 +587,7 @@ function render(d) {
       <td><span class="mono">${esc(j.name)}</span><div class="sub">${esc(j.scheduler)}</div></td>
       <td class="wide">${esc(j.what)}</td><td>${esc(schedule(j.schedule, j.machine))}</td>
       <td class="sub">${j.agent ? "agent" : "script"}</td><td class="sub">${ago(j.last_run_at)}</td>
-      <td>${esc(j.enabled ? (j.last_status || "—") : j.state)}${j.last_error ? `<div class="err">${esc(j.last_error.slice(0, 120))}</div>` : ""}</td>
+      <td>${esc(j.last_status || "—")}${j.last_error ? `<div class="err">${esc(j.last_error.slice(0, 120))}</div>` : ""}</td>
       <td class="num mono">${j.runs_1h ?? "—"}</td>
     </tr>`).join("");
 
@@ -714,6 +762,10 @@ function renderProject() {
          agents.length ? agents.map((r) => `${esc(r.kind)} · ${esc(r.name || "")}`).join(", ") : "no agent works on it", false),
   ].join("");
 }
+document.getElementById("pool").onclick = (e) => {
+  const row = e.target.closest("tr.row");
+  if (row && !e.target.closest("a")) location.hash = row.dataset.href;
+};
 async function loadProjects() {
   try { projectData = await (await fetch("/api/projects")).json(); renderProjects(); } catch {}
 }
@@ -767,6 +819,42 @@ document.getElementById("pick-save").onclick = async () => {
   }
 };
 
+// A note when config.json has none: the role's first clause, without the parentheses.
+const shortRole = (role) => (role || "").replace(/\s*\(.*?\)/g, "").split(/[:;]/)[0].replace(/^The /, "").slice(0, 60);
+let agentPool = [];
+// The cron jobs a profile owns: the active ones, plus the paused ones in grey.
+function cronCount(p) {
+  const on = p.cronJobs.filter((j) => j.enabled).length, off = p.cronJobs.length - on;
+  if (!p.cronJobs.length) return `<span class="sub">—</span>`;
+  return `${on}${off ? ` <span class="sub">+${off} paused</span>` : ""}`;
+}
+let currentAgent = null;  // [machine, profile] of the open agent page
+function renderAgent() {
+  if (!currentAgent) return;
+  const [machine, name] = currentAgent;
+  const a = agentPool.find((p) => p.machine === machine && p.name === name);
+  document.getElementById("agent-title").textContent = name;
+  document.getElementById("crumb").textContent = `Agents / ${name}`;
+  document.getElementById("agent-desc").textContent = a ? a.note || "" : "Loading…";
+  if (!a) return;
+  const fact = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+  document.getElementById("agent-facts").innerHTML = [
+    fact("Type", "Hermes"), fact("Machine", esc(machine)),
+    fact("Model", a.model ? `<span class="mono">${esc(a.model)}</span>` : "—"), fact("Provider", esc(a.provider || "—")),
+    fact("Status", a.busy.length ? a.busy.map((r) => `<span class="pill agent">#${r.card} ${esc(r.kind)} · ${esc(r.repo)}</span>`).join(" ") : "Idle"),
+    fact("Last session", a.last_session ? ago(new Date(a.last_session * 1000)) : "never"),
+  ].join("");
+  document.getElementById("agent-role").innerHTML = a.role ? esc(a.role) : `<span class="sub">This profile uses the stock Hermes rules.</span>`;
+  // Status says whether the job runs (OK, Failed, Paused); Last result is what its last run returned.
+  const rank = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
+  const jobs = a.cronJobs.map((j) => ({ ...j, s: status(j) })).sort((x, y) => rank[x.s] - rank[y.s] || x.name.localeCompare(y.name));
+  document.getElementById("agent-crons").innerHTML = jobs.length ? jobs.map((j) => `<tr class="${j.enabled ? "" : "off"}">
+      <td><span class="pill ${j.s.toLowerCase()}"><span class="dot"></span>${j.s}</span></td>
+      <td><span class="mono">${esc(j.name)}</span></td><td>${esc(schedule(j.schedule, j.machine))}</td><td class="sub">${j.agent ? "agent" : "script"}</td>
+      <td class="sub">${ago(j.last_run_at)}</td><td>${esc(j.last_status || "—")}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="sub">This profile runs no cron jobs.</td></tr>`;
+}
+
 let next = 0;
 async function tick() {
   next = 0;
@@ -810,16 +898,20 @@ setInterval(async () => {
 // Pages: the hash picks one (#/cron); the sidebar and the top bar follow it.
 const links = [...document.querySelectorAll(".rail a.item")];
 function route() {
-  const name = location.hash.replace(/^#\/?/, "") || "dashboard";
+  let name = location.hash.replace(/^#\/?/, "") || "dashboard";
+  if (name === "running") name = "agents";  // the old address of the Agents page
   // #/projects/<owner>/<repo> is one project's own page; the sidebar keeps Projects lit.
   const repo = name.match(/^projects\/([\w.-]+\/[\w.-]+)$/);
+  const agent = name.match(/^agents\/([\w.-]+)\/([\w.-]+)$/);
   currentRepo = repo ? repo[1] : null;
-  const page = repo ? "project" : document.querySelector(`.page[data-page="${name}"]`) ? name : "dashboard";
-  const lit = repo ? "projects" : page;
+  currentAgent = agent ? [agent[1], agent[2]] : null;
+  const page = repo ? "project" : agent ? "agent" : document.querySelector(`.page[data-page="${name}"]`) ? name : "dashboard";
+  const lit = repo ? "projects" : agent ? "agents" : page;
   document.querySelectorAll(".page").forEach((p) => (p.hidden = p.dataset.page !== page));
   for (const a of links) a.toggleAttribute("aria-current", a.dataset.page === lit), a.dataset.page === lit && a.setAttribute("aria-current", "page");
   document.getElementById("crumb").textContent = links.find((a) => a.dataset.page === lit).querySelector(".label").textContent;
   if (repo) renderProject();
+  if (agent) renderAgent();
   scrollTo(0, 0);
 }
 addEventListener("hashchange", route);

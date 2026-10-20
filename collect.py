@@ -248,6 +248,46 @@ def work_script_ticks(now_local):
     return sum(1 for t in re.findall(r"=== tick (\S+ \S+) ===", tail) if t >= since)
 
 
+def profile_model(config_path):
+    """model.default and model.provider from a Hermes config.yaml, read with a regex (no YAML package)."""
+    try:
+        text = open(config_path).read()
+    except OSError:
+        return None, None
+    block = re.search(r"^model:\n((?:[ \t]+.*\n?)*)", text, re.M)
+    if not block:
+        return None, None
+    get = lambda key: (re.search(rf"^\s+{key}:\s*(\S+)", block.group(1), re.M) or [None, None])[1]
+    return get("default"), get("provider")
+
+
+def hermes_profiles():
+    """Every Hermes agent profile on this machine (and the default one), with its role, model, and last session."""
+    dirs = [("default", HERMES)] + [(d.rstrip("/").split("/")[-1], d) for d in sorted(glob.glob(os.path.join(HERMES, "profiles/*/")))]
+    out = []
+    for name, d in dirs:
+        if not os.path.exists(os.path.join(d, "config.yaml")):
+            continue
+        model, provider = profile_model(os.path.join(d, "config.yaml"))
+        role = ""
+        try:
+            first = open(os.path.join(d, "SOUL.md")).read().strip().split("\n")[0]
+            role = re.split(r"(?<=[.!])\s", first)[0].removeprefix("You are ").rstrip(".")[:160]
+            role = "" if role.startswith("Hermes Agent, built by Nous Research") else role[:1].upper() + role[1:]
+        except OSError:
+            pass
+        last = None
+        db = os.path.join(d, "state.db")
+        if os.path.exists(db):
+            try:
+                with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)) as con:
+                    last = con.execute("SELECT MAX(started_at) FROM sessions").fetchone()[0]
+            except sqlite3.Error:
+                pass
+        out.append({"name": name, "model": model, "provider": provider, "role": role, "last_session": last})
+    return out
+
+
 def main():
     now = datetime.now(timezone.utc).astimezone()
     print(json.dumps({
@@ -256,6 +296,7 @@ def main():
         "now": now.isoformat(),
         "jobs": hermes_jobs(now) + launchd_jobs(),
         "running": running_agents(),
+        "profiles": hermes_profiles(),
         "work_ticks_10m": work_script_ticks(now.replace(tzinfo=None)),
     }))
 

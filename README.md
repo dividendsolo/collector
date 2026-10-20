@@ -13,7 +13,11 @@ The Dashboard answers these questions at a glance:
 3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
 4. **Monthly spend:** your subscriptions, with annual charges counted as a twelfth a month. The Subscriptions page
    lists them all. The eye button blurs every amount, so you can share the screen.
-5. **Cron jobs:** every scheduled job on every machine, with its schedule, last run, result, and runs in the last hour.
+5. **Cron jobs:** every scheduled job on every machine, with its status, schedule, last run, last result, and runs in the last hour.
+
+The **Agents** page shows Running now, then every Hermes profile on every machine, A to Z: a short note, the type,
+the model, the machine, and how many cron jobs the profile runs. Each agent opens its own page with its model,
+provider, last session, rules summary, and the cron jobs it runs.
 
 The **Projects** page shows the repos you choose: product name, repo, type, status, hosting, live URL, and health.
 Each project opens its own page with the last push, open issues and PRs, CI on the default branch, the card an
@@ -61,6 +65,7 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 | `services` | Sites to check once a minute: `[{"name": "My app", "url": "https://example.com"}]`. A project whose repo name matches a service name shows that service's status. |
 | `subscriptions` | What you pay for: `[{"name": "Hosting", "amount": 20, "billing": "monthly", "currency": "USD"}]`. `billing` is `monthly` or `annual`. |
 | `projects` | The repos on the Projects page, as `owner/repo`. The "Choose repos" button writes this key. |
+| `agent_notes` | One short note per Hermes profile, shown in the Agents table: `{"builder": "Builds cards"}`. A profile with no note shows "No note yet". |
 | `repos_dir` | The folder that holds your repos (default `~/code`). |
 
 ## How it finds things
@@ -70,6 +75,7 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 - **Agent runs:** processes that work in a card worktree, `<repo>/.worktrees/build-<card>` or `review-<card>`. A Hermes
   process (`hermes -p <profile> chat`) makes the row an agent; anything else is the work script.
 - **Models:** the agent's open session in the profile's `state.db` (Hermes), read only.
+- **Agents:** each folder in `~/.hermes/profiles`: the model and provider from its `config.yaml`, the first sentence of its `SOUL.md`, and the last session from its `state.db`.
 - **Projects:** the GitHub REST API through `gh`, about seven calls per repo every five minutes.
 - **Remote machines:** the server sends `collect.py` over SSH (`ssh <host> python3 -`) on each refresh, so nothing is
   installed there.
