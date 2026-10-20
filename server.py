@@ -237,6 +237,175 @@ def project(repo):
     }
 
 
+# DataFast: revenue and visitors for each project's live site, over the last 30 days.
+# The token is the DataFast CLI's (`datafast login` writes ~/.config/datafast/config.json), or DATAFAST_TOKEN.
+DATAFAST_CONFIG = os.path.expanduser("~/.config/datafast/config.json")
+DATAFAST_SECONDS = 600
+_datafast = {"at": 0, "sites": {}, "error": None}
+_datafast_lock = threading.Lock()
+
+
+def datafast_token():
+    try:
+        return os.environ.get("DATAFAST_TOKEN") or json.load(open(DATAFAST_CONFIG)).get("token")
+    except (OSError, ValueError):
+        return None
+
+
+def datafast_get(path, token):
+    req = urllib.request.Request(f"https://datafa.st/api/v1/{path}", headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.load(r).get("data")
+
+
+def datafast():
+    """{hostname: {visitors, revenue, payments}} for every DataFast website, cached ten minutes."""
+    with _datafast_lock:  # two page requests at once share one fetch, and neither sees a half-filled cache
+        if time.time() - _datafast["at"] >= DATAFAST_SECONDS:
+            _datafast.update(datafast_fetch(), at=time.time())
+    return _datafast
+
+
+def datafast_fetch():
+    token = datafast_token()
+    if not token:
+        return {"sites": {}, "error": "no token"}
+    end = time.strftime("%Y-%m-%d")
+    start = time.strftime("%Y-%m-%d", time.localtime(time.time() - 29 * 86400))
+
+    def one(site):
+        q = f"analytics/overview?websiteId={site['_id']}&startAt={start}&endAt={end}&fields=visitors,revenue,payments"
+        row = (datafast_get(q, token) or [{}])[0]
+        # All time: from the day the site was added to DataFast.
+        q = f"analytics/overview?websiteId={site['_id']}&startAt={site['createdAt'][:10]}&endAt={end}&fields=revenue,payments"
+        total = (datafast_get(q, token) or [{}])[0]
+        return site["domain"], {"visitors": row.get("visitors"), "revenue": row.get("revenue"), "payments": row.get("payments"),
+                                "revenue_total": total.get("revenue"), "payments_total": total.get("payments"),
+                                "since": site["createdAt"][:10]}
+    try:
+        sites = datafast_get("admin/websites", token) or []
+        with ThreadPoolExecutor(max(len(sites), 1)) as pool:
+            return {"sites": dict(pool.map(one, sites)), "error": None}
+    except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+        return {"sites": {}, "error": str(getattr(e, "code", "") or e)}
+
+
+# MRR: active subscriptions read from each project's payment provider (config.json "billing").
+# Keys live in .env next to this file (gitignored), never in config.json: {"owner/repo": {"provider": "stripe", "key": "ENV_NAME"}}.
+BILLING_SECONDS = 600
+_billing = {"at": 0, "mrr": {}}
+_billing_lock = threading.Lock()
+
+
+def env_file():
+    try:
+        lines = open(os.path.join(HERE, ".env")).read().splitlines()
+    except OSError:
+        return {}
+    pairs = (x.split("=", 1) for x in lines if "=" in x and not x.lstrip().startswith("#"))
+    return {k.strip(): v.strip().strip('"').strip("'") for k, v in pairs}
+
+
+def per_month(cents, interval, count=1):
+    """One subscription's price as a monthly amount in dollars."""
+    months = {"day": 12 / 365, "week": 12 / 52, "month": 1, "year": 12}.get(interval)
+    return cents / 100 / (months * (count or 1)) if months else 0
+
+
+def stripe_list(key, path):
+    """Every row of one Stripe list endpoint, page by page."""
+    rows, after = [], None
+    while True:
+        url = f"https://api.stripe.com/v1/{path}{'&' if '?' in path else '?'}limit=100" + (f"&starting_after={after}" if after else "")
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"}), timeout=15) as r:
+            page = json.load(r)
+        rows += page["data"]
+        if not page.get("has_more"):
+            return rows
+        after = page["data"][-1]["id"]
+
+
+def stripe(key):
+    """MRR from active subscriptions; revenue from every paid charge, less refunds."""
+    subs = stripe_list(key, "subscriptions?status=active")
+    mrr = sum(per_month((i["price"].get("unit_amount") or 0) * (i.get("quantity") or 1),
+                        (i["price"].get("recurring") or {}).get("interval"), (i["price"].get("recurring") or {}).get("interval_count"))
+              for s in subs for i in s["items"]["data"])
+    paid = [c for c in stripe_list(key, "charges") if c.get("paid") and c.get("status") == "succeeded"]
+    # Clerk Billing charges plain payments, with no Stripe subscription behind them. A charge named "Pro (annual)"
+    # or "(monthly)" still pays for a term, so it counts toward MRR until its term ends.
+    terms = {"annual": 365, "yearly": 365, "monthly": 31}
+    for c in paid:
+        term = next((days for word, days in terms.items() if f"({word})" in (c.get("description") or "").lower()), None)
+        if term and time.time() - c["created"] < term * 86400 and not c.get("refunded"):
+            mrr += (c["amount"] - (c.get("amount_refunded") or 0)) / 100 / (12 if term > 31 else 1)
+            subs.append(c)
+    return {"mrr": mrr, "subscribers": len(subs),
+            "revenue": sum(c["amount"] - (c.get("amount_refunded") or 0) for c in paid) / 100, "payments": len(paid)}
+
+
+def polar_list(key, path):
+    # Polar's edge refuses Python's default User-Agent, so the request names itself.
+    rows, page = [], 1
+    while True:
+        url = f"https://api.polar.sh/v1/{path}{'&' if '?' in path else '?'}limit=100&page={page}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}", "Accept": "application/json", "User-Agent": "collector"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            body = json.load(r)
+        rows += body["items"]
+        if page >= (body.get("pagination") or {}).get("max_page", 1):
+            return rows
+        page += 1
+
+
+def polar(key):
+    """MRR from active subscriptions; revenue from every paid order, less refunds."""
+    subs = polar_list(key, "subscriptions/?active=true")
+    orders = [o for o in polar_list(key, "orders/") if o.get("paid")]
+    return {"mrr": sum(per_month(s.get("amount") or 0, s.get("recurring_interval"), s.get("recurring_interval_count")) for s in subs),
+            "subscribers": len(subs),
+            "revenue": sum((o.get("total_amount") or 0) - (o.get("refunded_amount") or 0) for o in orders) / 100, "payments": len(orders)}
+
+
+def billing():
+    """{repo: {mrr, subscribers, revenue, payments, providers} or {error}}, cached ten minutes."""
+    with _billing_lock:
+        # A new key in .env shows at once; otherwise the providers are asked every ten minutes.
+        stamp = os.path.getmtime(os.path.join(HERE, ".env")) if os.path.exists(os.path.join(HERE, ".env")) else 0
+        if time.time() - _billing["at"] >= BILLING_SECONDS or _billing.get("stamp") != stamp:
+            _billing.update(mrr=billing_fetch(), at=time.time(), stamp=stamp)
+    return _billing["mrr"]
+
+
+def billing_fetch():
+    """A project can bill through more than one provider (ZeroPhase: Stripe through Clerk, then Polar); the totals add up."""
+    keys, out = env_file(), {}
+    for repo, accounts in (config().get("billing") or {}).items():
+        accounts = accounts if isinstance(accounts, list) else [accounts]
+        total = {"mrr": 0.0, "subscribers": 0, "revenue": 0.0, "payments": 0, "providers": [], "missing": [], "rejected": []}
+        for b in accounts:
+            key = os.environ.get(b.get("key", "")) or keys.get(b.get("key", ""))
+            if not key:
+                total["missing"].append(b.get("key"))
+                continue
+            try:
+                one = {"stripe": stripe, "polar": polar}[b["provider"]](key)
+            except (KeyError, urllib.error.URLError, OSError, ValueError) as e:
+                code = getattr(e, "code", "")
+                reason = "the key is wrong or deleted" if code == 401 else "the key lacks a permission" if code == 403 else str(code or e)
+                total["rejected"].append(f"{b['provider'].title()} refused {b.get('key')}: {reason}")
+                continue
+            for k in ("mrr", "subscribers", "revenue", "payments"):
+                total[k] += one[k]
+            total["providers"].append(b["provider"].title())
+        if not total["providers"]:
+            out[repo] = {"error": "; ".join(total["rejected"] + ([f"add {', '.join(total['missing'])} to .env"] if total["missing"] else []))}
+        else:
+            total.update(mrr=round(total["mrr"], 2), revenue=round(total["revenue"], 2))
+            out[repo] = total
+    return out
+
+
 def flat(name):
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
@@ -251,12 +420,28 @@ def projects(force=False):
     # A project's live site: the service with the repo's name (zero-phase = ZeroPhase), else its GitHub homepage.
     # The product name comes from the same service (ZeroPhase); without one, the repo name in title case.
     sites = {flat(x["name"]): x for x in cfg.get("services") or []}
+    df = datafast()
+    mrr = billing()
+    subs = cfg.get("subscriptions") or []
     for p in _projects["list"]:
         if "name" in p:
             site = sites.get(flat(p["name"])) or {}
             p["live"] = site.get("url") or p["homepage"]
             p["title"] = site.get("name") or p["name"].replace("-", " ").title()
-    return {"at": int(_projects["at"]), "projects": _projects["list"]}
+            host = re.sub(r"^https?://|/.*$", "", p["live"] or "")
+            p["traffic"] = df["sites"].get(host) or {"error": df["error"] or "not on DataFast"}
+            # A subscription belongs to a project when its "project" names the repo (zero-phase).
+            p["subscriptions"] = [x for x in subs if x.get("project") in (p["name"], p["repo"])]
+            p["billing"] = mrr.get(p["repo"])
+    # The keys the payment providers need, and whether .env has each one. Never the key itself.
+    keys = env_file()
+    titles = {p["repo"]: p.get("title") or p["repo"] for p in _projects["list"]}
+    needed = [{"repo": repo, "project": titles.get(repo, repo), "provider": b["provider"], "key": b["key"], "note": b.get("note", ""),
+               "present": bool(os.environ.get(b["key"]) or keys.get(b["key"])),
+               "refused": b["key"] in json.dumps(mrr.get(repo) or {}) and "refused" in json.dumps(mrr.get(repo) or {})}
+              for repo, accounts in (cfg.get("billing") or {}).items()
+              for b in (accounts if isinstance(accounts, list) else [accounts])]
+    return {"at": int(_projects["at"]), "projects": _projects["list"], "keys": needed, "env_path": os.path.join(HERE, ".env")}
 
 
 def save_projects(repos):

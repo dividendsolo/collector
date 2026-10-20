@@ -58,5 +58,17 @@
   "agent_notes": {
     "builder": "Builds cards",
     "reviewer": "Reviews PRs"
+  },
+  "billing": {
+    "owner/my-app": [
+      {
+        "provider": "stripe",
+        "key": "MYAPP_STRIPE_KEY"
+      },
+      {
+        "provider": "polar",
+        "key": "MYAPP_POLAR_TOKEN"
+      }
+    ]
   }
 }

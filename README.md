@@ -26,6 +26,10 @@ Each project opens its own page with the last push, open issues and PRs, CI on t
 agent works on now, and the tech stack read from the repo's `package.json` and `Gemfile`. Hosting comes from the live site's headers, the last GitHub deployment, or a host file in the
 repo (`.kamal`, `config/deploy.yml`, `fly.toml`, `vercel.json`, and others).
 
+Each project page also shows a Stats card: monthly spend (subscriptions tagged with the project), MRR and ARR and
+total revenue (from the project's payment providers, Stripe and Polar), and revenue and visitors over 30 days
+(from DataFast). The Payment keys page (`#/keys`) shows how to make each read-only key and whether it works.
+
 It reads only. It never changes a job or a card. Its one write is your repo choice, saved to `config.json`.
 
 ## Requirements
@@ -68,6 +72,7 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 | `subscriptions` | What you pay for: `[{"name": "Hosting", "amount": 20, "billing": "monthly", "currency": "USD"}]`. `billing` is `monthly` or `annual`. |
 | `projects` | The repos on the Projects page, as `owner/repo`. The "Choose repos" button writes this key. |
 | `agent_notes` | One short note per Hermes profile, shown in the Agents table: `{"builder": "Builds cards"}`. A profile with no note shows "No note yet". |
+| `billing` | Each project's payment providers: `{"owner/repo": [{"provider": "stripe", "key": "MYAPP_STRIPE_KEY"}]}`. `provider` is `stripe` or `polar`; `key` names a line in `.env` (gitignored) that holds a read-only key. |
 | `repos_dir` | The folder that holds your repos (default `~/code`). |
 
 ## How it finds things
@@ -77,6 +82,9 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 - **Agent runs:** processes that work in a card worktree, `<repo>/.worktrees/build-<card>` or `review-<card>`. A Hermes
   process (`hermes -p <profile> chat`) makes the row an agent; anything else is the work script.
 - **Models:** the agent's open session in the profile's `state.db` (Hermes), read only.
+- **Revenue:** Stripe charges and Polar orders (paid, less refunds) for total revenue; active subscriptions for MRR.
+  Clerk Billing makes plain charges, so a charge named "(annual)" or "(monthly)" counts toward MRR until its term ends.
+  DataFast (the token from `datafast login`) gives 30-day revenue and visitors.
 - **Agents:** each folder in `~/.hermes/profiles`: the model and provider from its `config.yaml`, the first sentence of its `SOUL.md`, and the last session from its `state.db`.
 - **Projects:** the GitHub REST API through `gh`, about seven calls per repo every five minutes.
 - **Remote machines:** the server sends `collect.py` over SSH (`ssh <host> python3 -`) on each refresh, so nothing is
