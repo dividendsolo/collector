@@ -42,6 +42,17 @@ def cron_dirs():
         yield d.split("/")[-2], d
 
 
+def open_db(db):
+    """Open a Hermes SQLite file to read. Older SQLite (macOS's /usr/bin/python3) cannot open a WAL file
+    read-only when its -shm file is missing, so fall back to a normal open; only selects run on it."""
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        con.execute("select 1 from sqlite_master limit 1")
+        return con
+    except sqlite3.Error:
+        return sqlite3.connect(db, timeout=2)
+
+
 def run_counts(db, now):
     """job_id -> (runs in 1h, runs in 24h, failures in 24h), from Hermes's executions table."""
     if not os.path.exists(db):
@@ -49,7 +60,7 @@ def run_counts(db, now):
     since, hour = now - timedelta(hours=24), now - timedelta(hours=1)
     counts = {}
     try:
-        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        con = open_db(db)
         # claimed_at is ISO with mixed offsets, so filter loosely in SQL and exactly here
         rows = con.execute("select job_id, claimed_at, status from executions where claimed_at >= ?",
                            ((since - timedelta(hours=14)).strftime("%Y-%m-%d"),))
@@ -70,6 +81,54 @@ def run_counts(db, now):
     return counts
 
 
+def recent_runs(db, keep=10):
+    """job_id -> its last runs, newest first, from Hermes's executions table."""
+    if not os.path.exists(db):
+        return {}
+    runs = {}
+    try:
+        with closing(open_db(db)) as con:
+            rows = con.execute("""select job_id, claimed_at, started_at, finished_at, status, error, delivery_outcome from (
+                select *, row_number() over (partition by job_id order by claimed_at desc) n from executions) where n <= ?""", (keep,))
+            for job_id, claimed, started, finished, status, error, delivery in rows:
+                runs.setdefault(job_id, []).append({"at": started or claimed, "finished": finished, "status": status,
+                                                    "error": (error or "")[:300], "delivery": delivery})
+    except sqlite3.Error:
+        pass
+    return runs
+
+
+def read_text(path, limit=20000):
+    """A script's source for the job page, or None when it is missing or not text."""
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) > 200000:
+            return None
+        with open(path, errors="replace") as f:
+            return f.read(limit)
+    except OSError:
+        return None
+
+
+def script_size(path):
+    """The whole script's lines and characters, also when the page shows only its start."""
+    text = read_text(path, 10**6) if path else None
+    return {"script_chars": len(text), "script_lines": text.count("\n") + (not text.endswith("\n"))} if text else {}
+
+
+def script_path(home, script):
+    """Hermes runs a job's script from <HERMES_HOME>/scripts; a profile's home is its own folder."""
+    if not script:
+        return None
+    script = os.path.expanduser(script.split()[0])
+    if os.path.isabs(script):
+        return script
+    for base in (home, HERMES):
+        path = os.path.join(base, "scripts", script)
+        if os.path.exists(path):
+            return path
+    return os.path.join(home, "scripts", script)
+
+
 def hermes_jobs(now):
     jobs = []
     for profile, d in cron_dirs():
@@ -78,8 +137,12 @@ def hermes_jobs(now):
             continue
         data = json.load(open(path))
         counts = run_counts(os.path.join(d, "executions.db"), now)
+        history = recent_runs(os.path.join(d, "executions.db"))
+        home = os.path.dirname(d)
         for j in data.get("jobs", data) if isinstance(data, dict) else data:
             h, day, fails = counts.get(j.get("id"), (0, 0, 0))
+            spath = script_path(home, j.get("script"))
+            skills = list(j.get("skills") or []) + ([j["skill"]] if j.get("skill") else [])
             jobs.append({
                 "scheduler": "Hermes" if profile == "default" else f"Hermes ({profile})",
                 "id": j.get("id"),
@@ -97,6 +160,23 @@ def hermes_jobs(now):
                 "runs_1h": h,
                 "runs_24h": day,
                 "fails_24h": fails,
+                # The job page shows the rest.
+                "profile": profile,
+                "schedule_raw": (j.get("schedule") or {}).get("expr") or (j.get("schedule") or {}).get("display"),
+                "prompt": (j.get("prompt") or "")[:20000],
+                "prompt_chars": len(j.get("prompt") or ""),
+                "skills": skills,
+                "model": j.get("model") or j.get("model_snapshot"),
+                "provider": j.get("provider") or j.get("provider_snapshot"),
+                "deliver": j.get("deliver"),
+                "workdir": j.get("workdir"),
+                "created_at": j.get("created_at"),
+                "paused_reason": j.get("paused_reason"),
+                "total_runs": (j.get("repeat") or {}).get("completed"),
+                "script_path": spath,
+                "script_body": read_text(spath) if spath else None,
+                **script_size(spath),
+                "runs": history.get(j.get("id"), []),
             })
     return jobs
 
@@ -145,7 +225,13 @@ def launchd_jobs():
             "runs_1h": None,
             "runs_24h": None,
             "fails_24h": None,
+            "plist": path,
+            "command": " ".join(args),
+            "logs": list(dict.fromkeys(x for x in (p.get("StandardOutPath"), p.get("StandardErrorPath")) if x)),
+            "script_path": next((a for a in args if a.startswith("/") and a.endswith((".sh", ".py", ".rb", ".js"))), None),
         })
+        jobs[-1]["script_body"] = read_text(jobs[-1]["script_path"]) if jobs[-1]["script_path"] else None
+        jobs[-1].update(script_size(jobs[-1]["script_path"]))
     return jobs
 
 
@@ -185,7 +271,7 @@ def agent_model(profile, worktree):
     if not os.path.exists(db):
         return None
     try:
-        with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)) as con:
+        with closing(open_db(db)) as con:
             session = con.execute("SELECT id, model, billing_provider FROM sessions WHERE cwd = ? AND ended_at IS NULL "
                                   "ORDER BY started_at DESC LIMIT 1", (worktree,)).fetchone()
             if not session:
@@ -280,7 +366,7 @@ def hermes_profiles():
         db = os.path.join(d, "state.db")
         if os.path.exists(db):
             try:
-                with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)) as con:
+                with closing(open_db(db)) as con:
                     last = con.execute("SELECT MAX(started_at) FROM sessions").fetchone()[0]
             except sqlite3.Error:
                 pass

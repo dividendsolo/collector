@@ -13,7 +13,9 @@ The Dashboard answers these questions at a glance:
 3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
 4. **Monthly spend:** your subscriptions, with annual charges counted as a twelfth a month. The Subscriptions page
    lists them all. The eye button blurs every amount, so you can share the screen.
-5. **Cron jobs:** every scheduled job on every machine, with its status, schedule, last run, last result, and runs in the last hour.
+5. **Cron jobs:** every scheduled job on every machine, with its status, machine, schedule, last run, and last result.
+   Each job opens its own page: its setup (model, output, size in characters or lines and tokens), its schedule,
+   its run counts, the agent's full prompt or the script's source, the last error, and its last 10 runs.
 
 The **Agents** page shows Running now, then every Hermes profile on every machine, A to Z: a short note, the type,
 the model, the machine, and how many cron jobs the profile runs. Each agent opens its own page with its model,

@@ -176,6 +176,11 @@
     table.fit:not(.pool) tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)), table.fit .desc { display: none; }
     table.pool tr > :is(th, td):is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(7)) { display: none; }
   }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: var(--hover); }
+  .code { margin: 0; padding: 14px 16px; font: 12px/1.6 var(--mono, ui-monospace, monospace); color: var(--muted);
+          white-space: pre-wrap; word-break: break-word; max-height: 640px; overflow: auto; }
+  .code.prose { font-family: inherit; font-size: 13px; color: var(--text); }
   table.fit tr.row { cursor: pointer; }
   table.fit tr.row:hover td { background: var(--hover); }
   table.fit .chev { width: 12px; height: 12px; margin-left: 6px; color: var(--faint); vertical-align: -1px; opacity: 0; transition: opacity .12s ease; }
@@ -192,6 +197,19 @@
   .crumbs a { color: inherit; text-decoration: none; }
   .crumbs a:hover { color: var(--text); }
   .facts { display: flex; flex-wrap: wrap; gap: 12px 40px; margin: 0; padding: 14px 16px; }
+  /* Job page: three cards of label / value rows, side by side and the same height. */
+  .kv-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+  .kv-cards .panel { margin: 0; }
+  /* The label column is as wide as the longest label, so each value starts right after the labels. */
+  .kv { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); }
+  .kv > div { display: contents; }
+  .kv dt, .kv dd { padding: 9px 16px; line-height: 20px; }
+  .kv dd { padding-left: 8px; }
+  .kv > div + div > * { border-top: 1px solid var(--line); }
+  .kv dt { font-size: 12px; color: var(--faint); }
+  .kv dd { margin: 0; overflow-wrap: anywhere; }
+  .kv dd .sub { white-space: nowrap; }
+  .kv .digits { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; }
   .facts dt { font-size: 12px; color: var(--faint); }
   .facts dd { margin: 2px 0 0; }
   tbody tr:last-child td { border-bottom: 0; }
@@ -344,8 +362,8 @@
         <div class="wrap">
           <table>
             <thead><tr>
-              <th>Status</th><th>Machine</th><th>Job</th><th>What it does</th><th>Schedule</th><th>Runs</th>
-              <th>Last run</th><th>Last result</th><th class="num">Runs, 1 h</th>
+              <th>Status</th><th>Job</th><th>Machine</th><th>What it does</th><th>Schedule</th>
+              <th>Last run</th><th>Last result</th>
             </tr></thead>
             <tbody id="jobs"></tbody>
           </table>
@@ -372,6 +390,33 @@
           <div class="tools"><input class="search" id="pick-search" type="search" placeholder="Find a repo" aria-label="Find a repo">
             <button class="btn ghost" id="pick-cancel">Cancel</button><button class="btn primary" id="pick-save">Save</button></div></div>
         <ul class="picks" id="picks"><li class="sub">Loading repos from GitHub…</li></ul>
+      </section>
+      </div>
+      <div class="page" data-page="job" hidden>
+      <div class="page-head"><div class="crumbs"><a href="#/cron">&larr; All cron jobs</a></div><h1 id="job-title" class="mono-title">Cron job</h1><p id="job-desc"></p></div>
+      <div class="kv-cards">
+        <section class="panel"><div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Setup</h2></div><dl class="kv" id="job-setup"></dl></section>
+        <section class="panel"><div class="panel-head"><svg class="i"><use href="#i-clock"/></svg><h2>Schedule</h2></div><dl class="kv" id="job-when"></dl></section>
+        <section class="panel"><div class="panel-head"><svg class="i"><use href="#i-activity"/></svg><h2>Runs</h2></div><dl class="kv" id="job-runs-facts"></dl></section>
+      </div>
+      <section class="panel" id="job-error-panel" hidden>
+        <div class="panel-head"><svg class="i"><use href="#i-alert"/></svg><h2>Last error</h2></div>
+        <pre class="code" id="job-error"></pre>
+      </section>
+      <section class="panel" id="job-prompt-panel" hidden>
+        <div class="panel-head"><svg class="i"><use href="#i-bot"/></svg><h2>What the agent is told</h2><span class="sub">the job's prompt, word for word</span></div>
+        <pre class="code prose" id="job-prompt"></pre>
+      </section>
+      <section class="panel" id="job-script-panel" hidden>
+        <div class="panel-head"><svg class="i"><use href="#i-term"/></svg><h2>What the script does</h2><span class="sub mono" id="job-script-path"></span></div>
+        <pre class="code" id="job-script"></pre>
+      </section>
+      <section class="panel" id="job-runs-panel">
+        <div class="panel-head"><svg class="i"><use href="#i-clock"/></svg><h2>Recent runs</h2><span class="count" id="job-runs-count">0</span></div>
+        <div class="wrap"><table>
+          <thead><tr><th>Started</th><th>Took</th><th>Result</th><th>Delivery</th><th>Error</th></tr></thead>
+          <tbody id="job-runs"></tbody>
+        </table></div>
       </section>
       </div>
       <div class="page" data-page="agent" hidden>
@@ -582,14 +627,14 @@ function render(d) {
   tc.className = failing ? "tag hot" : "tag";
   const gq = (d.github || {}).graphql;
   document.getElementById("jobs").innerHTML = rows.map((j) => `
-    <tr class="${j.enabled ? "" : "off"}">
-      <td><span class="pill ${j.s.toLowerCase()}"><span class="dot"></span>${j.s}</span></td><td>${esc(j.machine)}</td>
-      <td><span class="mono">${esc(j.name)}</span><div class="sub">${esc(j.scheduler)}</div></td>
+    <tr class="row ${j.enabled ? "" : "off"}" data-href="${jobHref(j)}">
+      <td><span class="pill ${j.s.toLowerCase()}"><span class="dot"></span>${j.s}</span></td>
+      <td><span class="mono">${esc(j.name)}</span></td><td>${esc(j.machine)}</td>
       <td class="wide">${esc(j.what)}</td><td>${esc(schedule(j.schedule, j.machine))}</td>
-      <td class="sub">${j.agent ? "agent" : "script"}</td><td class="sub">${ago(j.last_run_at)}</td>
+      <td class="sub">${ago(j.last_run_at)}</td>
       <td>${esc(j.last_status || "—")}${j.last_error ? `<div class="err">${esc(j.last_error.slice(0, 120))}</div>` : ""}</td>
-      <td class="num mono">${j.runs_1h ?? "—"}</td>
     </tr>`).join("");
+  renderJob();
 
   const g = d.github || {};
   document.getElementById("github").innerHTML = g.error
@@ -762,6 +807,93 @@ function renderProject() {
          agents.length ? agents.map((r) => `${esc(r.kind)} · ${esc(r.name || "")}`).join(", ") : "no agent works on it", false),
   ].join("");
 }
+// One cron job's own page: #/cron/<machine>/<job id>.
+const jobHref = (j) => `#/cron/${encodeURIComponent(j.machine)}/${encodeURIComponent(j.id)}`;
+for (const id of ["jobs", "agent-crons"]) document.getElementById(id).onclick = (e) => {
+  const row = e.target.closest("tr.row");
+  if (row && !e.target.closest("a")) location.hash = row.dataset.href;
+};
+let currentJob = null;  // [machine, job id] of the open job page
+function renderJob() {
+  if (!currentJob || !last) return;
+  const [machine, id] = currentJob;
+  const j = ((last.machines.find((m) => m.name === machine) || {}).jobs || []).find((x) => x.id === id);
+  document.getElementById("job-title").textContent = j ? j.name : id;
+  document.getElementById("crumb").textContent = `Cron Jobs / ${j ? j.name : id}`;
+  document.getElementById("job-desc").textContent = j ? j.what || "" : "This job is not on that machine now.";
+  if (!j) return;
+  const s = status(j);
+  const fact = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
+  const when = (iso) => (iso ? `${new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}${new Date(iso) < Date.now() ? ` <span class="sub">${ago(iso)}</span>` : ""}` : "—");
+  const n = (x) => (x ?? "—");
+  const kv = (id, rows) => (document.getElementById(id).innerHTML = rows.filter(Boolean).join(""));
+  kv("job-when", [
+    fact("Status", `<span class="pill ${s.toLowerCase()}"><span class="dot"></span>${s}</span>`),
+    fact("Schedule", esc(schedule(j.schedule, machine))),
+    fact("Cron text", /^[\d*]/.test(j.schedule_raw || "") ? `<span class="mono">${esc(j.schedule_raw)}</span>` : "—"),
+    fact("Next run", when(j.next_run_at)),
+    fact("Last run", when(j.last_run_at)),
+    fact("Last result", esc(j.last_status || "—")),
+    j.paused_reason ? fact("Paused because", esc(j.paused_reason)) : "",
+  ]);
+  kv("job-runs-facts", [
+    fact("Runs, 1 h", n(j.runs_1h)), fact("Runs, 24 h", n(j.runs_24h)), fact("Failed, 24 h", n(j.fails_24h)),
+    fact("Failures in a row", n(j.failure_streak)),
+    fact("Runs in all", j.total_runs != null ? j.total_runs.toLocaleString() : "—"),
+    fact("Created", when(j.created_at)),
+  ]);
+  // The size of what runs: the prompt for an agent job, the script for a script job.
+  // Tokens are an estimate: about 4 characters per token for English text and code.
+  const chars = j.agent ? j.prompt_chars : j.script_chars;
+  // Hermes sends a job's output to "local" (a file on the machine) when the job names no target.
+  // Many jobs send their own email (email-brief.py, Resend); the prompt or the script says so.
+  const target = j.deliver || "local";
+  const emails = /email-brief|resend/i.test(`${j.prompt || ""}\n${j.script_body || ""}`);
+  const sendsTo = emails && target === "local" ? "email" : emails ? `${esc(target)} and email` : esc(target);
+  // A job with no model of its own runs on its profile's model.
+  const prof = ((last.machines.find((m) => m.name === machine) || {}).profiles || []).find((p) => p.name === j.profile);
+  const model = j.model ? `<span class="mono">${esc(j.model)}</span>`
+    : prof && prof.model ? `<span class="mono">${esc(prof.model)}</span>` : "—";
+  const digits = (text) => `<span class="digits">${text}</span>`;
+  kv("job-setup", [
+    fact("Machine", esc(machine)),
+    fact("Runs", j.agent ? "an agent" : "a script"),
+    fact("Scheduler", esc(j.scheduler)),
+    j.agent ? fact("Model", model) : "",
+    j.skills && j.skills.length ? fact("Skills", j.skills.map((x) => `<span class="chip">${esc(x)}</span>`).join(" ")) : "",
+    j.scheduler !== "launchd" ? fact("Output", sendsTo) : "",
+    j.workdir ? fact("Folder", `<span class="mono">${esc(j.workdir)}</span>`) : "",
+    j.command ? fact("Command", `<span class="mono">${esc(j.command)}</span>`) : "",
+    j.plist ? fact("launchd file", `<span class="mono">${esc(j.plist)}</span>`) : "",
+    !j.agent && j.script_lines ? fact("Lines of code", digits(j.script_lines.toLocaleString())) : "",
+    j.agent && chars ? fact("Characters", digits(chars.toLocaleString())) : "",
+    chars ? fact("Tokens", digits(`~${Math.round(chars / 4).toLocaleString()}`)) : "",
+    j.logs && j.logs.length ? fact("Logs", j.logs.map((x) => `<span class="mono">${esc(x)}</span>`).join("<br>")) : "",
+  ]);
+  // The size numbers get the width of the widest one, so their last digits line up.
+  const boxes = [...document.querySelectorAll("#job-setup .digits")];
+  const widest = Math.max(0, ...boxes.map((b) => b.offsetWidth));
+  boxes.forEach((b) => (b.style.minWidth = `${widest}px`));
+  const show = (panel, on) => (document.getElementById(panel).hidden = !on);
+  show("job-error-panel", !!j.last_error);
+  document.getElementById("job-error").textContent = j.last_error || "";
+  // A script job's prompt is only a label, so the script is the real steps.
+  show("job-prompt-panel", !!(j.agent && j.prompt));
+  document.getElementById("job-prompt").textContent = j.prompt || "";
+  show("job-script-panel", !!j.script_path);
+  document.getElementById("job-script-path").textContent = j.script_path || "";
+  document.getElementById("job-script").textContent = j.script_body ?? "The script file is not on this machine.";
+  const runs = j.runs || [];
+  show("job-runs-panel", j.scheduler !== "launchd");
+  document.getElementById("job-runs-count").textContent = runs.length;
+  const secs = (x) => (x < 1 ? "under 1 s" : x < 120 ? `${Math.round(x)} s` : duration(x));
+  const took = (r) => (r.finished && r.at ? secs((new Date(r.finished) - new Date(r.at)) / 1000) : "—");
+  document.getElementById("job-runs").innerHTML = runs.length ? runs.map((r) => `<tr>
+      <td>${new Date(r.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} <span class="sub">${ago(r.at)}</span></td>
+      <td class="mono">${took(r)}</td><td>${esc(r.status)}</td><td class="sub">${esc(r.delivery || "—")}</td>
+      <td class="err">${esc(r.error || "")}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="sub">No runs recorded.</td></tr>`;
+}
 document.getElementById("pool").onclick = (e) => {
   const row = e.target.closest("tr.row");
   if (row && !e.target.closest("a")) location.hash = row.dataset.href;
@@ -848,7 +980,7 @@ function renderAgent() {
   // Status says whether the job runs (OK, Failed, Paused); Last result is what its last run returned.
   const rank = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
   const jobs = a.cronJobs.map((j) => ({ ...j, s: status(j) })).sort((x, y) => rank[x.s] - rank[y.s] || x.name.localeCompare(y.name));
-  document.getElementById("agent-crons").innerHTML = jobs.length ? jobs.map((j) => `<tr class="${j.enabled ? "" : "off"}">
+  document.getElementById("agent-crons").innerHTML = jobs.length ? jobs.map((j) => `<tr class="row ${j.enabled ? "" : "off"}" data-href="${jobHref({ ...j, machine })}">
       <td><span class="pill ${j.s.toLowerCase()}"><span class="dot"></span>${j.s}</span></td>
       <td><span class="mono">${esc(j.name)}</span></td><td>${esc(schedule(j.schedule, j.machine))}</td><td class="sub">${j.agent ? "agent" : "script"}</td>
       <td class="sub">${ago(j.last_run_at)}</td><td>${esc(j.last_status || "—")}</td></tr>`).join("")
@@ -903,15 +1035,18 @@ function route() {
   // #/projects/<owner>/<repo> is one project's own page; the sidebar keeps Projects lit.
   const repo = name.match(/^projects\/([\w.-]+\/[\w.-]+)$/);
   const agent = name.match(/^agents\/([\w.-]+)\/([\w.-]+)$/);
+  const job = name.match(/^cron\/([^/]+)\/([^/]+)$/);
   currentRepo = repo ? repo[1] : null;
   currentAgent = agent ? [agent[1], agent[2]] : null;
-  const page = repo ? "project" : agent ? "agent" : document.querySelector(`.page[data-page="${name}"]`) ? name : "dashboard";
-  const lit = repo ? "projects" : agent ? "agents" : page;
+  currentJob = job ? [decodeURIComponent(job[1]), decodeURIComponent(job[2])] : null;
+  const page = repo ? "project" : agent ? "agent" : job ? "job" : document.querySelector(`.page[data-page="${name}"]`) ? name : "dashboard";
+  const lit = repo ? "projects" : agent ? "agents" : job ? "cron" : page;
   document.querySelectorAll(".page").forEach((p) => (p.hidden = p.dataset.page !== page));
   for (const a of links) a.toggleAttribute("aria-current", a.dataset.page === lit), a.dataset.page === lit && a.setAttribute("aria-current", "page");
   document.getElementById("crumb").textContent = links.find((a) => a.dataset.page === lit).querySelector(".label").textContent;
   if (repo) renderProject();
   if (agent) renderAgent();
+  if (job) renderJob();
   scrollTo(0, 0);
 }
 addEventListener("hashchange", route);
