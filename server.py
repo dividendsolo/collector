@@ -5,12 +5,15 @@ Reads only. Each refresh runs collect.py on every machine in config.json (locall
 adds the GitHub API limit, and works out the warnings. No database, no agent, no dependencies.
 """
 import json
+import re
 import shlex
 import os
 import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -62,7 +65,94 @@ def github_limit():
     return {k: {"used": r[k]["used"], "limit": r[k]["limit"], "reset": r[k]["reset"]} for k in ("graphql", "core")}
 
 
-def warnings(machines, limit, cfg):
+SLOW_SECONDS = 3
+_services = []  # the last check; the page asks for a new one (GET /api/services) once a minute
+
+
+def check(service):
+    """One GET of the service URL: online, slow (over SLOW_SECONDS), or down (an error or a 4xx/5xx answer)."""
+    start = time.time()
+    try:
+        req = urllib.request.Request(service["url"], headers={"User-Agent": "collector-health-check"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            code = r.status
+        error = None
+    except urllib.error.HTTPError as e:
+        code, error = e.code, f"HTTP {e.code}"
+    except Exception as e:
+        code, error = None, str(getattr(e, "reason", e))[:140]
+    ms = int((time.time() - start) * 1000)
+    status = "down" if error else "slow" if ms > SLOW_SECONDS * 1000 else "online"
+    return dict(service, status=status, code=code, ms=ms, error=error, checked_at=int(time.time()))
+
+
+def check_services():
+    listed = config().get("services") or []
+    with ThreadPoolExecutor(max(len(listed), 1)) as pool:
+        _services[:] = pool.map(check, listed)
+    with _lock:
+        _cache["at"] = 0  # the next /api/state carries the new results into Needs attention
+    return _services
+
+
+PROJECT_SECONDS = 300  # project details use about 3 REST calls per repo; five minutes keeps that small
+_projects = {"at": 0, "key": None, "list": []}
+_repos = {"at": 0, "list": []}
+
+
+def all_repos():
+    """Every repo the gh login can see (own and orgs), for the repo picker. One GraphQL call per owner, cached."""
+    if time.time() - _repos["at"] < 600 and _repos["list"]:
+        return _repos["list"]
+    owners = [None]
+    orgs, _ = run(["gh", "api", "user/orgs"], timeout=15)
+    owners += [o["login"] for o in orgs or []]
+    found = []
+    for owner in owners:
+        data, err = run(["gh", "repo", "list"] + ([owner] if owner else []) +
+                        ["--limit", "300", "--json", "nameWithOwner,description,isPrivate,isArchived,pushedAt"], timeout=30)
+        found += [r for r in data or [] if not r["isArchived"]]
+    found.sort(key=lambda r: r["pushedAt"], reverse=True)
+    _repos.update(at=time.time(), list=found)
+    return found
+
+
+def project(repo):
+    info, err = run(["gh", "api", f"repos/{repo}"], timeout=15)
+    if not info:
+        return {"repo": repo, "error": err}
+    pulls, _ = run(["gh", "api", f"repos/{repo}/pulls?state=open&per_page=100"], timeout=15)
+    runs, _ = run(["gh", "api", f"repos/{repo}/actions/runs?branch={info['default_branch']}&event=push&per_page=1"], timeout=15)
+    last = ((runs or {}).get("workflow_runs") or [None])[0]
+    prs = len(pulls or [])
+    return {
+        "repo": repo, "name": info["name"], "url": info["html_url"], "description": info.get("description") or "",
+        "homepage": info.get("homepage") or "", "private": info["private"], "pushed_at": info["pushed_at"],
+        "issues": info["open_issues_count"] - prs, "prs": prs,
+        "ci": {"status": last["status"], "conclusion": last["conclusion"], "name": last["name"], "url": last["html_url"]} if last else None,
+    }
+
+
+def projects(force=False):
+    chosen = config().get("projects") or []
+    if force or _projects["key"] != chosen or time.time() - _projects["at"] > PROJECT_SECONDS:
+        with ThreadPoolExecutor(max(len(chosen), 1)) as pool:
+            _projects["list"] = list(pool.map(project, chosen))
+        _projects.update(at=time.time(), key=chosen)
+    return {"at": int(_projects["at"]), "projects": _projects["list"]}
+
+
+def save_projects(repos):
+    """The repo picker's one write: the chosen repos go into config.json under "projects"."""
+    cfg = config()
+    cfg["projects"] = [r for r in repos if isinstance(r, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", r)]
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+    return cfg["projects"]
+
+
+def warnings(machines, limit, cfg, checked=()):
     out = []
     by_script = {}
     what = cfg.get("jobs") or {}
@@ -92,6 +182,9 @@ def warnings(machines, limit, cfg):
     g = limit.get("graphql")
     if g and g["limit"] - g["used"] < 500:
         out.append({"level": "error", "text": f"GitHub GraphQL limit nearly gone: {g['limit'] - g['used']} of {g['limit']} left"})
+    for x in checked:
+        if x["status"] == "down":
+            out.append({"level": "error", "text": f"{x['name']} is down: {x['error']} ({x['url']})"})
     for m in machines:
         if m.get("error"):
             out.append({"level": "error", "text": f"Could not read {m['name']}: {m['error']}"})
@@ -110,7 +203,8 @@ def snapshot():
             data, err = fut.result()
             machines.append(dict(data or {}, name=t["name"], error=err))
         limit = limit.result()
-    return {"at": int(time.time()), "machines": machines, "github": limit, "warnings": warnings(machines, limit, cfg)}
+    return {"at": int(time.time()), "machines": machines, "github": limit,
+            "warnings": warnings(machines, limit, cfg, _services)}
 
 
 def state():
@@ -143,6 +237,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/state":
             body, kind = state(), "application/json"
+        elif self.path == "/api/services":
+            body, kind = json.dumps(check_services()).encode(), "application/json"
+        elif self.path == "/api/projects":
+            body, kind = json.dumps(projects()).encode(), "application/json"
+        elif self.path == "/api/repos":
+            body, kind = json.dumps({"repos": all_repos(), "chosen": config().get("projects") or []}).encode(), "application/json"
         elif self.path == "/api/version":
             body, kind = version().encode(), "text/plain"
         elif self.path in ("/", "/index.html"):
@@ -153,6 +253,23 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", kind)
         self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        # JSON only: a browser cannot send application/json across origins without a preflight, which this server never answers.
+        if self.path != "/api/projects" or self.headers.get("Content-Type") != "application/json":
+            self.send_error(404)
+            return
+        try:
+            repos = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))["repos"]
+        except (ValueError, KeyError, TypeError):
+            self.send_error(400)
+            return
+        save_projects(repos)
+        body = json.dumps(projects(force=True)).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(body)
 

@@ -30,5 +30,15 @@
   "jobs": {
     "pickup": "Reads the board and starts a build or review agent if a card waits",
     "nightly-backup": "Backs up the production database"
-  }
+  },
+  "services": [
+    {
+      "name": "My app",
+      "url": "https://example.com"
+    },
+    {
+      "name": "My API",
+      "url": "https://api.example.com/health"
+    }
+  ]
 }

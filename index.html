@@ -24,16 +24,83 @@
     --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
-    --sidebar: 0px; /* the sidebar slot: set a width when the sidebar lands */
+    --sidebar: 48px;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
   svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 
   .app { display: flex; min-height: 100vh; }
-  .sidebar { flex: none; width: var(--sidebar); border-right: 1px solid var(--line); background: var(--bg); }
-  .sidebar:empty { display: none; }
+  /* Supabase-style rail: icons only; hovering the rail widens it over the page and shows the labels. */
+  .sidebar { flex: none; width: var(--sidebar); position: sticky; top: 0; height: 100vh; z-index: 5; }
+  .rail { position: absolute; inset: 0 auto 0 0; width: var(--sidebar); display: flex; flex-direction: column; gap: 2px;
+          padding: 0 8px 16px; overflow: hidden; border-right: 1px solid var(--line); background: var(--bg);
+          transition: width .18s ease, box-shadow .18s ease; }
+  .rail:hover, .rail:focus-within { width: 200px; box-shadow: 8px 0 24px oklch(0 0 0 / 0.45); }
+  .rail .home { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 12px; margin: 0 -8px 8px;
+                border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none;
+                font-weight: 600; font-size: 14px; letter-spacing: -0.01em; white-space: nowrap; }
+  .rail .home svg.i { width: 20px; height: 20px; color: var(--blue); filter: drop-shadow(0 0 5px var(--blue)); }
+  .rail .sep { height: 1px; margin: 8px 0; background: var(--line); }
+  .rail a.item { position: relative; display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 8px;
+                 border-radius: var(--radius); color: var(--muted); text-decoration: none; white-space: nowrap; }
+  .rail a.item svg.i { width: 16px; height: 16px; color: var(--faint); }
+  .rail .label, .rail .tag { opacity: 0; transition: opacity .12s ease; }
+  .rail:hover .label, .rail:hover .tag, .rail:focus-within .label, .rail:focus-within .tag { opacity: 1; }
+  .rail a.item:hover { color: var(--text); background: var(--hover); }
+  .rail a.item:hover svg.i { color: var(--text); }
+  .rail a.item[aria-current="page"] { color: var(--text); background: var(--panel-2); font-weight: 500; }
+  .rail a.item[aria-current="page"] svg.i { color: var(--blue); filter: drop-shadow(0 0 5px var(--blue)); }
+  .rail .tag { margin-left: auto; font: 500 11px var(--mono); color: var(--faint); }
+  .rail .tag.hot { color: var(--red); }
+  /* Collapsed: a red dot on the icon stands in for a red count. */
+  .rail a.item:has(.tag.hot)::after { content: ""; position: absolute; left: 21px; top: 7px; width: 6px; height: 6px;
+                 border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red); transition: opacity .12s ease; }
+  .rail:hover a.item::after, .rail:focus-within a.item::after { opacity: 0; }
+  .page { display: grid; gap: 20px; }
+  .page[hidden] { display: none; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; }
+  .tile { display: grid; gap: 4px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line);
+          border-radius: var(--radius); color: inherit; text-decoration: none; }
+  .tile:hover { border-color: var(--line-2); background: var(--panel-2); }
+  .tile .label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  .tile .value { font: 500 22px var(--mono); letter-spacing: -0.02em; }
+  .tile .hint { color: var(--faint); font-size: 12px; }
+  .tile.bad .value { color: var(--red); }
+  .soon { padding: 28px 16px; display: grid; gap: 6px; justify-items: start; color: var(--muted); }
+  .soon b { color: var(--text); font-weight: 500; }
+  .panel { scroll-margin-top: 64px; }
+  .pair { display: grid; gap: 20px; align-items: start; }
+  @media (min-width: 900px) { .pair { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .panel-head .more { margin-left: auto; font-size: 12px; color: var(--muted); text-decoration: none; }
+  .panel-head .more:hover { color: var(--text); }
+  .btn { font: 500 12px var(--sans); height: 28px; padding: 0 12px; white-space: nowrap; border-radius: var(--radius); cursor: pointer;
+         border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--blue-bg); border-color: var(--blue-line); color: var(--blue-2); box-shadow: var(--glow); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .panel-head .tools { display: flex; align-items: center; gap: 8px; }
+  .search { font: 12px var(--sans); height: 28px; width: 200px; padding: 0 10px; border-radius: var(--radius);
+            border: 1px solid var(--line-2); background: var(--bg); color: var(--text); }
+  .search:focus { outline: none; border-color: var(--blue-line); box-shadow: var(--glow); }
+  .picks { list-style: none; margin: 0; padding: 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2px; max-height: 420px; overflow-y: auto; }
+  .picks label { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: var(--radius); cursor: pointer; }
+  .picks label:hover { background: var(--hover); }
+  .picks input { accent-color: var(--blue); margin-top: 3px; }
+  .picks .desc { color: var(--faint); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  td a.plain { color: inherit; text-decoration: none; }
+  td a.plain:hover { color: var(--blue-2); }
+  .health { list-style: none; margin: 0; padding: 0; }
+  .health li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--line); }
+  .health li:first-child { border-top: 0; }
+  .health .name { font-weight: 500; }
+  .health .sub a { color: inherit; text-decoration: none; }
+  .health .sub a:hover { color: var(--text); }
+  .health .right { display: flex; align-items: center; gap: 12px; flex: none; }
+  .health .ms { font: 12px var(--mono); color: var(--faint); }
   .shell { flex: 1; min-width: 0; }
 
   .topbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -51,7 +118,10 @@
   @keyframes pulse { 50% { opacity: 0.35; } }
   @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
 
-  .content { max-width: 1440px; margin: 0 auto; padding: 32px 24px 64px; display: grid; gap: 20px; }
+  .content { max-width: 1440px; margin: 0 auto; padding: 32px 24px 64px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .page { grid-template-columns: minmax(0, 1fr); }
+  .page > *, .pair > * { min-width: 0; }
+  @media (max-width: 600px) { .content { padding: 24px 16px 48px; } .topbar { padding-left: 16px; padding-right: 16px; } }
   .page-head h1 { margin: 0; font-size: 22px; font-weight: 400; letter-spacing: -0.01em; }
   .page-head p { margin: 4px 0 0; color: var(--faint); }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
@@ -115,43 +185,89 @@
   .bar.low span { background: var(--red); box-shadow: 0 0 8px var(--red); }
 </style>
 </head>
-<body>
+<body id="top">
 <svg width="0" height="0" style="position: absolute">
-  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></symbol>
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01"/></symbol>
   <symbol id="i-term" viewBox="0 0 24 24"><path d="m5 8 4 4-4 4M12 16h7"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 3v18l2-1.5L9 21l2-1.5 2 1.5 2-1.5 2 1.5 2-1.5V3l-2 1.5L15 3l-2 1.5L11 3 9 4.5 7 3z"/><path d="M9 9h6M9 13h6"/></symbol>
+  <symbol id="i-brief" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
   <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 17a9 9 0 1 1 17.4 0"/></symbol>
 </svg>
 <div class="app">
-  <aside class="sidebar" id="sidebar"></aside>
+  <aside class="sidebar" id="sidebar">
+    <nav class="rail" aria-label="Pages">
+      <a class="home" href="#/"><svg class="i"><use href="#i-logo"/></svg><span class="label">Collector</span></a>
+      <a class="item" href="#/" data-page="dashboard"><svg class="i"><use href="#i-dash"/></svg><span class="label">Dashboard</span><span class="tag" id="tag-attention"></span></a>
+      <a class="item" href="#/running" data-page="running"><svg class="i"><use href="#i-play"/></svg><span class="label">Running now</span><span class="tag" id="tag-running"></span></a>
+      <a class="item" href="#/cron" data-page="cron"><svg class="i"><use href="#i-clock"/></svg><span class="label">Cron jobs</span><span class="tag" id="tag-cron"></span></a>
+      <div class="sep" role="separator"></div>
+      <a class="item" href="#/projects" data-page="projects"><svg class="i"><use href="#i-layers"/></svg><span class="label">Projects</span></a>
+      <a class="item" href="#/domains" data-page="domains"><svg class="i"><use href="#i-globe"/></svg><span class="label">Domains</span></a>
+      <a class="item" href="#/services" data-page="services"><svg class="i"><use href="#i-server"/></svg><span class="label">Services</span></a>
+      <a class="item" href="#/apis" data-page="apis"><svg class="i"><use href="#i-activity"/></svg><span class="label">APIs</span></a>
+      <a class="item" href="#/subscriptions" data-page="subscriptions"><svg class="i"><use href="#i-receipt"/></svg><span class="label">Subscriptions</span></a>
+      <a class="item" href="#/proposals" data-page="proposals"><svg class="i"><use href="#i-brief"/></svg><span class="label">Proposals</span></a>
+    </nav>
+  </aside>
   <div class="shell">
     <header class="topbar">
-      <div class="brand"><span class="mark"><svg class="i"><use href="#i-logo"/></svg></span>Collector<span class="crumb">/ overview</span></div>
+      <div class="brand"><span id="crumb">Dashboard</span></div>
       <div class="live" id="live"><span class="pulse"></span><span id="updated">Loading…</span><b id="countdown"></b></div>
     </header>
     <main class="content">
-      <div class="page-head"><h1>Overview</h1><p id="summary">Every cron job and agent run on your machines.</p></div>
+      <div class="page" data-page="dashboard">
+      <div class="page-head"><h1>Dashboard</h1><p id="summary">Every cron job and agent run on your machines.</p></div>
+      <div class="tiles" id="tiles"></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-play"/></svg><h2>Running now</h2><span class="count" data-run-count>0</span></div>
+        <div class="wrap">
+          <table>
+            <thead><tr>
+              <th>Type</th><th>Name / profile</th><th>Model</th><th>Task</th><th>Machine</th><th>Card</th><th>Repo</th><th class="num">Running for</th>
+            </tr></thead>
+            <tbody data-run-rows></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="pair">
       <section class="panel" id="attention">
         <div class="panel-head"><svg class="i"><use href="#i-alert"/></svg><h2>Needs attention</h2><span class="count" id="warn-count">0</span></div>
         <div class="alerts" id="warnings"></div>
       </section>
-
-      <section class="panel" id="running-now">
-        <div class="panel-head"><svg class="i"><use href="#i-play"/></svg><h2>Running now</h2><span class="count" id="run-count">0</span></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Service health</h2><span class="count" id="svc-count">0</span>
+          <a class="more" href="#/services">All services &rarr;</a></div>
+        <ul class="health" id="health"></ul>
+      </section>
+      </div>
+      </div>
+      <div class="page" data-page="running" hidden>
+      <div class="page-head"><h1>Running now</h1><p>Each agent or script working on a card, with its current task.</p></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-play"/></svg><h2>Running now</h2><span class="count" data-run-count>0</span></div>
         <div class="wrap">
           <table>
             <thead><tr>
-              <th>Type</th><th>Name / profile</th><th>Task</th><th>Machine</th><th>Card</th><th>Repo</th><th class="num">Running for</th>
+              <th>Type</th><th>Name / profile</th><th>Model</th><th>Task</th><th>Machine</th><th>Card</th><th>Repo</th><th class="num">Running for</th>
             </tr></thead>
-            <tbody id="running"></tbody>
+            <tbody data-run-rows></tbody>
           </table>
         </div>
       </section>
-
+      </div>
+      <div class="page" data-page="cron" hidden>
+      <div class="page-head"><h1>Cron jobs</h1><p>Every scheduled job on every machine.</p></div>
       <section class="panel" id="cron-jobs">
         <div class="panel-head"><svg class="i"><use href="#i-clock"/></svg><h2>Cron jobs</h2><span class="count" id="job-count">0</span>
           <div class="tools"><div class="seg" id="filter">
@@ -169,11 +285,56 @@
           </table>
         </div>
       </section>
-
+      </div>
+      <div class="page" data-page="projects" hidden>
+      <div class="page-head"><h1>Projects</h1><p>Each repo you chose: its live site, last push, open work, and CI.</p></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-layers"/></svg><h2>Projects</h2><span class="count" id="proj-count">0</span>
+          <span class="sub" id="proj-at"></span>
+          <div class="tools"><button class="btn" id="pick-open">Choose repos</button></div></div>
+        <div class="wrap">
+          <table>
+            <thead><tr>
+              <th>Project</th><th>Live</th><th>Last push</th><th class="num">Issues</th><th class="num">PRs</th><th>CI</th><th>Agent now</th>
+            </tr></thead>
+            <tbody id="projects"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel" id="picker" hidden>
+        <div class="panel-head"><svg class="i"><use href="#i-layers"/></svg><h2>Choose repos</h2><span class="count" id="pick-count">0</span>
+          <div class="tools"><input class="search" id="pick-search" type="search" placeholder="Find a repo" aria-label="Find a repo">
+            <button class="btn ghost" id="pick-cancel">Cancel</button><button class="btn primary" id="pick-save">Save</button></div></div>
+        <ul class="picks" id="picks"><li class="sub">Loading repos from GitHub…</li></ul>
+      </section>
+      </div>
+      <div class="page" data-page="domains" hidden>
+      <div class="page-head"><h1>Domains</h1><p>Each domain, its registrar, and when it expires.</p></div>
+      <section class="panel"><div class="soon"><b>No source connected yet.</b><span>Collector will read expiry dates from your registrar.</span></div></section>
+      </div>
+      <div class="page" data-page="services" hidden>
+      <div class="page-head"><h1>Services</h1><p>Your own services and whether they are up.</p></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Service health</h2><span class="count" id="svc-count-all">0</span></div>
+        <ul class="health" id="health-all"></ul>
+      </section>
+      </div>
+      <div class="page" data-page="apis" hidden>
+      <div class="page-head"><h1>APIs</h1><p>The APIs and AI providers your jobs depend on, and how much of each is left.</p></div>
       <section class="panel" id="github-limit">
         <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>GitHub API limit</h2></div>
         <div class="stats" id="github"></div>
       </section>
+      <section class="panel"><div class="soon"><b>AI providers come next.</b><span>Credits, tokens, and limits for each provider (collector#1).</span></div></section>
+      </div>
+      <div class="page" data-page="subscriptions" hidden>
+      <div class="page-head"><h1>Subscriptions</h1><p>What you pay for each month.</p></div>
+      <section class="panel"><div class="soon"><b>No source connected yet.</b><span>Collector will read billing from each vendor that has an API.</span></div></section>
+      </div>
+      <div class="page" data-page="proposals" hidden>
+      <div class="page-head"><h1>Proposals</h1><p>Open client proposals and their value.</p></div>
+      <section class="panel"><div class="soon"><b>No source connected yet.</b><span>No source is chosen for proposals yet.</span></div></section>
+      </div>
     </main>
   </div>
 </div>
@@ -234,6 +395,7 @@ function status(j) {
 
 function render(d) {
   last = d;
+  renderProjects();
   zones = Object.fromEntries(d.machines.map((m) => [m.name, m.tz]));
   const bar = document.getElementById("filter");
   const names = d.machines.map((m) => m.name);
@@ -257,26 +419,31 @@ function render(d) {
   const wc = document.getElementById("warn-count");
   wc.textContent = w.length;
   wc.className = w.length ? "count hot" : "count";
+  const ta = document.getElementById("tag-attention");
+  ta.textContent = w.length || "";
+  ta.className = w.length ? "tag hot" : "tag";
   document.getElementById("warnings").innerHTML = w.length
     ? w.map((x, i) => `<div class="alert ${x.level}"><span class="n">${i + 1}</span><svg class="i"><use href="#i-alert"/></svg><span>${esc(x.text)}</span></div>`).join("")
     : `<div class="empty"><svg class="i"><use href="#i-check"/></svg>Nothing needs attention.</div>`;
 
   const running = d.machines.flatMap((m) => (m.running || []).map((r) => ({ ...r, machine: m.name })))
     .sort((a, b) => b.seconds - a.seconds);
-  document.getElementById("run-count").textContent = running.length;
+  document.querySelectorAll("[data-run-count]").forEach((e) => (e.textContent = running.length));
   const jobsAll = d.machines.reduce((n, m) => n + (m.jobs || []).length, 0);
   document.getElementById("summary").textContent =
     `${d.machines.length} machines · ${jobsAll} cron jobs · ${running.length} running now`;
-  document.getElementById("running").innerHTML = running.length
+  const runRows = running.length
     ? running.map((r) => `
     <tr>
       <td><span class="pill ${r.type}"><svg class="i"><use href="#i-${r.type === "agent" ? "bot" : "term"}"/></svg>${r.type}</span></td>
       <td class="mono">${esc(r.name || "unknown")}</td>
+      <td>${r.model ? `<span class="mono">${esc(r.model.split("/").pop())}</span>${r.provider ? ` <span class="sub">${esc(r.provider)}</span>` : ""}` : `<span class="sub">—</span>`}</td>
       <td>${r.kind}${r.feature ? ` <span class="sub">${esc(r.feature)}</span>` : ""}</td><td>${esc(r.machine)}</td>
       <td class="mono">#${r.card}</td><td>${esc(r.repo)}</td>
       <td class="num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}">${duration(r.seconds)}</td>
     </tr>`).join("")
-    : `<tr><td colspan="7" class="sub">No agent or script is running.</td></tr>`;
+    : `<tr><td colspan="8" class="sub">No agent or script is running.</td></tr>`;
+  document.querySelectorAll("[data-run-rows]").forEach((e) => (e.innerHTML = runRows));
 
   const rank = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
   const rows = d.machines.flatMap((m) => m.jobs || [])
@@ -284,6 +451,21 @@ function render(d) {
     .filter((j) => filter === "all" || (filter === "problems" ? rank[j.s] < 2 : j.machine === filter))
     .sort((a, b) => rank[a.s] - rank[b.s] || a.machine.localeCompare(b.machine) || a.name.localeCompare(b.name));
   document.getElementById("job-count").textContent = rows.length;
+  const allJobs = d.machines.flatMap((m) => m.jobs || []).map((j) => ({ ...j, s: status(j) }));
+  const failing = allJobs.filter((j) => j.s === "Failed" || j.s === "Warning").length;
+  document.getElementById("tag-running").textContent = running.length || "";
+  const tc = document.getElementById("tag-cron");
+  tc.textContent = failing || "";
+  tc.className = failing ? "tag hot" : "tag";
+  const gq = (d.github || {}).graphql;
+  const tile = (href, icon, label, value, hint, bad) =>
+    `<a class="tile ${bad ? "bad" : ""}" href="${href}"><span class="label"><svg class="i"><use href="#i-${icon}"/></svg>${label}</span>
+      <span class="value">${value}</span><span class="hint">${hint}</span></a>`;
+  document.getElementById("tiles").innerHTML = [
+    tile("#/cron", "clock", "Cron jobs", allJobs.length, failing ? `${failing} failing` : "all OK", failing > 0),
+    tile("#/cron", "server", "Machines", d.machines.length, d.machines.map((m) => m.name).join(" · "), d.machines.some((m) => m.error)),
+    gq ? tile("#/apis", "activity", "GitHub GraphQL", `${Math.round((gq.used / gq.limit) * 100)}%`, `${gq.used.toLocaleString()} of ${gq.limit.toLocaleString()} used`, gq.used / gq.limit > 0.9) : "",
+  ].join("");
   document.getElementById("jobs").innerHTML = rows.map((j) => `
     <tr class="${j.enabled ? "" : "off"}">
       <td><span class="pill ${j.s.toLowerCase()}"><span class="dot"></span>${j.s}</span></td><td>${esc(j.machine)}</td>
@@ -306,6 +488,121 @@ function render(d) {
           <div class="bar ${pct > 90 ? "low" : ""}"><span style="width: ${pct}%"></span></div></div>`;
       }).join("");
 }
+
+// Service health: checked when the page loads, then once a minute.
+const svcLabel = { online: ["ok", "Online"], slow: ["warning", "Slow"], down: ["failed", "Down"] };
+function renderServices(svc) {
+  const rows = (list) => list.length ? list.map((x) => `<li>
+      <div><div class="name">${esc(x.name)}</div><div class="sub"><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url.replace(/^https?:\/\//, ""))}</a>${x.error ? ` · <span class="err">${esc(x.error)}</span>` : ""}</div></div>
+      <div class="right"><span class="ms">${x.ms} ms</span><span class="pill ${svcLabel[x.status][0]}"><span class="dot"></span>${svcLabel[x.status][1]}</span></div>
+    </li>`).join("") : `<li><div class="sub">No services in config.json yet.</div></li>`;
+  // Down first, then slow, then online; fastest first inside each.
+  const order = { down: 0, slow: 1, online: 2 };
+  const sorted = [...svc].sort((a, b) => order[a.status] - order[b.status] || a.ms - b.ms);
+  document.getElementById("health").innerHTML = rows(sorted.slice(0, 6));
+  document.getElementById("health-all").innerHTML = rows(sorted);
+  document.getElementById("svc-count").textContent = document.getElementById("svc-count-all").textContent = svc.length;
+}
+async function checkServices() {
+  if (!document.querySelector("#health li")) {
+    const loading = `<li><div class="sub">Checking…</div></li>`;
+    document.getElementById("health").innerHTML = document.getElementById("health-all").innerHTML = loading;
+  }
+  try {
+    lastServices = await (await fetch("/api/services")).json();
+    renderServices(lastServices);
+    renderProjects();
+    tick();
+  } catch {}
+}
+
+// Projects: the repos chosen in the picker, with details from the GitHub REST API (refreshed every 5 min on the server).
+let projectData = null;
+let lastServices = [];
+// A project's live site: its GitHub homepage, or else the service whose name matches the repo name (zero-phase = ZeroPhase).
+const flat = (x) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+function liveSite(p) {
+  const svc = lastServices.find((x) => (p.homepage && x.url.replace(/\/$/, "") === p.homepage.replace(/\/$/, "")) || flat(x.name) === flat(p.name));
+  return { url: (svc && svc.url) || p.homepage || "", svc };
+}
+const ciLabel = (c) => !c ? ["", "—"] : c.status !== "completed" ? ["agent", "Running"]
+  : c.conclusion === "success" ? ["ok", "Passing"] : c.conclusion === "failure" ? ["failed", "Failing"] : ["warning", c.conclusion || "—"];
+function renderProjects() {
+  if (!projectData) return;
+  const list = projectData.projects;
+  document.getElementById("proj-count").textContent = list.length;
+  document.getElementById("proj-at").textContent = projectData.at ? `read ${ago(new Date(projectData.at * 1000))}` : "";
+  const runningIn = (name) => ((last && last.machines) || []).flatMap((m) => m.running || []).filter((r) => r.repo === name);
+  document.getElementById("projects").innerHTML = list.length ? list.map((p) => {
+    if (p.error) return `<tr><td class="mono">${esc(p.repo)}</td><td colspan="6" class="err">${esc(p.error)}</td></tr>`;
+    const [cls, word] = ciLabel(p.ci);
+    const agents = runningIn(p.name);
+    const live = liveSite(p);
+    return `<tr>
+      <td class="wide"><a class="plain" href="${esc(p.url)}" target="_blank" rel="noopener"><b>${esc(p.name)}</b></a>${p.private ? ` <span class="sub">private</span>` : ""}
+        ${p.description ? `<div class="sub">${esc(p.description)}</div>` : ""}</td>
+      <td>${live.url ? `<a class="plain" href="${esc(live.url)}" target="_blank" rel="noopener">${esc(live.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : `<span class="sub">—</span>`}
+        ${live.svc ? `<span class="pill ${svcLabel[live.svc.status][0]}"><span class="dot"></span>${svcLabel[live.svc.status][1]}</span>` : ""}</td>
+      <td class="sub">${ago(p.pushed_at)}</td>
+      <td class="num mono"><a class="plain" href="${esc(p.url)}/issues" target="_blank" rel="noopener">${p.issues}</a></td>
+      <td class="num mono"><a class="plain" href="${esc(p.url)}/pulls" target="_blank" rel="noopener">${p.prs}</a></td>
+      <td>${p.ci ? `<a class="plain" href="${esc(p.ci.url)}" target="_blank" rel="noopener" title="${esc(p.ci.name)}"><span class="pill ${cls}"><span class="dot"></span>${word}</span></a>` : `<span class="sub">—</span>`}</td>
+      <td>${agents.length ? agents.map((r) => `<span class="pill agent">#${r.card} ${esc(r.kind)}</span>`).join(" ") : `<span class="sub">—</span>`}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7"><div class="soon"><b>No projects chosen yet.</b><span>Choose the repos to show. Collector reads them through your gh login.</span></div></td></tr>`;
+}
+async function loadProjects() {
+  try { projectData = await (await fetch("/api/projects")).json(); renderProjects(); } catch {}
+}
+
+let repoList = [];
+let chosen = new Set();
+function renderPicks() {
+  const q = document.getElementById("pick-search").value.trim().toLowerCase();
+  const shown = repoList.filter((r) => !q || r.nameWithOwner.toLowerCase().includes(q) || (r.description || "").toLowerCase().includes(q));
+  document.getElementById("pick-count").textContent = `${chosen.size} chosen`;
+  document.getElementById("picks").innerHTML = shown.map((r) => `<li><label>
+      <input type="checkbox" value="${esc(r.nameWithOwner)}" ${chosen.has(r.nameWithOwner) ? "checked" : ""}>
+      <span><span class="mono">${esc(r.nameWithOwner)}</span>${r.isPrivate ? ` <span class="sub">private</span>` : ""}
+      ${r.description ? `<span class="desc">${esc(r.description)}</span>` : ""}</span></label></li>`).join("")
+    || `<li class="sub">No repo matches.</li>`;
+}
+document.getElementById("pick-open").onclick = async () => {
+  document.getElementById("picker").hidden = false;
+  document.getElementById("picker").scrollIntoView({ block: "start" });
+  try {
+    const d = await (await fetch("/api/repos")).json();
+    // A to Z by repo name, so a repo is easy to find.
+    repoList = d.repos.sort((a, b) => a.nameWithOwner.split("/")[1].localeCompare(b.nameWithOwner.split("/")[1], undefined, { sensitivity: "base" }));
+    chosen = new Set(d.chosen);
+    renderPicks();
+    document.getElementById("pick-search").focus();
+  } catch (e) {
+    document.getElementById("picks").innerHTML = `<li class="err">Could not read repos: ${esc(e.message)}</li>`;
+  }
+};
+document.getElementById("pick-search").oninput = renderPicks;
+document.getElementById("picks").onchange = (e) => {
+  if (e.target.checked) chosen.add(e.target.value); else chosen.delete(e.target.value);
+  document.getElementById("pick-count").textContent = `${chosen.size} chosen`;
+};
+document.getElementById("pick-cancel").onclick = () => (document.getElementById("picker").hidden = true);
+document.getElementById("pick-save").onclick = async () => {
+  const save = document.getElementById("pick-save");
+  save.disabled = true;
+  save.textContent = "Saving…";
+  try {
+    // Keep the picker's order: A to Z.
+    const repos = repoList.map((r) => r.nameWithOwner).filter((n) => chosen.has(n));
+    projectData = await (await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repos }) })).json();
+    renderProjects();
+    document.getElementById("picker").hidden = true;
+  } finally {
+    save.disabled = false;
+    save.textContent = "Save";
+  }
+};
 
 let next = 0;
 async function tick() {
@@ -347,7 +644,24 @@ setInterval(async () => {
   } catch {}
 }, 1000);
 
+// Pages: the hash picks one (#/cron); the sidebar and the top bar follow it.
+const links = [...document.querySelectorAll(".rail a.item")];
+function route() {
+  const name = location.hash.replace(/^#\/?/, "") || "dashboard";
+  const page = document.querySelector(`.page[data-page="${name}"]`) ? name : "dashboard";
+  document.querySelectorAll(".page").forEach((p) => (p.hidden = p.dataset.page !== page));
+  for (const a of links) a.toggleAttribute("aria-current", a.dataset.page === page), a.dataset.page === page && a.setAttribute("aria-current", "page");
+  document.getElementById("crumb").textContent = links.find((a) => a.dataset.page === page).querySelector(".label").textContent;
+  scrollTo(0, 0);
+}
+addEventListener("hashchange", route);
+route();
+
 tick();
+checkServices();
+setInterval(checkServices, 60000);
+loadProjects();
+setInterval(loadProjects, 60000);
 setInterval(countdown, 1000);
 </script>
 </body>

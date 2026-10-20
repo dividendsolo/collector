@@ -16,6 +16,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
 HOME = os.path.expanduser("~")
@@ -178,6 +179,25 @@ def verify_runs():
     return list(runs.values())
 
 
+def agent_model(profile, worktree):
+    """The model the agent's open Hermes session last called (a fallback shows here too), with its provider."""
+    db = os.path.join(HERMES, "profiles", profile, "state.db")
+    if not os.path.exists(db):
+        return None
+    try:
+        with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)) as con:
+            session = con.execute("SELECT id, model, billing_provider FROM sessions WHERE cwd = ? AND ended_at IS NULL "
+                                  "ORDER BY started_at DESC LIMIT 1", (worktree,)).fetchone()
+            if not session:
+                return None
+            used = con.execute("SELECT model, billing_provider FROM session_model_usage WHERE session_id = ? AND task = '' "
+                               "ORDER BY last_seen DESC LIMIT 1", (session[0],)).fetchone()
+    except sqlite3.Error:
+        return None
+    model, provider = used or session[1:]
+    return {"model": model, "provider": provider}
+
+
 def running_agents():
     """One row per agent run: a Hermes agent working in a card worktree (<repo>/.worktrees/<build|review>-<card>).
     While a verify run is going on for the card's commit, the row shows that verify and its own time."""
@@ -185,6 +205,7 @@ def running_agents():
     found = {}
     for line in out.splitlines():
         m = re.search(r"/([\w.-]+)/\.worktrees/(build|review)-(\d+)", line)
+        path = re.search(r"(/[^\s'\"`]*/\.worktrees/(?:build|review)-\d+)", line)
         if not m:
             continue
         key = (m.group(1), m.group(2), int(m.group(3)))
@@ -193,6 +214,8 @@ def running_agents():
         profile = re.search(r"hermes\S* -p (\S+) chat", line)
         if profile:
             row.update(type="agent", name=profile.group(1))
+            if path and "model" not in row:
+                row.update(agent_model(profile.group(1), path.group(1)) or {})
     for row in found.values():
         # No Hermes agent in the worktree: the work script runs its own step there (the verify gate).
         row["name"] = row["name"] or WORK_SCRIPT
