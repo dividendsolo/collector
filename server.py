@@ -552,6 +552,95 @@ def flat(name):
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
+TICKET_SECONDS = 120
+TICKET_TYPES = ("bug", "enhancement", "tech-debt")
+_tickets = {"at": 0, "list": [], "error": None}
+_tickets_lock = threading.Lock()
+
+
+REASON_HINT = re.compile(r"needs?[- ]info|need your|did not pass|cannot|can't|blocked|split this|unverified|over \d+ hours", re.I)
+REASON_STRONG = re.compile(r"need your|needs James|James to|awaiting|your input|answer|cannot|can't|uncommitted|split this|over \d+ hours|blocked by", re.I)
+REASON_QUERY = """query($o:String!,$r:String!,$n:Int!){ repository(owner:$o,name:$r){ issue(number:$n){
+  comments(last:20){ nodes{ createdAt url body } }
+  timelineItems(last:20,itemTypes:[LABELED_EVENT]){ nodes{ ... on LabeledEvent{ createdAt label{name} } } } }}}"""
+_reasons = {}  # (url, lane) -> (time, reason)
+
+
+def sentences(body):
+    """The prose of a comment, one sentence at a time: no headings, quotes, tables, code, or Markdown marks."""
+    keep = []
+    for line in body.replace("\r", "").split("\n"):
+        t = line.strip()
+        if not t or t.startswith(("#", ">", "|", "```", "- [")):
+            continue
+        keep.append(re.sub(r"[*_`]", "", re.sub(r"^\s*[-*]\s+", "", t)))
+    text = re.sub(r"^(Mac lane|VPS lane|Foreman|foreman)( on \w+)?:\s*", "", " ".join(keep))
+    said = [x.strip() for x in re.split(r"(?<=[.!?])\s+", text) if x.strip()]
+    return [x for x in said if "$" not in x and x.count("/") < 3 and len(x) < 400]  # skip log paths and run records
+
+
+def reason(t):
+    """Why a ticket sits in its lane: the comment that moved it there (the one just before the lane label, or the
+    newest comment that reads like a reason), cut to one sentence. Cached for ten minutes per ticket."""
+    key = (t["url"], t["lane"])
+    hit = _reasons.get(key)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    m = re.match(r"https://github.com/([^/]+)/([^/]+)/issues/(\d+)", t["url"] or "")
+    found = None
+    if m:
+        data, _ = run(["gh", "api", "graphql", "-f", f"query={REASON_QUERY}", "-F", f"o={m[1]}", "-F", f"r={m[2]}",
+                       "-F", f"n={m[3]}"], timeout=20)
+        issue = ((data or {}).get("data") or {}).get("repository", {}).get("issue") or {}
+        comments = (issue.get("comments") or {}).get("nodes") or []
+        moved = [e["createdAt"] for e in (issue.get("timelineItems") or {}).get("nodes") or []
+                 if (e.get("label") or {}).get("name") == t["lane"]]
+        pick = None
+        if moved:  # label repos: the newest comment up to the moment the label went on
+            before = [c for c in comments if c["createdAt"] <= moved[-1]]
+            pick = before[-1] if before else None
+        if not pick:
+            pick = next((c for c in reversed(comments) if REASON_HINT.search(c["body"])), comments[-1] if comments else None)
+        if pick:
+            said = sentences(pick["body"])
+            line = next((x for x in said if REASON_STRONG.search(x)),
+                        next((x for x in said if REASON_HINT.search(x)), said[0] if said else ""))
+            line = line[:1].upper() + line[1:]
+            found = {"text": line[:220] + ("…" if len(line) > 220 else ""), "url": pick["url"], "at": pick["createdAt"]}
+    _reasons[key] = (time.time(), found)
+    return found
+
+
+def tickets():
+    """Tickets that wait on a person (config "tickets": "each" lanes list every ticket in Needs attention, "count"
+    lanes show one line with a count, and "command" prints one lane's tickets as JSON, with {lane} in place of the
+    lane name). Cached for two minutes; the page asks for a refresh once a minute."""
+    cfg = config().get("tickets") or {}
+    lanes, cmd = (cfg.get("each") or []) + (cfg.get("count") or []), cfg.get("command") or []
+    with _tickets_lock:
+        if lanes and cmd and time.time() - _tickets["at"] > TICKET_SECONDS:
+            rows, errors = [], []
+            for slug in lanes:
+                data, err = run([os.path.expanduser(c.replace("{lane}", slug)) for c in cmd], timeout=60)
+                if err:
+                    errors.append(f"{slug}: {err}")
+                for t in data or []:
+                    rows.append({"repo": t.get("repo"), "number": t.get("number"), "title": t.get("title"),
+                                 "url": t.get("url"), "lane": slug, "priority": t.get("priority"),
+                                 "created": t.get("createdAt"),
+                                 "type": next((l for l in t.get("labels") or [] if l in TICKET_TYPES), None)})
+            each = cfg.get("each") or []
+            with ThreadPoolExecutor(4) as pool:
+                for t, why in zip([t for t in rows if t["lane"] in each],
+                                  pool.map(reason, [t for t in rows if t["lane"] in each])):
+                    t["reason"] = why
+            _tickets.update(at=time.time(), list=rows, error="; ".join(errors) or None)
+            with _lock:
+                _cache["at"] = 0  # the next /api/state carries the tickets into Needs attention
+        return {"each": cfg.get("each") or [], "count": cfg.get("count") or [], "tickets": _tickets["list"],
+                "error": _tickets["error"]}
+
+
 def projects(force=False):
     cfg = config()
     chosen = cfg.get("projects") or []
@@ -640,6 +729,9 @@ def warnings(machines, limit, cfg, checked=()):
     for m in machines:
         if m.get("error"):
             out.append({"level": "error", "text": f"Could not read {m['name']}: {m['error']}"})
+    tix = cfg.get("tickets") or {}
+    if _tickets["error"]:
+        out.append({"level": "warn", "text": f"Could not list tickets: {_tickets['error']}"})
     order = {"error": 0, "warn": 1}
     return sorted(out, key=lambda w: order[w["level"]])
 
@@ -694,6 +786,8 @@ class Handler(BaseHTTPRequestHandler):
             body, kind = json.dumps(check_services()).encode(), "application/json"
         elif self.path == "/api/projects":
             body, kind = json.dumps(projects()).encode(), "application/json"
+        elif self.path == "/api/tickets":
+            body, kind = json.dumps(tickets()).encode(), "application/json"
         elif self.path == "/api/domains":
             body, kind = json.dumps(domains()).encode(), "application/json"
         elif self.path == "/api/repos":

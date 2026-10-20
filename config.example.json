@@ -44,6 +44,20 @@
   "domains": [
     "example.com"
   ],
+  "tickets": {
+    "each": [
+      "needs-info"
+    ],
+    "count": [
+      "needs-triage"
+    ],
+    "command": [
+      "my-tracker",
+      "list",
+      "{lane}",
+      "--json"
+    ]
+  },
   "subscriptions": [
     {
       "name": "Hosting",

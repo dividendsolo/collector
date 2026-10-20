@@ -330,6 +330,15 @@
         <div class="panel-head"><svg class="i"><use href="#i-alert"/></svg><h2>Needs attention</h2><span class="count" id="warn-count">0</span></div>
         <div class="alerts" id="warnings"></div>
       </section>
+      <section class="panel" id="waiting-panel" hidden>
+        <div class="panel-head"><svg class="i"><use href="#i-layers"/></svg><h2>Waiting on you</h2><span class="count" id="waiting-count">0</span></div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Lane</th><th>Ticket</th><th>Reason</th><th>Type</th><th>Priority</th><th class="num">Opened</th></tr></thead>
+            <tbody id="waiting"></tbody>
+          </table>
+        </div>
+      </section>
       <div class="pair">
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Service health</h2><span class="count" id="svc-count">0</span>
@@ -551,6 +560,12 @@ let last = null;
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// One Needs attention line: plain text, or a link when the warning has one.
+function alertBody(x) {
+  if (x.url) return `<a class="plain" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.text)}</a>`;
+  return `<span>${esc(x.text)}</span>`;
+}
+
 function ago(iso) {
   if (!iso) return "—";
   const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
@@ -629,13 +644,14 @@ function render(d) {
 
   const w = d.warnings;
   const wc = document.getElementById("warn-count");
+  const hot = w.some((x) => x.level === "error") ? " hot" : "";  // red only for errors
   wc.textContent = w.length;
-  wc.className = w.length ? "count hot" : "count";
+  wc.className = "count" + (w.length ? hot : "");
   const ta = document.getElementById("tag-attention");
   ta.textContent = w.length || "";
-  ta.className = w.length ? "tag hot" : "tag";
+  ta.className = "tag" + (w.length ? hot : "");
   document.getElementById("warnings").innerHTML = w.length
-    ? w.map((x, i) => `<div class="alert ${x.level}"><span class="n">${i + 1}</span><svg class="i"><use href="#i-alert"/></svg><span>${esc(x.text)}</span></div>`).join("")
+    ? w.map((x, i) => `<div class="alert ${x.level}"><span class="n">${i + 1}</span><svg class="i"><use href="#i-alert"/></svg>${alertBody(x)}</div>`).join("")
     : `<div class="empty"><svg class="i"><use href="#i-check"/></svg>Nothing needs attention.</div>`;
 
   const running = d.machines.flatMap((m) => (m.running || []).map((r) => ({ ...r, machine: m.name })))
@@ -795,6 +811,40 @@ function daysCell(days, warnAt, failAt) {
   const cls = days <= failAt ? "failed" : days <= warnAt ? "warning" : "";
   return cls ? `<span class="pill ${cls}">${days}</span>` : `${days}`;
 }
+// Tickets that wait on you (the "each" lanes, needs-info): one row per ticket, highest priority first, then oldest.
+// Red only for P0.
+async function loadTickets() {
+  let d;
+  try {
+    d = await (await fetch("/api/tickets")).json();
+  } catch {
+    return;
+  }
+  const list = d.tickets.filter((t) => d.each.includes(t.lane))
+    .sort((a, b) => (a.priority ? +a.priority.slice(1) : 9) - (b.priority ? +b.priority.slice(1) : 9)
+      || (a.created || "").localeCompare(b.created || ""));
+  const counts = d.count.map((lane) => [lane, d.tickets.filter((t) => t.lane === lane).length]).filter(([, n]) => n);
+  document.getElementById("waiting-panel").hidden = !list.length && !counts.length;
+  const c = document.getElementById("waiting-count");
+  c.textContent = list.length;
+  c.className = list.some((t) => t.priority === "P0") ? "count hot" : "count";
+  document.getElementById("waiting").innerHTML = list.map((t) => `
+    <tr>
+      <td><span class="pill warning">${esc(t.lane)}</span></td>
+      <td><a class="plain mono" href="${esc(t.url)}" target="_blank" rel="noopener" title="${esc(t.title)}">${esc(t.repo)}#${esc(t.number)}</a></td>
+      <td class="wide" title="${esc(t.title)}">${t.reason
+        ? `<a class="plain" href="${esc(t.reason.url)}" target="_blank" rel="noopener">${esc(t.reason.text)}</a>`
+        : `<span style="color: var(--faint)">No reason found. ${esc(t.title)}</span>`}</td>
+      <td>${esc(t.type || "—")}</td>
+      <td>${t.priority === "P0" ? `<span class="pill failed">P0</span>` : `<span class="mono">${esc(t.priority || "—")}</span>`}</td>
+      <td class="num">${ago(t.created)}</td>
+    </tr>`).join("") + counts.map(([lane, n]) => `
+    <tr>
+      <td><span class="pill ok">${esc(lane)}</span></td>
+      <td colspan="5" style="color: var(--muted)">${n} ${n === 1 ? "ticket" : "tickets"} wait for a triage session</td>
+    </tr>`).join("");
+}
+
 async function loadDomains() {
   let d;
   try {
@@ -1228,6 +1278,8 @@ loadProjects();
 setInterval(loadProjects, 60000);
 loadDomains();
 setInterval(loadDomains, 60000);
+loadTickets();
+setInterval(loadTickets, 60000);
 setInterval(countdown, 1000);
 </script>
 </body>
