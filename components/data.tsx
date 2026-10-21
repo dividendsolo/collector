@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
-import useSWR, { mutate } from "swr";
+import useSWR from "swr";
 
 const fetcher = async (url: string) => {
   const r = await fetch(url, { cache: "no-store" });
@@ -71,7 +71,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     es.addEventListener("board", (e) => {
       const v = JSON.parse((e as MessageEvent).data);
       setBoard({ tickets: v.tickets, work: v.work });
-      mutate("/api/work-stats", (s: any) => (s ? { ...s, open: v.work.cards.length } : s), { revalidate: false });
     });
     return () => es.close();
   }, []);
