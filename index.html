@@ -976,6 +976,8 @@ document.getElementById("waiting-filter").addEventListener("click", (e) => {
 // AI providers: what is left on each provider the Hermes profiles use. A low one also shows in Needs attention.
 const AI_NAMES = { anthropic: "Anthropic", nous: "Nous", minimax: "MiniMax", "xai-oauth": "Grok (xAI)" };
 const aiName = (slug) => AI_NAMES[slug] || slug;
+// Dollar amounts inside a sentence ("the $22/month plan") blur with the eye button too.
+const blurMoney = (text) => esc(text).replace(/\$[\d,.]+(\/(month|mo|year|yr))?/g, (m) => `<span class="money">${m}</span>`);
 async function loadAi() {
   let d;
   try {
@@ -1005,13 +1007,13 @@ async function loadAi() {
         <span class="value">${w.used}% <small>used${w.resets ? ` · resets ${resets(w.resets)}` : ""}</small></span>
         <div class="bar ${w.used > 90 ? "low" : ""}"><span style="width: ${Math.min(100, w.used)}%"></span></div></div>`).join("")}</div>`
         : a.kind === "usage" ? `<div class="stats"><div class="stat"><span class="label">Balance</span>
-        <span class="value">${value(a)}</span>${a.detail ? `<span class="sub">${esc(a.detail)}</span>` : ""}</div></div>`
+        <span class="value">${value(a)}</span>${a.detail ? `<span class="sub">${blurMoney(a.detail)}</span>` : ""}</div></div>`
         : `<div class="note sub">${esc(a.note || a.detail || "")}</div>`}
     </div>`;
   document.getElementById("ai-plans").innerHTML = plans.map(plan).join("") || `<div class="note sub">No plan logins in the Hermes profiles.</div>`;
   document.getElementById("ai-usage").innerHTML = usage.map((a) => `<tr>
       <td>${provider(a)}</td><td class="num mono">${a.profiles}</td>
-      <td class="num">${value(a)}</td><td class="wide sub">${esc(a.detail || a.note || "")}</td></tr>`).join("")
+      <td class="num">${value(a)}</td><td class="wide sub">${blurMoney(a.detail || a.note || "")}</td></tr>`).join("")
     || `<tr><td colspan="4" class="sub">No pay-as-you-go providers in the Hermes profiles.</td></tr>`;
   // The dashboard shows plans first (bars), then pay-as-you-go balances.
   document.getElementById("ai-dash").innerHTML = [...plans, ...usage].map(plan).join("")
