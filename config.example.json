@@ -23,6 +23,7 @@
       "pickup"
     ],
     "log": "~/.hermes/scratch/pickup.log",
+    "steps": "~/.work/steps",
     "max_starts_10m": 15
   },
   "verify_label": "my-verify",

@@ -30,6 +30,9 @@ WORK = CONFIG.get("work_script") or {}
 # The work script's own log; each start writes "=== tick <local time> ===". Optional.
 WORK_LOG = os.path.expanduser(WORK["log"]) if WORK.get("log") else None
 WORK_SCRIPT = WORK.get("name") or "work script"
+# Where the work script says what it does on each card now: one JSON file per card with repo, card, step,
+# since, and pid. Optional; without it a work-script row is named after its worktree (build, review).
+WORK_STEPS = os.path.expanduser(WORK["steps"]) if WORK.get("steps") else None
 # Docker label prefix the verify tool puts on its containers (<prefix>.run, <prefix>.commit). Optional.
 VERIFY_LABEL = CONFIG.get("verify_label")
 # The folder that holds the repos whose card worktrees the verify runs are matched to.
@@ -297,7 +300,8 @@ def running_agents():
         key = (m.group(1), m.group(2), int(m.group(3)))
         row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "seconds": 0, "type": "script", "name": None})
         row["seconds"] = max(row["seconds"], seconds(line.split(None, 1)[0]))
-        profile = re.search(r"hermes\S* -p (\S+) chat", line)
+        # `hermes -p <name> chat`, or the same argv inside a Python launcher: '-p', '<name>', 'chat'
+        profile = re.search(r"(?:^|[\s'\"])-p'?,?\s+'?([\w.-]+)'?,?\s+'?chat\b", line)
         if profile:
             row.update(type="agent", name=profile.group(1))
             if path and "model" not in row:
@@ -305,6 +309,15 @@ def running_agents():
     for row in found.values():
         # No Hermes agent in the worktree: the work script runs its own step there (the verify gate).
         row["name"] = row["name"] or WORK_SCRIPT
+    for st in work_steps():
+        rows = [k for k in found if (k[0], k[2]) == (st["repo"], st["card"])]
+        if any(found[k]["type"] == "agent" for k in rows):
+            continue  # the agent's own row says what happens
+        for k in rows:
+            del found[k]
+        found[(st["repo"], st["step"], st["card"])] = {
+            "repo": st["repo"], "kind": st["step"], "card": st["card"], "type": "script", "name": WORK_SCRIPT,
+            "seconds": max(0, int(time.time()) - st["since"])}
     verifies = verify_runs()
     if verifies:
         heads = {}
@@ -321,6 +334,21 @@ def running_agents():
             # The newest verify for the card wins; the sort puts it last.
             row.update(kind="verify", feature=feature, seconds=secs)
     return [found[k] for k in sorted(found)]
+
+
+def work_steps():
+    """The work script's current step per card, from its step files; a file whose process is gone is skipped."""
+    if not WORK_STEPS:
+        return []
+    out = []
+    for path in glob.glob(os.path.join(WORK_STEPS, "*.json")):
+        try:
+            st = json.load(open(path))
+            os.kill(int(st["pid"]), 0)
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        out.append(st)
+    return out
 
 
 def work_script_ticks(now_local):
