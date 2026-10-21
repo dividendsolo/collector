@@ -558,20 +558,75 @@ _vendors = {"at": 0, "list": []}
 _vendors_lock = threading.Lock()
 
 
+def get_json(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "collector"})
+    return json.load(urllib.request.urlopen(req, timeout=10))
+
+
+DATADOG_IMPACT = {"degraded_performance": "minor", "partial_outage": "major", "major_outage": "critical"}
+
+
+def read_feed(d, url):
+    """Open incidents from one status feed, by its shape, or None for a shape this does not know.
+    Statuspage (most vendors), Datadog status pages (OpenRouter), Better Stack (Polar), Stripe's /current, X's
+    developer status API, Google Cloud's incidents.json."""
+    if "page" in d:
+        found = [{"name": i["name"], "impact": i.get("impact") or "none", "url": i.get("shortlink") or url}
+                 for i in d.get("incidents") or [] if i.get("status") != "resolved"]
+        indicator = (d.get("status") or {}).get("indicator") or "none"
+        if not found and indicator in IMPACT and indicator != "none":  # a page that lists no incidents, only its status
+            found = [{"name": d["status"].get("description") or "Degraded", "impact": indicator, "url": url}]
+        return found
+    if "pageType" in d and "components" in d:
+        return [{"name": i.get("title") or "Incident", "url": url,
+                 "impact": max((DATADOG_IMPACT.get(c.get("status"), "minor") for c in i.get("componentsAffected") or []),
+                               key=lambda x: IMPACT[x], default="minor")}
+                for i in d.get("incidents") or [] if not i.get("resolved")]
+    if isinstance(d, list):  # Google Cloud's incidents.json: every recent incident; open ones have no end
+        return [{"name": i.get("external_desc") or "Incident", "url": f"{url}/{i['uri']}" if i.get("uri") else url,
+                 "impact": {"high": "major"}.get(i.get("severity"), "minor")}
+                for i in d if isinstance(i, dict) and "begin" in i and not i.get("end")]
+    if (d.get("data") or {}).get("type") == "status_page":  # Better Stack
+        if d["data"]["attributes"].get("aggregate_state") in ("operational", "maintenance"):
+            return []
+        down = [r["attributes"] for r in d.get("included") or [] if r.get("type") == "status_page_resource"
+                and r["attributes"].get("status") not in ("operational", "maintenance", None)]
+        return [{"name": f"{r.get('public_name')}: {r['status']}", "url": url,
+                 "impact": "major" if r["status"] == "downtime" else "minor"} for r in down] or [
+            {"name": d["data"]["attributes"]["aggregate_state"], "url": url, "impact": "minor"}]
+    if "largestatus" in d:
+        return [] if d["largestatus"] == "up" else [
+            {"name": d.get("message") or "Stripe is not fully up", "url": url,
+             "impact": "minor" if d["largestatus"] == "degraded" else "major"}]
+    if "overall" in d:
+        return [] if d["overall"] == "operational" else [
+            {"name": f"X API: {d['overall']}", "url": url, "impact": "minor" if d["overall"] == "degraded" else "major"}]
+    return None
+
+
 def vendor(v):
-    """One vendor's status page. Statuspage sites (most vendors) publish /api/v2/summary.json: the open incidents
-    and their impact. A page with no feed shows as a link only."""
+    """One vendor's status page. The feed is "feed" in config.json when set, else the first of the page's
+    /api/v2/summary.json (Statuspage), /config.json (Datadog), /index.json (Better Stack), /current (Stripe) that
+    reads. No feed: a link only."""
     url = v["url"].rstrip("/")
     row = {"name": v["name"], "url": url, "state": "no feed", "incidents": []}
-    try:
-        req = urllib.request.Request(url + "/api/v2/summary.json", headers={"User-Agent": "collector"})
-        d = json.load(urllib.request.urlopen(req, timeout=10))
-    except Exception:
+    if v.get("probe"):  # no status page: one GET of an API that answers without a key (Nous: /v1/models)
+        c = check({"url": v["probe"]})
+        row["state"] = {"online": "ok", "slow": "minor"}.get(c["status"], "major")
+        if c["status"] != "online":
+            row["incidents"] = [{"name": f"API {'slow' if c['status'] == 'slow' else 'not answering'}: "
+                                         f"{c['error'] or str(c['ms']) + ' ms'}", "impact": row["state"], "url": v["probe"]}]
         return row
-    row["incidents"] = [{"name": i["name"], "impact": i.get("impact") or "none", "url": i.get("shortlink") or url}
-                        for i in d.get("incidents") or [] if i.get("status") != "resolved"]
-    worst = max([IMPACT[i["impact"]] for i in row["incidents"]] + [0])
-    row["state"] = ["ok", "minor", "major", "critical"][worst]
+    for feed in [v["feed"]] if v.get("feed") else [url + "/api/v2/summary.json", url + "/config.json", url + "/index.json",
+                                                    url + "/current"]:
+        try:
+            found = read_feed(get_json(feed), url)
+        except Exception:
+            continue
+        if found is not None:
+            row["incidents"] = found
+            row["state"] = ["ok", "minor", "major", "critical"][max([IMPACT[i["impact"]] for i in found] + [0])]
+            break
     return row
 
 
@@ -586,9 +641,116 @@ def vendors():
             with ThreadPoolExecutor(max(len(listed), 1)) as pool:
                 _vendors["list"] = list(pool.map(vendor, listed))
             _vendors["at"] = time.time()
-            with _lock:
-                _cache["at"] = 0  # the next /api/state carries an outage into Needs attention
         return {"at": _vendors["at"], "vendors": _vendors["list"]}
+
+
+AI_SECONDS = 300
+AI_LOW_USD, AI_LOW_PERCENT = 5, 10  # under these, a provider goes to Needs attention
+_ai = {"at": 0, "list": []}
+_ai_lock = threading.Lock()
+HERMES_HOME = os.path.expanduser("~/.hermes")
+# Nous credits through Hermes's own portal client: the portal login lives in Hermes's auth.json.
+NOUS_SCRIPT = """
+import json, os, sys
+sys.path.insert(0, os.path.expanduser("~/.hermes/hermes-agent"))
+os.chdir(sys.path[0])
+from hermes_cli.nous_account import get_nous_portal_account_info
+info = get_nous_portal_account_info(force_fresh=True)
+access, sub = getattr(info, "paid_service_access_info", None), getattr(info, "subscription", None)
+print(json.dumps({"logged_in": bool(getattr(info, "logged_in", False)), "plan": getattr(sub, "plan", None),
+                  "usable": getattr(access, "total_usable_credits", None), "monthly": getattr(sub, "monthly_credits", None),
+                  "renews": getattr(sub, "current_period_end", None)}))
+"""
+AI_LINKS = {"anthropic": "https://claude.ai/settings/usage", "nous": "https://portal.nousresearch.com",
+            "minimax": "https://platform.minimax.io/user-center/payment/coding-plan", "xai-oauth": "https://grok.com",
+            "claude": "https://claude.ai/settings/usage"}
+
+
+def hermes_env():
+    try:
+        lines = open(os.path.join(HERMES_HOME, ".env")).read().splitlines()
+    except OSError:
+        return {}
+    pairs = (x.split("=", 1) for x in lines if "=" in x and not x.lstrip().startswith("#"))
+    return {k.strip(): v.strip().strip('"').strip("'") for k, v in pairs}
+
+
+def ai_nous():
+    py = os.path.join(HERMES_HOME, "hermes-agent", "venv", "bin", "python")
+    data, err = run([py, "-c", NOUS_SCRIPT], timeout=30)
+    if not data or not data.get("logged_in"):
+        return {"note": f"Could not read the Nous portal: {err or 'not logged in'}"}
+    left = data.get("usable")
+    renews = (data.get("renews") or "")[:10]
+    return {"plan": data.get("plan"), "left": f"${left:.2f}" if isinstance(left, (int, float)) else None,
+            "detail": f"usable on the ${data['monthly']:.0f}/month plan with top-ups" + (f", renews {renews}" if renews else "")
+            if isinstance(data.get("monthly"), (int, float)) else None,
+            "low": isinstance(left, (int, float)) and left < AI_LOW_USD}
+
+
+def ai_minimax():
+    key = hermes_env().get("MINIMAX_API_KEY")
+    if not key:
+        return {"note": "No MINIMAX_API_KEY in ~/.hermes/.env"}
+    req = urllib.request.Request("https://api.minimax.io/v1/api/openplatform/coding_plan/remains",
+                                 headers={"Authorization": f"Bearer {key}", "User-Agent": "collector"})
+    try:
+        d = json.load(urllib.request.urlopen(req, timeout=10))
+    except Exception as e:
+        return {"note": f"Could not read the MiniMax plan: {str(getattr(e, 'reason', e))[:80]}"}
+    m = next((x for x in d.get("model_remains") or [] if x.get("model_name") == "general"), None)
+    if not m:
+        return {"note": "MiniMax returned no plan"}
+    now, week = m.get("current_interval_remaining_percent"), m.get("current_weekly_remaining_percent")
+    return {"plan": "Coding plan", "left": f"{now}%", "detail": f"of this 5-hour window, {week}% of the week",
+            "low": min(now if now is not None else 100, week if week is not None else 100) < AI_LOW_PERCENT}
+
+
+def ai_anthropic():
+    # The lanes log in with a `claude setup-token` subscription token: it can call the model but not read the
+    # usage endpoint (scope user:profile), so the row links to the usage page instead of guessing.
+    return {"plan": "Claude subscription", "note": "This token cannot read usage"}
+
+
+AI_READERS = {"nous": ai_nous, "minimax": ai_minimax, "anthropic": ai_anthropic}
+
+
+def refresh_ai():
+    users = {}
+    for m in json.loads(state()).get("machines") or []:
+        for prof in m.get("profiles") or []:
+            if prof.get("provider"):
+                users.setdefault(prof["provider"], []).append(f"{m['name']}:{prof['name']}")
+
+    def one(item):
+        slug, profiles = item
+        reader = AI_READERS.get(slug) or AI_READERS.get(slug.split("-")[0])
+        row = reader() if reader else {"note": "Subscription login, no usage API"}
+        link = AI_LINKS.get(slug) or AI_LINKS.get(slug.split("-")[0])
+        return dict(row, provider=slug, profiles=len(profiles), link=link)
+
+    try:
+        with ThreadPoolExecutor(4) as pool:
+            rows = list(pool.map(one, sorted(users.items(), key=lambda x: -len(x[1]))))
+        _ai.update(at=time.time(), list=rows)
+    finally:
+        _ai["busy"] = False
+    with _lock:
+        _cache["at"] = 0  # the next /api/state carries a low balance into Needs attention
+
+
+def ai_providers():
+    """One row per AI provider the Hermes profiles use (from each profile's config.yaml): the plan and what is
+    left, read from the provider's own API, else a note and a link. A read takes seconds (the Nous portal), so
+    a stale list is served while a new one is read in the background; only the very first read waits."""
+    with _ai_lock:
+        stale = time.time() - _ai["at"] > AI_SECONDS
+        if stale and not _ai["list"]:
+            refresh_ai()
+        elif stale and not _ai.get("busy"):
+            _ai["busy"] = True
+            threading.Thread(target=refresh_ai, daemon=True).start()
+        return {"at": _ai["at"], "providers": _ai["list"]}
 
 
 TICKET_SECONDS = 120
@@ -805,10 +967,10 @@ def warnings(machines, limit, cfg, checked=()):
     tix = cfg.get("tickets") or {}
     if _tickets["error"]:
         out.append({"level": "warn", "text": f"Could not list tickets: {_tickets['error']}"})
-    for v in _vendors["list"]:  # minor incidents stay on the APIs page; a major one is an alert
-        for i in v["incidents"]:
-            if IMPACT.get(i["impact"], 0) >= 2:
-                out.append({"level": "error", "text": f"{v['name']}: {i['name']} ({i['impact']} outage)", "url": i["url"]})
+    for a in _ai["list"]:  # a low balance is something to act on: top it up before the lanes stop on a 402
+        if a.get("low"):
+            out.append({"level": "error", "text": f"{a['provider']}: {a.get('left')} left {a.get('detail') or ''}".strip()
+                        + " (top up before the lanes stop)", "url": a.get("link")})
     order = {"error": 0, "warn": 1}
     return sorted(out, key=lambda w: order[w["level"]])
 
@@ -863,6 +1025,8 @@ class Handler(BaseHTTPRequestHandler):
             body, kind = json.dumps(check_services()).encode(), "application/json"
         elif self.path == "/api/projects":
             body, kind = json.dumps(projects()).encode(), "application/json"
+        elif self.path == "/api/ai":
+            body, kind = json.dumps(ai_providers()).encode(), "application/json"
         elif self.path == "/api/vendors":
             body, kind = json.dumps(vendors()).encode(), "application/json"
         elif self.path == "/api/tickets":
@@ -914,5 +1078,6 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     threading.Thread(target=restart_on_change, daemon=True).start()
+    threading.Thread(target=ai_providers, daemon=True).start()  # the first read is slow: start it before a page asks
     ThreadingHTTPServer.allow_reuse_address = True
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

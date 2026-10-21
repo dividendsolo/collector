@@ -133,6 +133,15 @@
   .live.busy .pulse { animation-duration: 0.6s; }
   .live.down .pulse { background: var(--red); box-shadow: 0 0 8px var(--red); }
   @keyframes pulse { 50% { opacity: 0.35; } }
+  /* Skeleton rows: the shape of the rows to come, so nothing shifts when the data lands. */
+  .skel { display: block; height: 10px; border-radius: 4px; background: var(--line); animation: pulse 1.6s ease-in-out infinite; }
+  .skel + .skel { margin-top: 7px; }
+  .skel.w1 { width: 120px; } .skel.w2 { width: 180px; } .skel.w3 { width: 64px; } .skel.short { width: 80px; }
+  li.skel-row, tr.skel-row td { pointer-events: none; }
+  /* One text line per bar (padding, not margin, so nothing collapses): the same height as a real row. */
+  .skel-row .skel, .skel-row .skel + .skel { margin: 0; padding: 5px 0 4px; height: 10px; box-sizing: content-box; background-clip: content-box; }
+  tr.skel-row .skel { padding: 5px 0 4px; }
+  @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
   @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
 
   .content { max-width: 1440px; margin: 0 auto; padding: 32px 24px 64px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
@@ -248,7 +257,7 @@
   .sub { color: var(--faint); font-size: 12px; }
   .err { color: var(--muted); font-size: 12px; max-width: 420px; white-space: normal; }
   td.long { color: var(--amber); }
-  td.stuck { color: var(--red); }
+  td.stuck, .stuck { color: var(--red); }
 
   .pill { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
           border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted); }
@@ -311,7 +320,7 @@
       <a class="item" href="#/projects" data-page="projects"><svg class="i"><use href="#i-layers"/></svg><span class="label">Projects</span></a>
       <a class="item" href="#/domains" data-page="domains"><svg class="i"><use href="#i-globe"/></svg><span class="label">Domains</span></a>
       <a class="item" href="#/services" data-page="services"><svg class="i"><use href="#i-server"/></svg><span class="label">Services</span></a>
-      <a class="item" href="#/apis" data-page="apis"><svg class="i"><use href="#i-activity"/></svg><span class="label">APIs</span></a>
+      <a class="item" href="#/apis" data-page="apis"><svg class="i"><use href="#i-activity"/></svg><span class="label">APIs</span><span class="tag" id="tag-apis"></span></a>
       <a class="item" href="#/subscriptions" data-page="subscriptions"><svg class="i"><use href="#i-receipt"/></svg><span class="label">Subscriptions</span></a>
       <a class="item" href="#/proposals" data-page="proposals"><svg class="i"><use href="#i-brief"/></svg><span class="label">Proposals</span></a>
     </nav>
@@ -356,10 +365,9 @@
         <ul class="health" id="health"></ul>
       </section>
       <section class="panel">
-        <div class="panel-head"><svg class="i"><use href="#i-receipt"/></svg><h2>Monthly spend</h2>
-          <button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button>
-          <a class="more" href="#/subscriptions">All subscriptions &rarr;</a></div>
-        <div id="spend"></div>
+        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI credits</h2>
+          <a class="more" href="#/subscriptions">All providers &rarr;</a></div>
+        <ul class="health" id="ai-dash" data-skel="5"></ul>
       </section>
       </div>
       </div>
@@ -494,7 +502,7 @@
         <div class="wrap">
           <table>
             <thead><tr><th>Domain</th><th>Registrar</th><th>Registered</th><th>Expires</th><th class="num">Days left</th><th>Auto-renew</th><th>HTTPS certificate</th><th class="num">Days left</th></tr></thead>
-            <tbody id="domains"><tr><td colspan="8" class="sub">Checking…</td></tr></tbody>
+            <tbody id="domains" data-skel="4" data-cols="8"></tbody>
           </table>
         </div>
       </section>
@@ -512,13 +520,12 @@
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Vendor status</h2><span class="count" id="vendor-count">0</span>
           <span class="sub" style="margin-left: 8px">from each vendor's status page, checked every 5 minutes</span></div>
-        <ul class="health" id="vendors"><li><div class="sub">Checking…</div></li></ul>
+        <ul class="health" id="vendors" data-skel="8"></ul>
       </section>
       <section class="panel" id="github-limit">
         <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>GitHub API limit</h2></div>
         <div class="stats" id="github"></div>
       </section>
-      <section class="panel"><div class="soon"><b>AI providers come next.</b><span>Credits, tokens, and limits for each provider (collector#1).</span></div></section>
       </div>
       <div class="page" data-page="keys" hidden>
       <div class="page-head"><div class="crumbs"><a href="#/projects">&larr; All projects</a></div><h1>Payment keys</h1>
@@ -541,6 +548,16 @@
             <thead><tr><th>Name</th><th>Billing</th><th class="num">Charge</th><th class="num">Per month</th><th class="num">Per year</th></tr></thead>
             <tbody id="subs"></tbody>
             <tfoot id="subs-total"></tfoot>
+          </table>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI providers</h2><span class="count" id="ai-count">0</span>
+          <span class="sub">the providers your Hermes profiles use, read from each provider every 5 minutes</span></div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Provider</th><th>Plan</th><th class="num">Profiles</th><th class="num">Left</th><th>Detail</th></tr></thead>
+            <tbody id="ai" data-skel="5" data-cols="5"></tbody>
           </table>
         </div>
       </section>
@@ -579,6 +596,13 @@ function alertBody(x) {
   if (x.url) return `<a class="plain" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.text)}</a>`;
   return `<span>${esc(x.text)}</span>`;
 }
+
+// Skeletons: list rows and table rows in the shape of the real ones, shown until the first data lands.
+const skelItems = (n) => `<li class="skel-row"><div><span class="skel w1"></span><span class="skel w2"></span></div><span class="skel w3"></span></li>`.repeat(n);
+const skelRows = (n, cols) => `<tr class="skel-row">${`<td><span class="skel short"></span></td>`.repeat(cols)}</tr>`.repeat(n);
+document.querySelectorAll("[data-skel]").forEach((e) => {
+  e.innerHTML = e.tagName === "TBODY" ? skelRows(+e.dataset.skel, +e.dataset.cols) : skelItems(+e.dataset.skel);
+});
 
 function ago(iso) {
   if (!iso) return "—";
@@ -753,7 +777,6 @@ function renderSpend(subs) {
   const totals = {};
   for (const x of active) totals[x.currency || "USD"] = (totals[x.currency || "USD"] || 0) + monthly(x);
   const sorted = [...active].sort((a, b) => monthly(b) - monthly(a));
-  const top = sorted.slice(0, 5);
   // The Subscriptions page: every active subscription and the totals.
   document.getElementById("subs-count").textContent = active.length;
   document.getElementById("subs").innerHTML = sorted.length ? sorted.map((x) => `<tr>
@@ -764,12 +787,6 @@ function renderSpend(subs) {
   document.getElementById("subs-total").innerHTML = Object.entries(totals).map(([cur, n]) => `<tr class="total">
       <td>Total${Object.keys(totals).length > 1 ? ` (${cur})` : ""}</td><td></td><td></td>
       <td class="num mono">${money(n, cur)}</td><td class="num mono">${money(n * 12, cur)}</td></tr>`).join("");
-  document.getElementById("spend").innerHTML = active.length ? `
-    <div class="spend-total">${Object.entries(totals).map(([cur, n]) => `<span class="value">${money(n, cur)}<small>/mo</small></span>`).join("")}
-      <span class="sub">${active.length} active subscriptions · ${money(Object.values(totals)[0] * 12, Object.keys(totals)[0])} a year</span></div>
-    <ul class="health">${top.map((x) => `<li><div><div class="name">${esc(x.name)}</div><div class="sub">${x.billing === "annual" ? `${money(x.amount, x.currency)} a year` : "monthly"}</div></div>
-      <span class="mono">${money(monthly(x), x.currency)}</span></li>`).join("")}</ul>`
-    : `<div class="soon"><b>No subscriptions yet.</b><span>Add them to config.json under "subscriptions".</span></div>`;
 }
 
 // Blur toggle for amounts; remembered in this browser only.
@@ -809,7 +826,7 @@ function renderServices(svc) {
 }
 async function checkServices() {
   if (!document.querySelector("#health li")) {
-    const loading = `<li><div class="sub">Checking…</div></li>`;
+    const loading = skelItems(5);
     document.getElementById("health").innerHTML = document.getElementById("health-all").innerHTML = loading;
   }
   try {
@@ -860,6 +877,32 @@ async function loadTickets() {
     </tr>`).join("");
 }
 
+// AI providers: what is left on each provider the Hermes profiles use. A low one also shows in Needs attention.
+const AI_NAMES = { anthropic: "Anthropic", nous: "Nous", minimax: "MiniMax", "xai-oauth": "Grok (xAI)" };
+const aiName = (slug) => AI_NAMES[slug] || (slug.startsWith("claude-subscription") ? "Claude subscription (SDK)" : slug);
+async function loadAi() {
+  let d;
+  try {
+    d = await (await fetch("/api/ai")).json();
+  } catch {
+    return;
+  }
+  const rows = d.providers || [];
+  const left = (a) => a.left
+    ? `<span class="mono${a.low ? " stuck" : ""}">${esc(a.left)}</span>`
+    : `<a class="sub" href="${esc(a.link || "#")}" target="_blank" rel="noopener">${esc(a.note || "No usage API")}</a>`;
+  document.getElementById("ai-count").textContent = rows.length;
+  document.getElementById("ai").innerHTML = rows.map((a) => `<tr>
+      <td>${a.link ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(aiName(a.provider))}</a>` : esc(aiName(a.provider))}</td>
+      <td>${esc(a.plan || "—")}</td><td class="num mono">${a.profiles}</td>
+      <td class="num">${a.left ? left(a) : `<span class="sub">—</span>`}</td>
+      <td class="sub">${esc(a.detail || a.note || "")}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="sub">No Hermes profiles found.</td></tr>`;
+  document.getElementById("ai-dash").innerHTML = rows.map((a) => `<li>
+      <div><div class="name">${esc(aiName(a.provider))}</div><div class="sub">${esc(a.plan || "")}${a.plan ? " · " : ""}${a.profiles} ${a.profiles === 1 ? "profile" : "profiles"}</div></div>
+      ${left(a)}</li>`).join("") || `<li><div class="sub">No Hermes profiles found.</div></li>`;
+}
+
 // Vendor status: open incidents from each vendor's status page. Outages first, then incidents, then the rest.
 const VENDOR_PILL = { critical: ["failed", "Critical outage"], major: ["failed", "Major outage"], minor: ["warning", "Minor incident"],
   ok: ["ok", "Operational"] };
@@ -873,6 +916,11 @@ async function loadVendors() {
   const rank = { critical: 0, major: 1, minor: 2, ok: 3, "no feed": 4 };
   const list = [...d.vendors].sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
   document.getElementById("vendor-count").textContent = list.length;
+  // Outages are nothing to act on, so they skip Needs attention: the APIs tag counts them, red for a major one.
+  const hit = list.filter((v) => v.incidents.length);
+  const tag = document.getElementById("tag-apis");
+  tag.textContent = hit.length || "";
+  tag.className = "tag" + (hit.some((v) => v.state === "major" || v.state === "critical") ? " hot" : "");
   document.getElementById("vendors").innerHTML = list.length ? list.map((v) => {
     const pill = VENDOR_PILL[v.state];
     const incidents = v.incidents.map((i) =>
@@ -1357,6 +1405,8 @@ loadTickets();
 setInterval(loadTickets, 60000);
 loadVendors();
 setInterval(loadVendors, 60000);
+loadAi();
+setInterval(loadAi, 60000);
 setInterval(countdown, 1000);
 </script>
 </body>
