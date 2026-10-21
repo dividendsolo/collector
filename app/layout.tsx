@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
-import { Inter, Source_Code_Pro } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-inter" });
-const mono = Source_Code_Pro({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-source-code-pro" });
 
 export const metadata: Metadata = { title: "Collector" };
 
+/** Fonts come from Google Fonts with the old page's exact link: the full files carry the arrows (← →) the page uses,
+ * which next/font's latin subset leaves to a fallback font. */
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`dark ${inter.variable} ${mono.variable}`}>
+    <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Code+Pro:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body id="top">{children}</body>
     </html>
   );

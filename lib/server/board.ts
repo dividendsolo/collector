@@ -422,9 +422,11 @@ const intervalSeconds = () => {
 
 export function startBoard() {
   if (S.timer) return;
+  // Start to start: a read takes about 1.7 s, so the next one waits only the rest of the interval.
   const loop = async () => {
+    const t0 = Date.now();
     await poll();
-    S.timer = setTimeout(loop, intervalSeconds() * 1000);
+    S.timer = setTimeout(loop, Math.max(1000, intervalSeconds() * 1000 - (Date.now() - t0)));
   };
   S.timer = setTimeout(loop, 0);
 }
