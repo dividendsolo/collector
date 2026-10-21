@@ -941,7 +941,7 @@ def tickets():
     cfg = config().get("tickets") or {}
     lanes, cmd = (cfg.get("each") or []) + (cfg.get("count") or []), cfg.get("command") or []
     with _tickets_lock:
-        if lanes and cmd and time.time() - _tickets["at"] > TICKET_SECONDS:
+        if lanes and cmd and (time.time() - _tickets["at"] > TICKET_SECONDS or _tickets.get("lanes") != lanes):
             rows, errors = [], []
             for slug in lanes:
                 data, err = run([os.path.expanduser(c.replace("{lane}", slug)) for c in cmd], timeout=60)
@@ -957,11 +957,115 @@ def tickets():
                 for t, why in zip([t for t in rows if t["lane"] in each],
                                   pool.map(reason, [t for t in rows if t["lane"] in each])):
                     t["reason"] = why
-            _tickets.update(at=time.time(), list=rows, error="; ".join(errors) or None)
+            _tickets.update(at=time.time(), list=rows, error="; ".join(errors) or None, lanes=lanes)  # a lane edit reads again
             with _lock:
                 _cache["at"] = 0  # the next /api/state carries the tickets into Needs attention
         return {"each": cfg.get("each") or [], "count": cfg.get("count") or [], "tickets": _tickets["list"],
                 "error": _tickets["error"]}
+
+
+WORK_SECONDS = 120
+_work = {"at": 0, "list": [], "error": None, "busy": False}
+_work_lock = threading.Lock()
+
+
+def refresh_work():
+    """Read every lane in config "tickets" "all" with the tickets command, all lanes at once."""
+    cfg = config().get("tickets") or {}
+    lanes, cmd = cfg.get("all") or [], cfg.get("command") or []
+    rows, errors = [], []
+
+    def read(slug):
+        return slug, *run([os.path.expanduser(c.replace("{lane}", slug)) for c in cmd], timeout=60)
+
+    with ThreadPoolExecutor(max(len(lanes), 1)) as pool:
+        for slug, data, err in pool.map(read, lanes):
+            if err:
+                errors.append(f"{slug}: {err}")
+            for t in data or []:
+                rows.append({"repo": t.get("repo"), "number": t.get("number"), "title": t.get("title"),
+                             "url": t.get("url"), "lane": slug, "priority": t.get("priority"),
+                             "created": t.get("createdAt"),
+                             "labels": [l for l in t.get("labels") or [] if l not in lanes and l != t.get("priority")]})
+    _work.update(at=time.time(), list=rows, error="; ".join(errors) or None, busy=False)
+
+
+def work():
+    """Every open card on the board, one row per card, in board lane order (config "tickets" "all"). A read takes
+    a few seconds per lane, so a stale list is served while a new one is read in the background."""
+    with _work_lock:
+        stale = time.time() - _work["at"] > WORK_SECONDS
+        if stale and not _work["list"]:
+            refresh_work()
+        elif stale and not _work["busy"]:
+            _work["busy"] = True
+            threading.Thread(target=refresh_work, daemon=True).start()
+        return {"at": _work["at"], "lanes": (config().get("tickets") or {}).get("all") or [],
+                "cards": _work["list"], "error": _work["error"]}
+
+
+STATS_SECONDS = 300
+_stats = {"at": 0, "data": None, "busy": False}
+_stats_lock = threading.Lock()
+
+
+def deploys_today(repo, since):
+    """Production deploys of one repo since `since` (local midnight): GitHub deployments to a production
+    environment (Vercel makes these), else successful CI jobs named "deploy" on pushes (Kamal from Actions)."""
+    deps, _ = run(["gh", "api", f"repos/{repo}/deployments?per_page=50"], timeout=15)
+    if deps:
+        return sum(1 for d in deps if (d.get("environment") or "").lower() == "production" and d["created_at"] >= since)
+    runs, _ = run(["gh", "api", f"repos/{repo}/actions/runs?event=push&created=>={since[:10]}&per_page=50"], timeout=15)
+    n = 0
+    for r in (runs or {}).get("workflow_runs") or []:
+        if r["created_at"] < since or r.get("head_branch") not in ("main", "master"):
+            continue
+        jobs, _ = run(["gh", "api", f"repos/{repo}/actions/runs/{r['id']}/jobs"], timeout=15)
+        n += sum(1 for j in (jobs or {}).get("jobs") or [] if "deploy" in j["name"].lower() and j.get("conclusion") == "success")
+    return n
+
+
+def refresh_stats():
+    """Work stats for the dashboard: open cards, cards closed as done (today, 30 days), deploys today per repo, and
+    the signed-in GitHub user's contribution calendar (the heat map on their profile).
+    The repos are the chosen projects plus every repo with a card on the board."""
+    local = dt.datetime.now().astimezone()
+    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    since = midnight.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cards = work()["cards"]
+    repos = set(config().get("projects") or [])
+    repos |= {m[1] for t in cards if (m := re.match(r"https://github.com/([^/]+/[^/]+)/", t.get("url") or ""))}
+    owners = sorted({r.split("/")[0] for r in repos})
+
+    def closed(day):
+        q = f"is:issue is:closed reason:completed closed:>={day} " + " ".join(f"user:{o}" for o in owners)
+        data, _ = run(["gh", "api", "-X", "GET", "search/issues", "-f", f"q={q}", "-f", "per_page=1"], timeout=20)
+        return (data or {}).get("total_count")
+
+    with ThreadPoolExecutor(8) as pool:
+        today = pool.submit(closed, midnight.isoformat(timespec="seconds"))
+        month = pool.submit(closed, (midnight - dt.timedelta(days=30)).strftime("%Y-%m-%d"))
+        names = sorted(repos)
+        deploys = dict(zip(names, pool.map(lambda r: deploys_today(r, since), names)))
+    cal, _ = run(["gh", "api", "graphql", "-f", "query={viewer{contributionsCollection{contributionCalendar{"
+                  "totalContributions weeks{contributionDays{date contributionCount contributionLevel}}}}}}"], timeout=20)
+    cal = (((cal or {}).get("data") or {}).get("viewer") or {}).get("contributionsCollection", {}).get("contributionCalendar")
+    _stats.update(at=time.time(), busy=False, data={
+        "open": len(cards), "closed_today": today.result(), "closed_30d": month.result(),
+        "contributions": cal and {"total": cal["totalContributions"], "weeks": [
+            [[d["date"], d["contributionCount"], d["contributionLevel"]] for d in w["contributionDays"]] for w in cal["weeks"]]},
+        "deploys": [{"repo": r.split("/")[-1], "n": n} for r, n in sorted(deploys.items(), key=lambda x: -x[1]) if n]})
+
+
+def work_stats():
+    with _stats_lock:
+        stale = time.time() - _stats["at"] > STATS_SECONDS
+        if stale and not _stats["data"]:
+            refresh_stats()
+        elif stale and not _stats["busy"]:
+            _stats["busy"] = True
+            threading.Thread(target=refresh_stats, daemon=True).start()
+        return {"at": _stats["at"], **(_stats["data"] or {})}
 
 
 def projects(force=False):
@@ -1117,6 +1221,10 @@ class Handler(BaseHTTPRequestHandler):
             body, kind = json.dumps(check_services()).encode(), "application/json"
         elif self.path == "/api/projects":
             body, kind = json.dumps(projects()).encode(), "application/json"
+        elif self.path == "/api/work-stats":
+            body, kind = json.dumps(work_stats()).encode(), "application/json"
+        elif self.path == "/api/work":
+            body, kind = json.dumps(work()).encode(), "application/json"
         elif self.path == "/api/ai":
             body, kind = json.dumps(ai_providers()).encode(), "application/json"
         elif self.path == "/api/vendors":
@@ -1172,4 +1280,5 @@ if __name__ == "__main__":
     threading.Thread(target=restart_on_change, daemon=True).start()
     threading.Thread(target=ai_providers, daemon=True).start()  # the first read is slow: start it before a page asks
     ThreadingHTTPServer.allow_reuse_address = True
+    ThreadingHTTPServer.request_queue_size = 64  # the page asks for about ten things at once on load; the default is 5
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

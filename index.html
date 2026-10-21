@@ -21,6 +21,7 @@
     --glow: 0 0 0 1px oklch(0.76 0.15 var(--hue) / 0.25), 0 0 16px oklch(0.76 0.15 var(--hue) / 0.22);
     --red: oklch(0.68 0.16 25); --red-bg: oklch(0.55 0.14 25 / 0.12); --red-line: oklch(0.55 0.14 25 / 0.35);
     --amber: oklch(0.8 0.14 75); --amber-bg: oklch(0.8 0.14 75 / 0.10); --amber-line: oklch(0.8 0.14 75 / 0.30);
+    --green: oklch(0.78 0.15 150); --green-bg: oklch(0.78 0.15 150 / 0.10); --green-line: oklch(0.78 0.15 150 / 0.30);
     --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
@@ -268,6 +269,21 @@
   .pill.failed { color: var(--red); background: var(--red-bg); border-color: var(--red-line); }
   .pill.failed .dot { background: var(--red); box-shadow: 0 0 6px var(--red); }
   .pill.warning { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-line); }
+  .heat { padding: 14px 16px 16px; border-top: 1px solid var(--line); }
+  .heat .head { display: flex; align-items: baseline; margin-bottom: 10px; }
+  .heat .head .more { margin-left: auto; font-size: 12px; color: var(--muted); text-decoration: none; }
+  .heat .head .more:hover { color: var(--text); }
+  /* The map fills the panel: 53 week columns share the width and each day stays square. */
+  .heat .months, .heat .grid { display: grid; grid-template-columns: repeat(var(--weeks), 1fr); gap: 3px; }
+  .heat .months { margin-bottom: 6px; font-size: 11px; color: var(--faint); }
+  .heat .months span { white-space: nowrap; overflow: visible; width: 0; }
+  .heat .grid { grid-auto-flow: column; grid-template-rows: repeat(7, auto); }
+  .heat .grid i { aspect-ratio: 1; border-radius: 3px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .heat .grid i[data-l="1"] { background: oklch(0.78 0.15 150 / 0.25); }
+  .heat .grid i[data-l="2"] { background: oklch(0.78 0.15 150 / 0.5); }
+  .heat .grid i[data-l="3"] { background: oklch(0.78 0.15 150 / 0.75); }
+  .heat .grid i[data-l="4"] { background: var(--green); }
+  .pill.human { color: var(--green); background: var(--green-bg); border-color: var(--green-line); }
   .pill.warning .dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
   .pill.ok { color: var(--text); }
 
@@ -311,6 +327,7 @@
   <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
   <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 3v18l2-1.5L9 21l2-1.5 2 1.5 2-1.5 2 1.5 2-1.5V3l-2 1.5L15 3l-2 1.5L11 3 9 4.5 7 3z"/><path d="M9 9h6M9 13h6"/></symbol>
   <symbol id="i-brief" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></symbol>
@@ -322,6 +339,7 @@
       <a class="home" href="#/"><svg class="i"><use href="#i-logo"/></svg><span class="label">Collector</span></a>
       <a class="item" href="#/" data-page="dashboard"><svg class="i"><use href="#i-dash"/></svg><span class="label">Dashboard</span><span class="tag" id="tag-attention"></span></a>
       <a class="item" href="#/agents" data-page="agents"><svg class="i"><use href="#i-bot"/></svg><span class="label">Agents</span><span class="tag" id="tag-running"></span></a>
+      <a class="item" href="#/work" data-page="work"><svg class="i"><use href="#i-list"/></svg><span class="label">Work</span><span class="tag" id="tag-work"></span></a>
       <a class="item" href="#/cron" data-page="cron"><svg class="i"><use href="#i-clock"/></svg><span class="label">Cron Jobs</span><span class="tag" id="tag-cron"></span></a>
       <div class="sep" role="separator"></div>
       <a class="item" href="#/projects" data-page="projects"><svg class="i"><use href="#i-layers"/></svg><span class="label">Projects</span></a>
@@ -355,8 +373,15 @@
         <div class="panel-head"><svg class="i"><use href="#i-alert"/></svg><h2>Needs attention</h2><span class="count" id="warn-count">0</span></div>
         <div class="alerts" id="warnings"></div>
       </section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-list"/></svg><h2>Work</h2>
+          <a class="more" href="#/work">All cards &rarr;</a></div>
+        <div class="stats" id="work-stats"><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div></div>
+        <div class="heat" id="heat"></div>
+      </section>
       <section class="panel" id="waiting-panel" hidden>
-        <div class="panel-head"><svg class="i"><use href="#i-layers"/></svg><h2>Waiting on you</h2><span class="count" id="waiting-count">0</span></div>
+        <div class="panel-head"><svg class="i"><use href="#i-layers"/></svg><h2>Waiting on you</h2><span class="count" id="waiting-count">0</span>
+          <div class="tools"><div class="seg" id="waiting-filter"></div></div></div>
         <div class="wrap">
           <table>
             <thead><tr><th>Lane</th><th>Ticket</th><th>Reason</th><th>Type</th><th>Priority</th><th class="num">Opened</th></tr></thead>
@@ -579,6 +604,19 @@
             <thead><tr><th>Name</th><th>Billing</th><th class="num">Charge</th><th class="num">Per month</th><th class="num">Per year</th></tr></thead>
             <tbody id="subs"></tbody>
             <tfoot id="subs-total"></tfoot>
+          </table>
+        </div>
+      </section>
+      </div>
+      <div class="page" data-page="work" hidden>
+      <div class="page-head"><h1>Work</h1></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-list"/></svg><h2>Open cards</h2><span class="count" id="work-count">0</span>
+          <span class="sub" id="work-sub">every lane on the board</span></div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Repo</th><th>Card</th><th>Title</th><th>Lane</th><th>Priority</th><th>Labels</th><th class="num">Opened</th></tr></thead>
+            <tbody id="work" data-skel="8" data-cols="7"></tbody>
           </table>
         </div>
       </section>
@@ -886,30 +924,54 @@ async function loadTickets() {
   } catch {
     return;
   }
+  waitingData = d;
+  renderWaiting();
+}
+// The lane filter on Waiting on you: All, then one button per lane that has tickets, in config order.
+let waitingData = null, waitingLane = "all";
+function renderWaiting() {
+  const d = waitingData;
   const list = d.tickets.filter((t) => d.each.includes(t.lane))
     .sort((a, b) => (a.priority ? +a.priority.slice(1) : 9) - (b.priority ? +b.priority.slice(1) : 9)
       || (a.created || "").localeCompare(b.created || ""));
   const counts = d.count.map((lane) => [lane, d.tickets.filter((t) => t.lane === lane).length]).filter(([, n]) => n);
   document.getElementById("waiting-panel").hidden = !list.length && !counts.length;
+  const lanes = d.each.filter((l) => list.some((t) => t.lane === l));
+  if (waitingLane !== "all" && !lanes.includes(waitingLane)) waitingLane = "all";
+  document.getElementById("waiting-filter").innerHTML = [["all", "All", list.length],
+    ...lanes.map((l) => [l, l, list.filter((t) => t.lane === l).length])].map(([f, label, n]) =>
+    `<button data-f="${esc(f)}" aria-pressed="${f === waitingLane}">${esc(label)} <span class="sub">${n}</span></button>`).join("");
+  const shown = waitingLane === "all" ? list : list.filter((t) => t.lane === waitingLane);
   const c = document.getElementById("waiting-count");
-  c.textContent = list.length;
-  c.className = list.some((t) => t.priority === "P0") ? "count hot" : "count";
-  document.getElementById("waiting").innerHTML = list.map((t) => `
+  // The chip counts only the P0s, in red; the filter's All button has the full count.
+  const p0 = list.filter((t) => t.priority === "P0").length;
+  c.textContent = p0;
+  c.className = "count hot";
+  c.title = `${p0} P0 ${p0 === 1 ? "ticket waits" : "tickets wait"} on you`;
+  c.hidden = !p0;
+  const tag = document.getElementById("tag-work");  // the sidebar's red dot: P0s wait on you
+  tag.textContent = p0 || "";
+  tag.className = p0 ? "tag hot" : "tag";
+  document.getElementById("waiting").innerHTML = shown.map((t) => `
     <tr>
-      <td><span class="pill warning">${esc(t.lane)}</span></td>
-      <td><a class="plain mono" href="${esc(t.url)}" target="_blank" rel="noopener" title="${esc(t.title)}">${esc(t.repo)}#${esc(t.number)}</a></td>
-      <td class="wide" title="${esc(t.title)}">${t.reason
+      <td><span class="pill ${t.lane === "ready-for-human" ? "human" : "warning"}">${esc(t.lane)}</span></td>
+      <td><a class="plain mono card-tip" href="${esc(t.url)}" target="_blank" rel="noopener" data-repo="${esc(t.repo)}" data-card="${esc(t.number)}">${esc(t.repo)}#${esc(t.number)}</a></td>
+      <td class="wide">${t.reason
         ? `<a class="plain" href="${esc(t.reason.url)}" target="_blank" rel="noopener">${esc(t.reason.text)}</a>`
-        : `<span style="color: var(--faint)">No reason found. ${esc(t.title)}</span>`}</td>
+        : `<span style="color: var(--muted)">${esc(t.title)}</span>`}</td>
       <td>${esc(t.type || "—")}</td>
       <td>${t.priority === "P0" ? `<span class="pill failed">P0</span>` : `<span class="mono">${esc(t.priority || "—")}</span>`}</td>
       <td class="num">${ago(t.created)}</td>
-    </tr>`).join("") + counts.map(([lane, n]) => `
+    </tr>`).join("") + (waitingLane === "all" ? counts.map(([lane, n]) => `
     <tr>
       <td><span class="pill ok">${esc(lane)}</span></td>
       <td colspan="5" style="color: var(--muted)">${n} ${n === 1 ? "ticket" : "tickets"} wait for a triage session</td>
-    </tr>`).join("");
+    </tr>`).join("") : "");
 }
+document.getElementById("waiting-filter").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) (waitingLane = b.dataset.f), renderWaiting();
+});
 
 // AI providers: what is left on each provider the Hermes profiles use. A low one also shows in Needs attention.
 const AI_NAMES = { anthropic: "Anthropic", nous: "Nous", minimax: "MiniMax", "xai-oauth": "Grok (xAI)" };
@@ -954,6 +1016,70 @@ async function loadAi() {
   // The dashboard shows plans first (bars), then pay-as-you-go balances.
   document.getElementById("ai-dash").innerHTML = [...plans, ...usage].map(plan).join("")
     || `<div class="note sub">No Hermes profiles found.</div>`;
+}
+
+// Work: every open card on the board, in lane order, then priority, then the oldest first.
+async function loadWork() {
+  let d;
+  try {
+    d = await (await fetch("/api/work")).json();
+  } catch {
+    return;
+  }
+  const rank = (t) => d.lanes.indexOf(t.lane) * 10 + (t.priority ? +t.priority.slice(1) : 9);
+  const cards = [...d.cards].sort((a, b) => rank(a) - rank(b) || (a.created || "").localeCompare(b.created || ""));
+  document.getElementById("work-count").textContent = cards.length;
+  document.getElementById("work-sub").textContent = d.error ? `Some lanes did not load: ${d.error}` : "every lane on the board";
+  const days = (iso) => {
+    const n = Math.floor((Date.now() - new Date(iso)) / 864e5);
+    return !iso ? "—" : n < 1 ? "today" : `${n} ${n === 1 ? "day" : "days"} ago`;
+  };
+  document.getElementById("work").innerHTML = cards.map((t) => `<tr>
+      <td>${esc(t.repo)}</td>
+      <td class="mono"><a class="plain card-tip" href="${esc(t.url)}" target="_blank" rel="noopener" data-repo="${esc(t.repo)}" data-card="${esc(t.number)}">#${esc(t.number)}</a></td>
+      <td class="wide">${esc(t.title)}</td>
+      <td><span class="pill">${esc(t.lane)}</span></td>
+      <td>${t.priority === "P0" ? `<span class="pill failed">P0</span>` : `<span class="mono">${esc(t.priority || "—")}</span>`}</td>
+      <td class="sub">${esc((t.labels || []).join(", ") || "—")}</td>
+      <td class="num">${days(t.created)}</td></tr>`).join("")
+    || `<tr><td colspan="7" class="sub">No open cards.</td></tr>`;
+}
+
+// Work stats on the dashboard: open cards, cards closed as done, and deploys today per repo.
+async function loadWorkStats() {
+  let d;
+  try {
+    d = await (await fetch("/api/work-stats")).json();
+  } catch {
+    return;
+  }
+  const num = (n) => (n == null ? "—" : n.toLocaleString());
+  const deployed = (d.deploys || []).reduce((n, x) => n + x.n, 0);
+  const stat = (label, value, sub) => `<div class="stat"><span class="label">${label}</span>
+    <span class="value">${value}</span>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
+  document.getElementById("work-stats").innerHTML = [
+    stat("Open cards", num(d.open)),
+    stat("Closed today", num(d.closed_today)),
+    stat("Closed in 30 days", num(d.closed_30d)),
+    stat("Deploys today", num(deployed), esc((d.deploys || []).map((x) => `${x.repo} ${x.n}`).join(" · "))),
+  ].join("");
+  // The GitHub heat map: one square per day for the last year, a column per week, darker for more contributions.
+  const c = d.contributions, LEVEL = { NONE: 0, FIRST_QUARTILE: 1, SECOND_QUARTILE: 2, THIRD_QUARTILE: 3, FOURTH_QUARTILE: 4 };
+  const heat = document.getElementById("heat");
+  heat.hidden = !c;
+  if (c) {
+    // A month name over the first week that starts in that month.
+    const months = c.weeks.map((w, k) => {
+      const first = new Date(w[0][0] + "T12:00"), prev = k && new Date(c.weeks[k - 1][0][0] + "T12:00");
+      return k && first.getMonth() !== prev.getMonth() ? first.toLocaleDateString([], { month: "short" }) : "";
+    });
+    heat.style.setProperty("--weeks", c.weeks.length);
+    heat.innerHTML = `<div class="head"><span class="sub">${c.total.toLocaleString()} contributions in the last year</span>
+        <a class="more" href="https://github.com" target="_blank" rel="noopener">GitHub &rarr;</a></div>
+      <div class="months">${months.map((m) => `<span>${m}</span>`).join("")}</div>
+      <div class="grid">${c.weeks.map((w, k) => (k ? "" : "<i style=\"visibility:hidden\"></i>".repeat(new Date(w[0][0] + "T12:00").getDay()))
+        + w.map(([day, n, l]) => `<i data-l="${LEVEL[l] || 0}" title="${n} ${n === 1 ? "contribution" : "contributions"} on ${day}"></i>`).join("")).join("")}</div>`;
+  }
 }
 
 // Vendor status: open incidents from each vendor's status page. Outages first, then incidents, then the rest.
@@ -1460,6 +1586,10 @@ loadVendors();
 setInterval(loadVendors, 60000);
 loadAi();
 setInterval(loadAi, 60000);
+loadWork();
+setInterval(loadWork, 60000);
+loadWorkStats();
+setInterval(loadWorkStats, 60000);
 setInterval(countdown, 1000);
 </script>
 </body>
