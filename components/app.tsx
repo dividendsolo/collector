@@ -191,8 +191,12 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
 function Shell() {
   const hash = useHash();
   const r = route(hash);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to the top on every page change
-  useEffect(() => scrollTo(0, 0), [hash]);
+  // Scroll to the top on every page change. Braces matter: scrollTo returns a promise in current Chrome, and React
+  // would call it as the cleanup.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the hash is the trigger
+  useEffect(() => {
+    scrollTo(0, 0);
+  }, [hash]);
   return (
     <div className="app">
       <Sidebar lit={r.lit} />

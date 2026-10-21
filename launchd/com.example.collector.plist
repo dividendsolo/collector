@@ -3,10 +3,15 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.example.collector</string>
+  <!-- Build first (bun run build); this serves the build. Set the folder to your Collector checkout. -->
+  <key>WorkingDirectory</key><string>/path/to/collector</string>
   <key>ProgramArguments</key>
-  <array><string>/usr/bin/python3</string><string>/path/to/collector/server.py</string></array>
+  <array><string>/path/to/.bun/bin/bun</string><string>start</string></array>
   <key>EnvironmentVariables</key>
-  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>COLLECTOR_PORT</key><string>4000</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>/tmp/collector.log</string>

@@ -128,7 +128,7 @@ export async function projects(force = false) {
         provider: b.provider,
         key: b.key,
         note: b.note || "",
-        present: Boolean(process.env[b.key] || keys[b.key]),
+        present: Boolean(keys[b.key] || process.env[b.key]),
         refused: text.includes(b.key) && text.includes("refused"),
       };
     }),

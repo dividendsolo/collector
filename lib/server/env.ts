@@ -29,8 +29,9 @@ function readEnv(file: string): Record<string, string> {
 export const envFile = () => readEnv(ENV_PATH);
 export const hermesEnv = () => readEnv(path.join(HERMES_HOME, ".env"));
 
-/** A key from the process environment, else from .env. */
-export const secret = (name: string) => process.env[name] || envFile()[name] || "";
+/** A key from .env (read now, so an edited key shows at once), else from the process environment. Next.js also loads
+ * .env into process.env at start, so the file must win. */
+export const secret = (name: string) => envFile()[name] || process.env[name] || "";
 
 export function envStamp(): number {
   try {

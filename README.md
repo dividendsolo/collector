@@ -45,9 +45,10 @@ It reads only. It never changes a job or a card. Its one write is your repo choi
 
 ## Requirements
 
-- Python 3.9 or later. No packages: the standard library only.
+- [Bun](https://bun.sh) 1.4 or later. Collector is a Next.js app (TypeScript); `bun install` gets the rest.
+- Python 3.9 or later, standard library only, on this machine and on each remote machine: `collect.py` reads each one.
 - SSH access (key-based) to each remote machine, with `python3` on it.
-- Optional: the [GitHub CLI](https://cli.github.com) (`gh`), signed in, for the API limit and the Projects page.
+- The [GitHub CLI](https://cli.github.com) (`gh`), signed in, for the board, the API limit, and the Projects page.
 - Optional: Docker, for verify runs in the Running now table.
 
 ## Run it
@@ -56,16 +57,23 @@ It reads only. It never changes a job or a card. Its one write is your repo choi
 git clone https://github.com/dividendsolo/collector.git
 cd collector
 cp config.example.json config.json   # then edit it
-python3 server.py
+bun install
+bun run build
+bun start                            # http://localhost:4000
 ```
 
-Open http://localhost:4000. The page refreshes every 15 seconds and reloads itself when a file in the folder changes.
-Set `COLLECTOR_PORT` for another port and `COLLECTOR_CONFIG` for a config file somewhere else.
+`bun dev` runs it with hot reload while you change the code. Set `COLLECTOR_PORT` for another port (both commands
+read it) and `COLLECTOR_CONFIG` for a config file somewhere else.
+
+The page reads machines and jobs every 15 seconds and the other panels once a minute. The board comes faster: the
+server reads it every 10 seconds and pushes each change to the page (server-sent events), so a lane change shows
+within about 10 seconds. No page waits on a slow reader: each panel shows skeleton rows, then fills. After
+`bun run build` and a restart, an open page reloads itself. `config.json` is read again whenever it changes.
 
 With no `config.json`, Collector shows the Hermes cron jobs of the machine it runs on.
 
-To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/Library/LaunchAgents/`, set the path
-to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
+To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/Library/LaunchAgents/`, set the
+path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
 
 ## Configure it
 
@@ -82,7 +90,8 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 | `services` | Sites to check once a minute: `[{"name": "My app", "url": "https://example.com"}]`. A project whose repo name matches a service name shows that service's status. |
 | `vendors` | The outside services you depend on, by their public status page: `[{"name": "GitHub", "url": "https://www.githubstatus.com"}]`. The Collector reads the page's feed by its shape: Statuspage (`/api/v2/summary.json`), Datadog status pages (`/config.json`), Better Stack (`/index.json`) and Stripe (`/current`) are found from `url`; any other feed goes in `"feed"` (Google Cloud's `incidents.json` is read too; for example X: `{"name": "X API", "url": "https://docs.x.com/status", "feed": "https://developer.x.com/api/status"}`). Open incidents show on the APIs page, and the APIs item in the sidebar counts the vendors with one (red for a major or critical one); they never go to Needs attention, since there is nothing to do about them. A service with no status page can use `"probe"`: one GET of an API that answers without a key (Nous: `https://inference-api.nousresearch.com/v1/models`), slow over 3 seconds, an outage on an error. A page with no feed it can read shows as a link. Checked every 5 minutes. |
 | `domains` | Domains for the Domains page: `["example.com"]`. Registrar and expiry come from the public registry (RDAP, or `whois` where the registry has no RDAP), plus the HTTPS certificate's expiry. Auto-renew is optional: Vercel domains use `VERCEL_TOKEN` in `.env` (or the Vercel CLI login), Cloudflare domains use `CLOUDFLARE_REGISTRAR_TOKEN` in `.env` (an API token with Account Registrar: Domains Read and Account Settings Read); the page shows the steps. Checked every 12 hours; Needs attention warns 30 days before a domain expires, 60 days before one with auto-renew off, and 14 days before a certificate runs out. |
-| `tickets` | Tickets that wait on you, in the Waiting on you panel on the Dashboard: `{"each": ["needs-info"], "count": ["needs-triage"], "command": ["my-tracker", "list", "{lane}", "--json"]}`. An `each` lane shows one row per ticket, with the reason from the comment that moved it there; a `count` lane shows one row with the count. The command runs once per lane, with `{lane}` replaced, and prints a JSON list of tickets with `repo`, `number`, `title`, `url`, `priority`, `labels`, and `createdAt`. `all` lists every lane on the board, in board order, for the Work page and the open-card count. Checked every 2 minutes. |
+| `tickets` | The lanes the page shows: `{"each": ["needs-info"], "count": ["needs-triage"], "all": ["needs-triage", "needs-info", "ready-for-agent"]}`. The Waiting on you panel on the Dashboard lists every ticket in the `each` lanes, with the reason from the comment that moved it there, and one row with the count for each `count` lane. `all` lists every lane on the board, in board order, for the Work page and the open-card count. Without a `board`, `"command": ["my-tracker", "list", "{lane}", "--json"]` runs once per lane (with `{lane}` replaced) and prints a JSON list of tickets with `repo`, `number`, `title`, `url`, `priority`, `labels`, and `createdAt`. |
+| `board` | A GitHub Projects (v2) board to read the lanes from: `{"project_id": "PVT_...", "lanes": {"needs-info": "<Status option id>"}, "priorities": {"P0": "<Priority option id>"}, "label_repos": ["owner/repo"], "interval": 10}`. `project_id` is the board's node id; `lanes` maps each lane name to its option of the board's Status field, and `priorities` maps P0, P1, and P2 to the Priority field's options. A repo in `label_repos` keeps its lane in an issue label (the same lane names) and its priority in a P0/P1/P2 label, off the board. The board is read in one GraphQL query (1 point) every `interval` seconds while a page is open, and every minute when none has been open for two minutes. |
 | `subscriptions` | What you pay for: `[{"name": "Hosting", "amount": 20, "billing": "monthly", "currency": "USD"}]`. `billing` is `monthly` or `annual`. |
 | `projects` | The repos on the Projects page, as `owner/repo`. The "Choose repos" button writes this key. |
 | `agent_notes` | One short note per Hermes profile, shown in the Agents table: `{"builder": "Builds cards"}`. A profile with no note shows "No note yet". |
@@ -104,6 +113,13 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 - **Projects:** the GitHub REST API through `gh`, about seven calls per repo every five minutes.
 - **Remote machines:** the server sends `collect.py` over SSH (`ssh <host> python3 -`) on each refresh, so nothing is
   installed there.
+- **The board:** one GraphQL query through `gh api graphql` every 10 seconds: the board's open items with their Status
+  and Priority, plus the open issues of the label repos. A change goes to every open page at once (`/api/events`).
+  The reason a ticket waits is read on a slower cache (ten minutes per ticket and lane, ten tickets per query).
+  `/api/board` shows the reads and the GraphQL points they used in the last hour.
+- **Caching:** each reader keeps its last answer and its own refresh rate (machines 10 s, AI and vendors 5 min,
+  projects 5 min, DataFast and revenue 10 min, domains 12 h). A stale answer is served while a new one is read in the
+  background; only the very first read after a start waits, and the server starts every reader when it boots.
 
 ## License
 

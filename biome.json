@@ -12,7 +12,6 @@
       "!**/node_modules",
       "!**/.artifacts",
       "!next-env.d.ts",
-      "!index.html",
       "!**/*.md",
       "!config.example.json",
       "!config.json"

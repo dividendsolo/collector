@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardQuery, diffBoard, isEmpty, laneSet, parseBoard, reasonOf, type Row } from "@/lib/server/board";
+import { boardQuery, diffBoard, isEmpty, laneSet, parseBoard, type Row, reasonOf } from "@/lib/server/board";
 import type { Board } from "@/lib/server/config";
 
 const board: Board = {
@@ -107,7 +107,10 @@ describe("reasonOf", () => {
   ];
   it("takes the comment just before the lane label went on, and its strongest sentence", () => {
     const r = reasonOf(
-      { comments: { nodes: comments }, timelineItems: { nodes: [{ createdAt: "2026-10-02T01:00:00Z", label: { name: "needs-info" } }] } },
+      {
+        comments: { nodes: comments },
+        timelineItems: { nodes: [{ createdAt: "2026-10-02T01:00:00Z", label: { name: "needs-info" } }] },
+      },
       "needs-info",
     );
     expect(r).toEqual({ text: "I need your call on the copy.", url: "c2", at: "2026-10-02T00:00:00Z" });

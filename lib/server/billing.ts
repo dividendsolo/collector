@@ -108,7 +108,7 @@ async function fetchBilling(): Promise<Record<string, Billing>> {
       rejected: [] as string[],
     };
     for (const b of accountsOf(accounts)) {
-      const key = process.env[b.key] || keys[b.key];
+      const key = keys[b.key] || process.env[b.key];
       if (!key) {
         total.missing.push(b.key);
         continue;

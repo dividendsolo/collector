@@ -13,7 +13,16 @@ import { warnings } from "@/lib/server/warnings";
 describe("readFeed", () => {
   it("reads Statuspage incidents and a bare status indicator", () => {
     expect(
-      readFeed({ page: {}, incidents: [{ name: "API errors", impact: "major", shortlink: "s", status: "investigating" }, { name: "old", status: "resolved" }] }, "u"),
+      readFeed(
+        {
+          page: {},
+          incidents: [
+            { name: "API errors", impact: "major", shortlink: "s", status: "investigating" },
+            { name: "old", status: "resolved" },
+          ],
+        },
+        "u",
+      ),
     ).toEqual([{ name: "API errors", impact: "major", url: "s" }]);
     expect(readFeed({ page: {}, incidents: [], status: { indicator: "minor", description: "Slow" } }, "u")).toEqual([
       { name: "Slow", impact: "minor", url: "u" },
@@ -21,9 +30,18 @@ describe("readFeed", () => {
   });
   it("reads Datadog, Better Stack, Stripe, X, and Google Cloud shapes", () => {
     expect(
-      readFeed({ pageType: "x", components: [], incidents: [{ title: "Down", componentsAffected: [{ status: "major_outage" }] }] }, "u"),
+      readFeed(
+        {
+          pageType: "x",
+          components: [],
+          incidents: [{ title: "Down", componentsAffected: [{ status: "major_outage" }] }],
+        },
+        "u",
+      ),
     ).toEqual([{ name: "Down", url: "u", impact: "critical" }]);
-    expect(readFeed({ data: { type: "status_page", attributes: { aggregate_state: "operational" } } }, "u")).toEqual([]);
+    expect(readFeed({ data: { type: "status_page", attributes: { aggregate_state: "operational" } } }, "u")).toEqual(
+      [],
+    );
     expect(
       readFeed(
         {
@@ -34,11 +52,19 @@ describe("readFeed", () => {
       ),
     ).toEqual([{ name: "API: downtime", url: "u", impact: "major" }]);
     expect(readFeed({ largestatus: "up" }, "u")).toEqual([]);
-    expect(readFeed({ largestatus: "degraded", message: "m" }, "u")).toEqual([{ name: "m", url: "u", impact: "minor" }]);
-    expect(readFeed({ overall: "degraded" }, "u")).toEqual([{ name: "X API: degraded", url: "u", impact: "minor" }]);
-    expect(readFeed([{ begin: "x", external_desc: "GCE", uri: "i/1", severity: "high" }, { begin: "x", end: "y" }], "u")).toEqual([
-      { name: "GCE", url: "u/i/1", impact: "major" },
+    expect(readFeed({ largestatus: "degraded", message: "m" }, "u")).toEqual([
+      { name: "m", url: "u", impact: "minor" },
     ]);
+    expect(readFeed({ overall: "degraded" }, "u")).toEqual([{ name: "X API: degraded", url: "u", impact: "minor" }]);
+    expect(
+      readFeed(
+        [
+          { begin: "x", external_desc: "GCE", uri: "i/1", severity: "high" },
+          { begin: "x", end: "y" },
+        ],
+        "u",
+      ),
+    ).toEqual([{ name: "GCE", url: "u/i/1", impact: "major" }]);
     expect(readFeed({ something: 1 }, "u")).toBeNull();
   });
 });
@@ -50,13 +76,33 @@ describe("domains", () => {
         { eventAction: "registration", eventDate: "2020-01-02T00:00:00Z" },
         { eventAction: "expiration", eventDate: "2027-01-02T00:00:00Z" },
       ],
-      entities: [{ roles: ["registrar"], vcardArray: ["vcard", [["version", {}, "text", "4.0"], ["fn", {}, "text", "Cloudflare, Inc."]]] }],
+      entities: [
+        {
+          roles: ["registrar"],
+          vcardArray: [
+            "vcard",
+            [
+              ["version", {}, "text", "4.0"],
+              ["fn", {}, "text", "Cloudflare, Inc."],
+            ],
+          ],
+        },
+      ],
     };
-    expect(parseRdap(j)).toEqual({ registered: true, registrar: "Cloudflare, Inc", expires: "2027-01-02", since: "2020-01-02" });
+    expect(parseRdap(j)).toEqual({
+      registered: true,
+      registrar: "Cloudflare, Inc",
+      expires: "2027-01-02",
+      since: "2020-01-02",
+    });
     expect(parseRdap({ events: [] })).toBeNull();
   });
   it("reads whois text", () => {
-    expect(parseWhois("Registry Expiry Date: 2027-03-04T00:00:00Z\nRegistrar: Example Registrar.\nCreation Date: 2019-05-06")).toEqual({
+    expect(
+      parseWhois(
+        "Registry Expiry Date: 2027-03-04T00:00:00Z\nRegistrar: Example Registrar.\nCreation Date: 2019-05-06",
+      ),
+    ).toEqual({
       registered: true,
       registrar: "Example Registrar",
       expires: "2027-03-04",
@@ -82,9 +128,18 @@ describe("billing", () => {
   });
   it("counts Stripe subscriptions, paid charges, and Clerk term charges", () => {
     const now = 1_800_000_000;
-    const subs = [{ items: { data: [{ price: { unit_amount: 1000, recurring: { interval: "month" } }, quantity: 2 }] } }];
+    const subs = [
+      { items: { data: [{ price: { unit_amount: 1000, recurring: { interval: "month" } }, quantity: 2 }] } },
+    ];
     const charges = [
-      { paid: true, status: "succeeded", amount: 12000, amount_refunded: 0, description: "Pro (annual)", created: now - 86400 },
+      {
+        paid: true,
+        status: "succeeded",
+        amount: 12000,
+        amount_refunded: 0,
+        description: "Pro (annual)",
+        created: now - 86400,
+      },
       { paid: true, status: "succeeded", amount: 500, amount_refunded: 100, description: "one-off", created: now },
       { paid: false, status: "failed", amount: 999, created: now },
     ];
@@ -94,7 +149,10 @@ describe("billing", () => {
     expect(
       polarRevenue(
         [{ amount: 1200, recurring_interval: "year" }],
-        [{ paid: true, total_amount: 1200, refunded_amount: 200 }, { paid: false, total_amount: 5 }],
+        [
+          { paid: true, total_amount: 1200, refunded_amount: 200 },
+          { paid: false, total_amount: 5 },
+        ],
       ),
     ).toEqual({ mrr: 1, subscribers: 1, revenue: 10, payments: 1 });
   });
@@ -109,9 +167,21 @@ describe("projects", () => {
     expect(hostFromHeaders((n) => (n === "fly-request-id" ? "1" : null))).toBe("Fly.io");
   });
   it("groups stack chips by category, in table order", () => {
-    const paths = ["package.json", "tsconfig.json", "bun.lock", "web/package.json", "a/b/package.json", "components.json"];
+    const paths = [
+      "package.json",
+      "tsconfig.json",
+      "bun.lock",
+      "web/package.json",
+      "a/b/package.json",
+      "components.json",
+    ];
     expect(near(paths, "package.json")).toEqual(["package.json", "web/package.json"]);
-    const chips = stackChips(paths, new Set(["next", "react", "@radix-ui/react-dialog", "stripe"]), gemsOf("gem 'rails'\n"), "Vercel");
+    const chips = stackChips(
+      paths,
+      new Set(["next", "react", "@radix-ui/react-dialog", "stripe"]),
+      gemsOf("gem 'rails'\n"),
+      "Vercel",
+    );
     expect(chips).toEqual([
       { category: "Language", items: ["TypeScript"] },
       { category: "Runtime", items: ["Bun"] },
@@ -139,7 +209,7 @@ describe("text", () => {
 
 describe("env and AI", () => {
   it("parses .env lines", () => {
-    expect(parseEnv('# c\nA=1\nB = "two"\nC=\'3\'\nnot a pair\n')).toEqual({ A: "1", B: "two", C: "3" });
+    expect(parseEnv("# c\nA=1\nB = \"two\"\nC='3'\nnot a pair\n")).toEqual({ A: "1", B: "two", C: "3" });
   });
   it("formats reset times and renewals in local time", () => {
     const t = new Date(2026, 9, 22, 9, 5);
