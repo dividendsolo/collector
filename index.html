@@ -285,6 +285,13 @@
   .bar { width: 160px; height: 3px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
   .bar.low span { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  /* AI plans: one block per provider, its usage windows as GitHub-limit style stats. */
+  .plans .plan { border-top: 1px solid var(--line); }
+  .plans .plan:first-child { border-top: 0; }
+  .plans .plan-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 16px 0; }
+  .plans .plan-head .name { font-weight: 500; }
+  .plans .stats .stat:last-child { border-right: 0; }
+  .plans .note { padding: 6px 16px 14px; }
 </style>
 </head>
 <body id="top">
@@ -366,6 +373,7 @@
       </section>
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI credits</h2>
+          <button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button>
           <a class="more" href="#/subscriptions">All providers &rarr;</a></div>
         <ul class="health" id="ai-dash" data-skel="5"></ul>
       </section>
@@ -526,6 +534,11 @@
         <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>GitHub API limit</h2></div>
         <div class="stats" id="github"></div>
       </section>
+      <section class="panel" id="x-limit" hidden>
+        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>X API usage</h2><span class="sub">developer.x.com, Situation's X wire</span>
+          <div class="tools"><button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button></div></div>
+        <div class="stats" id="x-usage"></div>
+      </section>
       </div>
       <div class="page" data-page="keys" hidden>
       <div class="page-head"><div class="crumbs"><a href="#/projects">&larr; All projects</a></div><h1>Payment keys</h1>
@@ -551,16 +564,24 @@
           </table>
         </div>
       </section>
+      <div class="pair">
       <section class="panel">
-        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI providers</h2><span class="count" id="ai-count">0</span>
-          <span class="sub">the providers your Hermes profiles use, read from each provider every 5 minutes</span></div>
+        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI plans</h2><span class="count" id="ai-plan-count">0</span>
+          <span class="sub">subscriptions with usage limits</span></div>
+        <div id="ai-plans" class="plans"><div class="plan skel-row"><div class="plan-head"><span class="skel w1"></span></div><div class="stats"><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div></div></div><div class="plan skel-row"><div class="plan-head"><span class="skel w1"></span></div><div class="stats"><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div></div></div></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI usage</h2><span class="count" id="ai-usage-count">0</span>
+          <span class="sub">pay-as-you-go credits</span>
+          <div class="tools"><button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button></div></div>
         <div class="wrap">
           <table>
-            <thead><tr><th>Provider</th><th>Plan</th><th class="num">Profiles</th><th class="num">Left</th><th>Detail</th></tr></thead>
-            <tbody id="ai" data-skel="5" data-cols="5"></tbody>
+            <thead><tr><th>Provider</th><th class="num">Profiles</th><th class="num">Balance</th><th>Detail</th></tr></thead>
+            <tbody id="ai-usage" data-skel="1" data-cols="4"></tbody>
           </table>
         </div>
       </section>
+      </div>
       </div>
       <div class="page" data-page="proposals" hidden>
       <div class="page-head"><h1>Proposals</h1><p>Open client proposals and their value.</p></div>
@@ -766,6 +787,22 @@ function render(d) {
           <span class="value">${x.used.toLocaleString()} <small>of ${x.limit.toLocaleString()} used · resets ${reset}</small></span>
           <div class="bar ${pct > 90 ? "low" : ""}"><span style="width: ${pct}%"></span></div></div>`;
       }).join("");
+  // X API: posts read this month against the project cap; the cap resets on the same day each month.
+  const x = d.x;
+  document.getElementById("x-limit").hidden = !x;
+  if (x) document.getElementById("x-usage").innerHTML = x.error
+    ? `<div class="alert error"><svg class="i"><use href="#i-alert"/></svg><span>${esc(x.error)}</span></div>`
+    : (() => {
+        const pct = x.limit ? Math.round((x.used / x.limit) * 100) : 0;
+        const now = new Date(), reset = new Date(now.getFullYear(), now.getMonth() + (now.getDate() >= x.reset_day ? 1 : 0), x.reset_day);
+        const c = x.credits || {}, usd = (n) => `<span class="money">$${(+n).toFixed(2)}</span>`;
+        const credits = c.total == null ? "" : `<div class="stat"><span class="label">Credits left</span>
+          <span class="value${c.total < 5 ? " stuck" : ""}">${usd(c.total)} <small>${usd(c.prepaid || 0)} prepaid + ${usd(c.free || 0)} free${c.free_expires
+            ? ` (expires ${new Date(c.free_expires).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })})` : ""}</small></span></div>`;
+        return credits + `<div class="stat"><span class="label">Posts read this month</span>
+          <span class="value"><span class="money">${x.used.toLocaleString()}</span> <small>of <span class="money">${x.limit.toLocaleString()}</span> · resets ${reset.toLocaleDateString([], { month: "short", day: "numeric" })}</small></span>
+          <div class="bar ${pct > 90 ? "low" : ""}"><span style="width: ${Math.max(pct, x.used ? 1 : 0)}%"></span></div></div>`;
+      })();
 }
 
 // Monthly spend: the subscriptions in config.json, each turned into a monthly amount (annual / 12).
@@ -879,7 +916,7 @@ async function loadTickets() {
 
 // AI providers: what is left on each provider the Hermes profiles use. A low one also shows in Needs attention.
 const AI_NAMES = { anthropic: "Anthropic", nous: "Nous", minimax: "MiniMax", "xai-oauth": "Grok (xAI)" };
-const aiName = (slug) => AI_NAMES[slug] || (slug.startsWith("claude-subscription") ? "Claude subscription (SDK)" : slug);
+const aiName = (slug) => AI_NAMES[slug] || slug;
 async function loadAi() {
   let d;
   try {
@@ -889,15 +926,31 @@ async function loadAi() {
   }
   const rows = d.providers || [];
   const left = (a) => a.left
-    ? `<span class="mono${a.low ? " stuck" : ""}">${esc(a.left)}</span>`
+    ? `<span class="mono${a.low ? " stuck" : ""}${a.left.startsWith("$") ? " money" : ""}">${esc(a.left)}</span>`
     : `<a class="sub" href="${esc(a.link || "#")}" target="_blank" rel="noopener">${esc(a.note || "No usage API")}</a>`;
-  document.getElementById("ai-count").textContent = rows.length;
-  document.getElementById("ai").innerHTML = rows.map((a) => `<tr>
-      <td>${a.link ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(aiName(a.provider))}</a>` : esc(aiName(a.provider))}</td>
-      <td>${esc(a.plan || "—")}</td><td class="num mono">${a.profiles}</td>
-      <td class="num">${a.left ? left(a) : `<span class="sub">—</span>`}</td>
-      <td class="sub">${esc(a.detail || a.note || "")}</td></tr>`).join("")
-    || `<tr><td colspan="5" class="sub">No Hermes profiles found.</td></tr>`;
+  const provider = (a) => a.link
+    ? `<a class="plain" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(aiName(a.provider))}</a>` : esc(aiName(a.provider));
+  const value = (a) => (a.left ? left(a) : `<span class="sub">—</span>`);
+  const plans = rows.filter((a) => a.kind !== "usage"), usage = rows.filter((a) => a.kind === "usage");
+  document.getElementById("ai-plan-count").textContent = plans.length;
+  document.getElementById("ai-usage-count").textContent = usage.length;
+  const resets = (iso) => {
+    const t = new Date(iso);
+    if (isNaN(t)) return "";
+    const time = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return t - Date.now() < 864e5 ? time : `${t.toLocaleDateString([], { weekday: "short" })} ${time}`;
+  };
+  document.getElementById("ai-plans").innerHTML = plans.map((a) => `<div class="plan">
+      <div class="plan-head"><span class="name">${provider(a)}</span><span class="sub">${esc(a.plan || "")}${a.plan ? " · " : ""}${a.profiles} ${a.profiles === 1 ? "profile" : "profiles"}</span></div>
+      ${a.windows ? `<div class="stats">${a.windows.map((w) => `<div class="stat"><span class="label">${esc(w.label)}</span>
+        <span class="value">${w.used}% <small>used${w.resets ? ` · resets ${resets(w.resets)}` : ""}</small></span>
+        <div class="bar ${w.used > 90 ? "low" : ""}"><span style="width: ${Math.min(100, w.used)}%"></span></div></div>`).join("")}</div>`
+        : `<div class="note sub">${esc(a.note || a.detail || "")}</div>`}
+    </div>`).join("") || `<div class="note sub">No plan logins in the Hermes profiles.</div>`;
+  document.getElementById("ai-usage").innerHTML = usage.map((a) => `<tr>
+      <td>${provider(a)}</td><td class="num mono">${a.profiles}</td>
+      <td class="num">${value(a)}</td><td class="wide sub">${esc(a.detail || a.note || "")}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="sub">No pay-as-you-go providers in the Hermes profiles.</td></tr>`;
   document.getElementById("ai-dash").innerHTML = rows.map((a) => `<li>
       <div><div class="name">${esc(aiName(a.provider))}</div><div class="sub">${esc(a.plan || "")}${a.plan ? " · " : ""}${a.profiles} ${a.profiles === 1 ? "profile" : "profiles"}</div></div>
       ${left(a)}</li>`).join("") || `<li><div class="sub">No Hermes profiles found.</div></li>`;

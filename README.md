@@ -11,11 +11,13 @@ The Dashboard answers these questions at a glance:
    A build turns amber after 30 minutes and red after an hour.
    The table also shows the model each agent calls now (a fallback model shows too).
 3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
-4. **AI credits:** one line per AI provider your Hermes profiles use (each profile's `config.yaml`), with what is
-   left, read from the provider: Nous credits through Hermes's own portal login, the MiniMax coding plan through
-   `MINIMAX_API_KEY` in `~/.hermes/.env`. A provider with no usage API shows a link to its usage page. Under $5 or
-   under 10% left goes to Needs attention. The Subscriptions page has the full table, and your subscriptions with
-   annual charges counted as a twelfth a month; its eye button blurs every amount, so you can share the screen.
+4. **AI credits:** one line per AI provider your Hermes profiles use (each profile's `config.yaml`), read from the
+   provider. Plans (subscriptions with usage windows) show bars like the GitHub limit: the Claude subscription
+   through Claude Code's own login in the macOS keychain (read only, never renewed), the MiniMax coding plan through
+   `MINIMAX_API_KEY` in `~/.hermes/.env`, and Grok as a login check (xAI has no usage API for subscriptions).
+   Pay-as-you-go credits (Nous, through Hermes's portal login) show the balance. Under $5, under 10% left, or a
+   failed login goes to Needs attention. The Subscriptions page has both panels and your subscriptions, with annual
+   charges counted as a twelfth a month; every eye button blurs every amount, so you can share the screen.
 5. **Cron jobs:** every scheduled job on every machine, with its status, machine, schedule, last run, and last result.
    Each job opens its own page: its setup (model, output, size in characters or lines and tokens), its schedule,
    its run counts, the agent's full prompt or the script's source, the last error, and its last 10 runs.
@@ -78,6 +80,7 @@ to `server.py`, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents
 | `subscriptions` | What you pay for: `[{"name": "Hosting", "amount": 20, "billing": "monthly", "currency": "USD"}]`. `billing` is `monthly` or `annual`. |
 | `projects` | The repos on the Projects page, as `owner/repo`. The "Choose repos" button writes this key. |
 | `agent_notes` | One short note per Hermes profile, shown in the Agents table: `{"builder": "Builds cards"}`. A profile with no note shows "No note yet". |
+| `X_BEARER_TOKEN` (`.env`) | Optional: the X API app's bearer token. The APIs page then shows the credit balance (`/2/usage/credits`) and posts read against the monthly cap (`/2/usage/tweets`); under $5 of credit goes to Needs attention. |
 | `billing` | Each project's payment providers: `{"owner/repo": [{"provider": "stripe", "key": "MYAPP_STRIPE_KEY"}]}`. `provider` is `stripe` or `polar`; `key` names a line in `.env` (gitignored) that holds a read-only key. |
 | `repos_dir` | The folder that holds your repos (default `~/code`). |
 

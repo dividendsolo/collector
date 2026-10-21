@@ -5,6 +5,7 @@ Reads only. Each refresh runs collect.py on every machine in config.json (locall
 adds the GitHub API limit, and works out the warnings. No database, no agent, no dependencies.
 """
 import base64
+import datetime as dt
 import json
 import re
 import shlex
@@ -67,6 +68,34 @@ def github_limit():
     return {k: {"used": r[k]["used"], "limit": r[k]["limit"], "reset": r[k]["reset"]} for k in ("graphql", "core")}
 
 
+_x_usage = {"at": 0, "data": None}
+
+
+def x_usage():
+    """Posts read this month against the X API project cap (developer.x.com) and the pay-per-use credit balance,
+    with X_BEARER_TOKEN from .env. None when no key is set. Cached five minutes."""
+    key = env_file().get("X_BEARER_TOKEN")
+    if not key:
+        return None
+    if time.time() - _x_usage["at"] > 300:
+        req = urllib.request.Request("https://api.x.com/2/usage/tweets",
+                                     headers={"Authorization": f"Bearer {key}", "User-Agent": "collector"})
+        try:
+            d = json.load(urllib.request.urlopen(req, timeout=10)).get("data") or {}
+            _x_usage["data"] = {"used": int(d.get("project_usage") or 0), "limit": int(d.get("project_cap") or 0),
+                                "reset_day": d.get("cap_reset_day")}
+            req = urllib.request.Request("https://api.x.com/2/usage/credits",
+                                         headers={"Authorization": f"Bearer {key}", "User-Agent": "collector"})
+            c = json.load(urllib.request.urlopen(req, timeout=10)).get("data") or {}
+            grants = [g.get("expires_at") for g in c.get("free_grants") or [] if g.get("expires_at")]
+            _x_usage["data"]["credits"] = {"total": c.get("total_balance"), "free": c.get("free_balance"),
+                                           "prepaid": c.get("prepaid_balance"), "free_expires": min(grants) if grants else None}
+        except Exception as e:
+            _x_usage["data"] = {"error": f"Could not read X API usage: {str(getattr(e, 'reason', e))[:80]}"}
+        _x_usage["at"] = time.time()
+    return _x_usage["data"]
+
+
 SLOW_SECONDS = 3
 _services = []  # the last check; the page asks for a new one (GET /api/services) once a minute
 
@@ -75,7 +104,7 @@ def check(service):
     """One GET of the service URL: online, slow (over SLOW_SECONDS), or down (an error or a 4xx/5xx answer)."""
     start = time.time()
     try:
-        req = urllib.request.Request(service["url"], headers={"User-Agent": "collector-health-check"})
+        req = urllib.request.Request(service["url"], headers={"User-Agent": "collector-health-check", **service.get("headers", {})})
         with urllib.request.urlopen(req, timeout=10) as r:
             code, headers = r.status, r.headers
         error = None
@@ -85,7 +114,8 @@ def check(service):
         code, error, headers = None, str(getattr(e, "reason", e))[:140], {}
     ms = int((time.time() - start) * 1000)
     status = "down" if error else "slow" if ms > SLOW_SECONDS * 1000 else "online"
-    return dict(service, status=status, code=code, ms=ms, error=error, checked_at=int(time.time()),
+    return dict({k: v for k, v in service.items() if k != "headers"}, status=status, code=code, ms=ms, error=error,
+                checked_at=int(time.time()),
                 hosting=host_from_headers(headers or {}))
 
 
@@ -662,8 +692,7 @@ print(json.dumps({"logged_in": bool(getattr(info, "logged_in", False)), "plan": 
                   "renews": getattr(sub, "current_period_end", None)}))
 """
 AI_LINKS = {"anthropic": "https://claude.ai/settings/usage", "nous": "https://portal.nousresearch.com",
-            "minimax": "https://platform.minimax.io/user-center/payment/coding-plan", "xai-oauth": "https://grok.com",
-            "claude": "https://claude.ai/settings/usage"}
+            "minimax": "https://platform.minimax.io/user-center/payment/coding-plan", "xai-oauth": "https://grok.com"}
 
 
 def hermes_env():
@@ -681,7 +710,13 @@ def ai_nous():
     if not data or not data.get("logged_in"):
         return {"note": f"Could not read the Nous portal: {err or 'not logged in'}"}
     left = data.get("usable")
-    renews = (data.get("renews") or "")[:10]
+    renews = ""
+    try:
+        end = dt.datetime.fromisoformat((data.get("renews") or "").replace("Z", "+00:00")).astimezone()
+        days = (end.date() - dt.date.today()).days
+        renews = f"in {days} {'day' if days == 1 else 'days'} ({end:%b} {end.day})" if days > 0 else f"today ({end:%b} {end.day})"
+    except ValueError:
+        pass
     return {"plan": data.get("plan"), "left": f"${left:.2f}" if isinstance(left, (int, float)) else None,
             "detail": f"usable on the ${data['monthly']:.0f}/month plan with top-ups" + (f", renews {renews}" if renews else "")
             if isinstance(data.get("monthly"), (int, float)) else None,
@@ -702,17 +737,67 @@ def ai_minimax():
     if not m:
         return {"note": "MiniMax returned no plan"}
     now, week = m.get("current_interval_remaining_percent"), m.get("current_weekly_remaining_percent")
-    return {"plan": "Coding plan", "left": f"{now}%", "detail": f"of this 5-hour window, {week}% of the week",
+    ms = lambda v: dt.datetime.fromtimestamp(v / 1000, dt.timezone.utc).isoformat() if v else None
+    windows = [{"label": "5-hour window", "used": 100 - (now if now is not None else 100), "resets": ms(m.get("end_time"))},
+               {"label": "Week", "used": 100 - (week if week is not None else 100), "resets": ms(m.get("weekly_end_time"))}]
+    return {"plan": "Coding plan", "left": f"{now}%", "windows": windows,
+            "detail": f"of this 5-hour window, {week}% of the week",
             "low": min(now if now is not None else 100, week if week is not None else 100) < AI_LOW_PERCENT}
 
 
 def ai_anthropic():
-    # The lanes log in with a `claude setup-token` subscription token: it can call the model but not read the
-    # usage endpoint (scope user:profile), so the row links to the usage page instead of guessing.
-    return {"plan": "Claude subscription", "note": "This token cannot read usage"}
+    """The Claude subscription's session and week limits. The lanes' `claude setup-token` token cannot read usage
+    (no user:profile scope), so this reads Claude Code's own login from the macOS keychain: the same Max account.
+    It never refreshes that login (Claude Code owns it); an expired one shows a note until Claude Code runs again."""
+    try:
+        raw = subprocess.run(["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+        login = json.loads(raw).get("claudeAiOauth") or {}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {"plan": "Claude subscription", "note": "No Claude Code login on this Mac"}
+    if login.get("expiresAt", 0) / 1000 < time.time():
+        return {"plan": "Claude subscription", "note": "Claude Code login expired: open Claude Code to renew it"}
+    req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage", headers={
+        "Authorization": f"Bearer {login.get('accessToken')}", "anthropic-beta": "oauth-2025-04-20", "User-Agent": "collector"})
+    try:
+        d = json.load(urllib.request.urlopen(req, timeout=10))
+    except Exception as e:
+        return {"plan": "Claude subscription", "note": f"Could not read Claude usage: {str(getattr(e, 'reason', e))[:80]}"}
+    session, week = d.get("five_hour") or {}, d.get("seven_day") or {}
+
+    def when(iso, fmt):
+        try:
+            return dt.datetime.fromisoformat(iso).astimezone().strftime(fmt).replace(" 0", " ").lstrip("0")
+        except (TypeError, ValueError):
+            return "?"
+    s_left, w_left = 100 - round(session.get("utilization") or 0), 100 - round(week.get("utilization") or 0)
+    plan = {"max": "Claude Max", "pro": "Claude Pro"}.get(login.get("subscriptionType"), "Claude subscription")
+    tier = re.search(r"(\d+x)$", login.get("rateLimitTier") or "")  # default_claude_max_5x
+    plan += f" ({tier[1]})" if tier else ""
+    windows = [{"label": "5-hour session", "used": round(session.get("utilization") or 0), "resets": session.get("resets_at")},
+               {"label": "Week", "used": round(week.get("utilization") or 0), "resets": week.get("resets_at")}]
+    return {"plan": plan, "left": f"{s_left}%", "windows": windows,
+            "detail": f"of this 5-hour session (resets {when(session.get('resets_at'), '%I:%M %p')}), "
+                      f"{w_left}% of the week (resets {when(week.get('resets_at'), '%a %I %p')})",
+            "low": min(s_left, w_left) < AI_LOW_PERCENT}
 
 
-AI_READERS = {"nous": ai_nous, "minimax": ai_minimax, "anthropic": ai_anthropic}
+def ai_grok():
+    """xAI has no usage API for a Grok subscription login, so this checks the login itself: a free models list."""
+    try:
+        token = json.load(open(os.path.join(HERMES_HOME, "auth.json")))["providers"]["xai-oauth"]["tokens"]["access_token"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"plan": "Grok subscription", "note": "No Grok login in Hermes", "low": True,
+                "alert": "Grok: no login in Hermes, so xresearch cannot search X"}
+    c = check({"url": "https://api.x.ai/v1/models"} | {"headers": {"Authorization": f"Bearer {token}"}})
+    if c["status"] == "down":
+        return {"plan": "Grok subscription", "note": f"Login failed ({c['error']}): log in again for xresearch", "low": True,
+                "alert": "Grok login failed, so xresearch cannot search X: log in again"}
+    return {"plan": "Grok subscription", "note": "Login OK (xAI has no usage API for subscriptions)"}
+
+
+AI_KIND = {"nous": "usage"}
+AI_READERS = {"nous": ai_nous, "minimax": ai_minimax, "anthropic": ai_anthropic, "xai": ai_grok}
 
 
 def refresh_ai():
@@ -720,14 +805,17 @@ def refresh_ai():
     for m in json.loads(state()).get("machines") or []:
         for prof in m.get("profiles") or []:
             if prof.get("provider"):
-                users.setdefault(prof["provider"], []).append(f"{m['name']}:{prof['name']}")
+                # One account, one row: the Claude SDK login is the same Claude subscription as "anthropic".
+                slug = "anthropic" if prof["provider"].startswith("claude") else prof["provider"]
+                users.setdefault(slug, []).append(f"{m['name']}:{prof['name']}")
 
     def one(item):
         slug, profiles = item
         reader = AI_READERS.get(slug) or AI_READERS.get(slug.split("-")[0])
         row = reader() if reader else {"note": "Subscription login, no usage API"}
         link = AI_LINKS.get(slug) or AI_LINKS.get(slug.split("-")[0])
-        return dict(row, provider=slug, profiles=len(profiles), link=link)
+        # A plan is a subscription with usage windows; usage is pay-as-you-go credits.
+        return dict(row, provider=slug, profiles=len(profiles), link=link, kind=AI_KIND.get(slug, "plan"))
 
     try:
         with ThreadPoolExecutor(4) as pool:
@@ -967,10 +1055,14 @@ def warnings(machines, limit, cfg, checked=()):
     tix = cfg.get("tickets") or {}
     if _tickets["error"]:
         out.append({"level": "warn", "text": f"Could not list tickets: {_tickets['error']}"})
+    xc = ((_x_usage.get("data") or {}).get("credits") or {}).get("total")
+    if isinstance(xc, (int, float)) and xc < AI_LOW_USD:
+        out.append({"level": "error", "text": f"X API: ${xc:.2f} of credits left (top up before Situation's X wire stops)",
+                    "url": "https://console.x.com"})
     for a in _ai["list"]:  # a low balance is something to act on: top it up before the lanes stop on a 402
         if a.get("low"):
-            out.append({"level": "error", "text": f"{a['provider']}: {a.get('left')} left {a.get('detail') or ''}".strip()
-                        + " (top up before the lanes stop)", "url": a.get("link")})
+            out.append({"level": "error", "url": a.get("link"), "text": a.get("alert") or
+                        f"{a['provider']}: {a.get('left')} left {a.get('detail') or ''}".strip() + " (top up before the lanes stop)"})
     order = {"error": 0, "warn": 1}
     return sorted(out, key=lambda w: order[w["level"]])
 
@@ -986,7 +1078,7 @@ def snapshot():
             data, err = fut.result()
             machines.append(dict(data or {}, name=t["name"], error=err))
         limit = limit.result()
-    return {"at": int(time.time()), "machines": machines, "github": limit, "subscriptions": cfg.get("subscriptions") or [],
+    return {"at": int(time.time()), "machines": machines, "github": limit, "x": x_usage(), "subscriptions": cfg.get("subscriptions") or [],
             "agent_notes": cfg.get("agent_notes") or {},
             "warnings": warnings(machines, limit, cfg, _services)}
 
