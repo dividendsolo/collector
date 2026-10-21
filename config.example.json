@@ -62,11 +62,29 @@
     "count": [
       "needs-triage"
     ],
-    "command": [
-      "my-tracker",
-      "list",
-      "{lane}",
-      "--json"
+    "all": [
+      "needs-triage",
+      "needs-info",
+      "ready-for-agent",
+      "code-review"
+    ]
+  },
+  "board": {
+    "project_id": "PVT_your-project-node-id",
+    "interval": 10,
+    "lanes": {
+      "needs-triage": "option-id-1",
+      "needs-info": "option-id-2",
+      "ready-for-agent": "option-id-3",
+      "code-review": "option-id-4"
+    },
+    "priorities": {
+      "P0": "option-id-p0",
+      "P1": "option-id-p1",
+      "P2": "option-id-p2"
+    },
+    "label_repos": [
+      "owner/a-repo-with-lane-labels"
     ]
   },
   "subscriptions": [
