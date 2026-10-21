@@ -11,9 +11,12 @@ export const useProjects = () => useApi("/api/projects");
 
 /** A project's live site comes from the server (p.live); its status pill comes from the last service check. */
 function liveSite(p: any, services: Svc[]) {
+  // Collector itself has no public site: it runs on this machine, at this page's own address.
+  if (!p.live && !p.homepage && p.name === "collector")
+    return { url: `http://localhost:${location.port}`, svc: undefined, local: true };
   const url: string = p.live || p.homepage || "";
   const svc = services.find((x) => x.url.replace(/\/$/, "") === url.replace(/\/$/, ""));
-  return { url, svc };
+  return { url, svc, local: false };
 }
 
 const ciLabel = (c: any): [string, string] =>
@@ -27,11 +30,12 @@ const ciLabel = (c: any): [string, string] =>
           ? ["failed", "Failing"]
           : ["warning", c.conclusion || "—"];
 
-/** Production: the project has a live site. Development: no live site yet. Archived: the repo is archived. Text
- * only: the dot belongs to Health, which is live. */
-function ProjectStatus({ p, live }: { p: any; live: { url: string } }) {
+/** Production: the project has a live site on its own domain. Preview: the live site is only a *.vercel.app URL.
+ * Development: no live site yet (Collector itself, on localhost, too). Archived: the repo is archived. Text only: the dot belongs to Health, which is live. */
+function ProjectStatus({ p, live }: { p: any; live: { url: string; local: boolean } }) {
   if (p.archived) return <>Archived</>;
-  if (live.url) return <>Production</>;
+  if (/\.vercel\.app\/?$/.test(live.url)) return <span className="pill warning">Preview</span>;
+  if (live.url && !live.local) return <>Production</>;
   return <span className="pill warning">Development</span>;
 }
 
@@ -72,7 +76,7 @@ function Picker({ onClose }: { onClose: () => void }) {
   const search = useRef<HTMLInputElement>(null);
   useEffect(() => {
     box.current?.scrollIntoView({ block: "start" });
-    fetch("/api/repos")
+    fetch("/api/repos?fresh=1")
       .then((r) => r.json())
       .then((d) => {
         // A to Z by repo name, so a repo is easy to find.
@@ -96,8 +100,10 @@ function Picker({ onClose }: { onClose: () => void }) {
   const save = async () => {
     setSaving(true);
     try {
-      // Keep the picker's order: A to Z.
-      const list = (repos || []).map((r) => r.nameWithOwner).filter((n) => chosen.has(n));
+      // A to Z by repo name. Every chosen repo is saved, even one the list no longer shows.
+      const list = [...chosen].sort((a, b) =>
+        a.split("/")[1].localeCompare(b.split("/")[1], undefined, { sensitivity: "base" }),
+      );
       const d = await (
         await fetch("/api/projects", {
           method: "POST",
@@ -228,6 +234,8 @@ export function ProjectsPage() {
                     <tr
                       className="row"
                       key={p.repo}
+                      data-tip={p.description || undefined}
+                      data-tip-title={p.title || p.name}
                       onClick={(e) => {
                         if (!(e.target as HTMLElement).closest("a")) location.hash = `#/projects/${p.repo}`;
                       }}
@@ -237,7 +245,6 @@ export function ProjectsPage() {
                           <b>{p.title || p.name}</b>
                         </a>
                         <Icon name="chev" className="i chev" />
-                        {p.description ? <div className="sub desc">{p.description}</div> : null}
                       </td>
                       <td>
                         <a className="plain mono" href={p.url} target="_blank" rel="noopener">
@@ -248,7 +255,9 @@ export function ProjectsPage() {
                       <td>
                         <ProjectStatus p={p} live={live} />
                       </td>
-                      <td>{hosting ? hosting : live.url ? "Self-hosted" : <span className="sub">—</span>}</td>
+                      <td>
+                        {hosting ? hosting : live.url && !live.local ? "Self-hosted" : <span className="sub">—</span>}
+                      </td>
                       <td>
                         {live.url ? (
                           <a className="plain" href={live.url} target="_blank" rel="noopener">

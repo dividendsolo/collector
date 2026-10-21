@@ -26,13 +26,13 @@ The Dashboard answers these questions at a glance:
    its run counts, the agent's full prompt or the script's source, the last error, and its last 10 runs.
 
 The **Work** page shows your GitHub contribution heat map, then lists every open card on the board (the `tickets` key's `all` lanes): repo, card, title, lane,
-priority, labels, and how many days ago it was opened, in lane order, then priority, then oldest first.
+priority, labels, and how many days ago it was opened: P0 first, then P1, P2, and no priority; inside one priority, in lane order, then oldest first.
 
 The **Agents** page shows Running now, then every Hermes profile on every machine, A to Z: a short note, the type,
 the model, the machine, and how many cron jobs the profile runs. Each agent opens its own page with its model,
 provider, last session, rules summary, and the cron jobs it runs.
 
-The **Projects** page shows the repos you choose: product name, repo, type, status, hosting, live URL, and health.
+The **Projects** page shows the repos you choose: product name, repo, type, status, hosting, live URL, and health. Hover a row to read what the project does (the repo description). Collector itself shows its localhost address as the live URL.
 Each project opens its own page with the last push, open issues and PRs, CI on the default branch, the card an
 agent works on now, and the tech stack read from the repo's `package.json` and `Gemfile`. Hosting comes from the live site's headers, the last GitHub deployment, or a host file in the
 repo (`.kamal`, `config/deploy.yml`, `fly.toml`, `vercel.json`, and others).

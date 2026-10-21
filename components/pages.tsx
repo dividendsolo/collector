@@ -492,7 +492,8 @@ const WeekCells = ({ w, pad }: { w: any[]; pad: number }) => (
 export function WorkPage() {
   const { board } = useLive();
   const d = board?.work;
-  const rank = (t: any) => d.lanes.indexOf(t.lane) * 10 + prio(t.priority);
+  // Priority first (P0, P1, P2, none), then lane order, then oldest.
+  const rank = (t: any) => prio(t.priority) * 100 + d.lanes.indexOf(t.lane);
   const cards: any[] = d?.loaded
     ? [...d.cards].sort((a, b) => rank(a) - rank(b) || (a.created || "").localeCompare(b.created || ""))
     : [];
