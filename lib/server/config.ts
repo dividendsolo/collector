@@ -62,6 +62,8 @@ export interface Config {
   board?: Board;
   subscriptions?: Subscription[];
   projects?: string[];
+  /** Actions minutes a month the GitHub plan includes; read from the plan when left out. */
+  actions_minutes?: number;
   agent_notes?: Record<string, string>;
   billing?: Record<string, BillingAccount | BillingAccount[]>;
   repos_dir?: string;

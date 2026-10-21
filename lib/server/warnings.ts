@@ -79,6 +79,13 @@ export function warnings(w: WarningInputs): Warning[] {
   const g = w.github.graphql;
   if (g && g.limit - g.used < 500)
     out.push({ level: "error", text: `GitHub GraphQL limit nearly gone: ${g.limit - g.used} of ${g.limit} left` });
+  const ga = w.github.actions;
+  if (ga?.used != null && ga.limit && ga.used >= ga.limit * 0.9)
+    out.push({
+      level: ga.used >= ga.limit ? "error" : "warn",
+      text: `GitHub Actions: ${ga.used.toLocaleString()} of ${ga.limit.toLocaleString()} included minutes used this month${ga.used >= ga.limit ? " (each extra minute is billed)" : ""}`,
+      url: "https://github.com/settings/billing",
+    });
   for (const x of w.services)
     if (x.status === "down") out.push({ level: "error", text: `${x.name} is down: ${x.error} (${x.url})` });
   for (const m of w.machines) if (m.error) out.push({ level: "error", text: `Could not read ${m.name}: ${m.error}` });

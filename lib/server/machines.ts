@@ -33,14 +33,44 @@ export interface GithubLimit {
   error?: string | null;
   graphql?: { used: number; limit: number; reset: number };
   core?: { used: number; limit: number; reset: number };
+  actions?: ActionsUsage;
 }
+
+/** GitHub Actions minutes this month: used (all Actions SKUs) against the minutes the plan includes. */
+export interface ActionsUsage {
+  error?: string | null;
+  used?: number;
+  limit?: number;
+  reset?: number;
+}
+
+// Minutes a month each GitHub plan includes for private repos (docs.github.com, "GitHub Actions billing").
+const PLAN_MINUTES: Record<string, number> = { free: 2000, pro: 3000, team: 3000, enterprise: 50000 };
+
+/** The signed-in gh account's Actions minutes, from the billing usage summary. Read every 5 minutes. */
+const actionsUsage = swr<ActionsUsage>("actions-usage", 5 * 60_000, async () => {
+  const [user, err] = await run(["gh", "api", "user"], { timeout: 10 });
+  if (!user) return { error: err };
+  const [sum, err2] = await run(["gh", "api", `users/${user.login}/settings/billing/usage/summary`], { timeout: 15 });
+  if (!sum) return { error: err2 };
+  const used = (sum.usageItems || [])
+    .filter((x: any) => x.product === "Actions" && x.unitType === "minutes")
+    .reduce((t: number, x: any) => t + x.grossQuantity, 0);
+  const now = new Date();
+  return {
+    used: Math.round(used),
+    limit: config().actions_minutes ?? PLAN_MINUTES[user.plan?.name] ?? 2000,
+    reset: Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1) / 1000,
+  };
+});
 
 export async function githubLimit(): Promise<GithubLimit> {
   const [data, err] = await run(["gh", "api", "rate_limit"], { timeout: 10 });
   if (!data) return { error: err };
   const r = data.resources;
   const pick = (k: string) => ({ used: r[k].used, limit: r[k].limit, reset: r[k].reset });
-  return { graphql: pick("graphql"), core: pick("core") };
+  const actions = await actionsUsage.get().catch((e) => ({ error: String(e) }));
+  return { graphql: pick("graphql"), core: pick("core"), actions };
 }
 
 export interface Snapshot {

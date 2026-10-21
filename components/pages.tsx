@@ -207,6 +207,35 @@ function GithubLimit() {
           </div>
         );
       })}
+      <ActionsMinutes a={g.actions} />
+    </div>
+  );
+}
+
+/** GitHub Actions minutes this month against the plan's included minutes; past them, GitHub bills each minute. */
+function ActionsMinutes({ a }: { a?: any }) {
+  if (!a) return null;
+  if (a.error)
+    return (
+      <div className="stat">
+        <span className="label">Actions minutes</span>
+        <span className="sub">Could not read: {a.error}</span>
+      </div>
+    );
+  const pct = Math.min(100, Math.round((a.used / a.limit) * 100));
+  const reset = new Date(a.reset * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+  return (
+    <div className="stat">
+      <span className="label">Actions minutes (this month)</span>
+      <span className="value">
+        {a.used.toLocaleString()}{" "}
+        <small>
+          of {a.limit.toLocaleString()} included · resets {reset}
+        </small>
+      </span>
+      <div className={`bar ${pct >= 90 ? "low" : ""}`}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
@@ -321,7 +350,7 @@ export function ApisPage() {
         </ul>
       </section>
       <section className="panel" id="github-limit">
-        <PanelHead icon="gauge" title="GitHub API limit" />
+        <PanelHead icon="gauge" title="GitHub limits" />
         <GithubLimit />
       </section>
       {state?.x ? (

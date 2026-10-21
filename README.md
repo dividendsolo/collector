@@ -6,7 +6,8 @@ Built for [Hermes Agent](https://github.com/NousResearch/hermes-agent) setups: a
 Hermes cron jobs, launchd jobs on the Mac, and coding agents that build and review cards in git worktrees.
 The Dashboard answers these questions at a glance:
 
-1. **Needs attention:** which job failed, which script starts itself in a loop, which GitHub limit is nearly gone.
+1. **Needs attention:** which job failed, which script starts itself in a loop, which GitHub limit is nearly gone (the API limits, and GitHub Actions minutes at 90% of what the plan
+   includes).
 2. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long. Hover a card number to read what the card is for.
    A build turns amber after 30 minutes and red after an hour.
    The table also shows the model each agent calls now (a fallback model shows too).
@@ -48,7 +49,7 @@ It reads only. It never changes a job or a card. Its one write is your repo choi
 - [Bun](https://bun.sh) 1.4 or later. Collector is a Next.js app (TypeScript); `bun install` gets the rest.
 - Python 3.9 or later, standard library only, on this machine and on each remote machine: `collect.py` reads each one.
 - SSH access (key-based) to each remote machine, with `python3` on it.
-- The [GitHub CLI](https://cli.github.com) (`gh`), signed in, for the board, the API limit, and the Projects page.
+- The [GitHub CLI](https://cli.github.com) (`gh`), signed in, for the board, the API limit, Actions minutes (the billing usage summary of the signed-in account; set `actions_minutes` in `config.json` if your plan is not read right), and the Projects page.
 - Optional: Docker, for verify runs in the Running now table.
 
 ## Run it
