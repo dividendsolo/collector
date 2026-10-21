@@ -7,7 +7,7 @@ Hermes cron jobs, launchd jobs on the Mac, and coding agents that build and revi
 The Dashboard answers these questions at a glance:
 
 1. **Needs attention:** which job failed, which script starts itself in a loop, which GitHub limit is nearly gone.
-2. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long.
+2. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long. Hover a card number to read what the card is for.
    A build turns amber after 30 minutes and red after an hour.
    The table also shows the model each agent calls now (a fallback model shows too).
 3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.

@@ -164,6 +164,15 @@
   th, td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
   th { font-size: 12px; font-weight: 400; color: var(--faint); background: var(--panel-2); }
   td.wide { white-space: normal; min-width: 220px; }
+  /* Card tooltip: what a running card is for, on hover or focus of its number. */
+  .card-tip { cursor: help; border-bottom: 1px dotted var(--line-2); }
+  .card-tip:focus-visible { outline: none; border-color: var(--blue-line); box-shadow: var(--glow); }
+  #card-tip { position: fixed; z-index: 20; max-width: 360px; padding: 10px 12px; display: grid; gap: 4px;
+    background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
+    font-size: 13px; line-height: 1.45; white-space: normal; pointer-events: none; }
+  #card-tip[hidden] { display: none; }  /* display: grid above would beat the hidden attribute */
+  #card-tip strong { font-weight: 500; color: var(--text); }
+  #card-tip span { color: var(--muted); }
   /* Projects: a full-page table that wraps inside its cells instead of scrolling sideways. */
   table.fit th, table.fit td { white-space: normal; padding: 9px 10px; }
   table.fit th:first-child, table.fit td:first-child { padding-left: 16px; }
@@ -672,11 +681,12 @@ function render(d) {
       <td class="mono">${esc(r.name || "unknown")}</td>
       <td>${r.model ? `<span class="mono">${esc(r.model.split("/").pop())}</span>${r.provider ? ` <span class="sub">${esc(r.provider)}</span>` : ""}` : `<span class="sub">—</span>`}</td>
       <td>${doing(r.kind)}${r.feature ? ` <span class="sub">${esc(r.feature)}</span>` : ""}</td><td>${esc(r.machine)}</td>
-      <td class="mono">#${r.card}</td><td>${esc(r.repo)}</td>
+      <td class="mono"><span class="card-tip" tabindex="0" data-repo="${esc(r.repo)}" data-card="${esc(r.card)}">#${r.card}</span></td><td>${esc(r.repo)}</td>
       <td class="num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}">${duration(r.seconds)}</td>
     </tr>`).join("")
     : `<tr><td colspan="8" class="sub">No agent or script is running.</td></tr>`;
   document.querySelectorAll("[data-run-rows]").forEach((e) => (e.innerHTML = runRows));
+  if (tipFor && !document.querySelector(".card-tip:hover, .card-tip:focus")) hideCard();
 
   // All agents: every Hermes profile per machine, A to Z by profile, then by machine.
   const pool = d.machines.flatMap((m) => (m.profiles || []).map((p) => {
@@ -1275,6 +1285,40 @@ document.getElementById("filter").addEventListener("click", (e) => {
   if (last) render(last);
 });
 
+
+// Card tooltip: hover or focus a card number in Running now to see what the card is for (title + its What / Summary).
+const cardInfo = new Map();  // "repo#n" -> promise of {title, text, url} or null
+const tip = Object.assign(document.createElement("div"), { id: "card-tip", hidden: true, role: "tooltip" });
+document.body.append(tip);
+let tipFor = null;
+async function showCard(el) {
+  const key = `${el.dataset.repo}#${el.dataset.card}`;
+  if (tipFor === key && !tip.hidden) return;
+  tipFor = key;
+  if (!cardInfo.has(key)) cardInfo.set(key, fetch(`/api/card?repo=${encodeURIComponent(el.dataset.repo)}&n=${encodeURIComponent(el.dataset.card)}`)
+    .then((r) => r.json()).catch(() => null));
+  tip.innerHTML = `<span>Loading the card…</span>`;
+  place(el);
+  const c = await cardInfo.get(key);
+  if (tipFor !== key) return;
+  if (!c) cardInfo.delete(key);  // try again on the next hover
+  tip.innerHTML = c ? `<strong>${esc(c.title)}</strong>${c.text ? `<span>${esc(c.text)}</span>` : ""}` : `<span>Could not read ${esc(key)}.</span>`;
+  place(el);
+}
+function place(el) {
+  tip.hidden = false;
+  const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+  tip.style.top = `${r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6}px`;
+}
+function hideCard() { tipFor = null; tip.hidden = true; }
+document.addEventListener("mouseover", (e) => { const el = e.target.closest(".card-tip"); if (el) showCard(el); });
+document.addEventListener("mouseout", (e) => { if (e.target.closest(".card-tip") && !e.relatedTarget?.closest?.(".card-tip")) hideCard(); });
+document.addEventListener("focusin", (e) => { const el = e.target.closest(".card-tip"); if (el) showCard(el); });
+document.addEventListener("focusout", (e) => e.target.closest(".card-tip") && hideCard());
+document.documentElement.addEventListener("mouseleave", hideCard);
+addEventListener("blur", hideCard);
+addEventListener("scroll", hideCard, { passive: true });
 
 // Pages: the hash picks one (#/cron); the sidebar and the top bar follow it.
 const links = [...document.querySelectorAll(".rail a.item")];

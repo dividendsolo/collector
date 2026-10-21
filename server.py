@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -649,6 +650,40 @@ def reason(t):
     return found
 
 
+CARD_SECTION = re.compile(r"^#+\s*(what|problem|bug|goal|why|summary)\b", re.I)
+_cards = {}  # (repo, number) -> (time, card)
+
+
+def card(repo, number):
+    """What a running card is for: its Agent Brief Summary, else the first sentences of its What / Problem section (else
+    of the body), for the Card column's tooltip. The repo's owner comes from the chosen projects. Cached ten minutes."""
+    hit = _cards.get((repo, number))
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    chosen = config().get("projects") or []
+    full = [p for p in chosen if p.split("/")[-1] == repo] or [f"{o}/{repo}" for o in dict.fromkeys(p.split("/")[0] for p in chosen)]
+    found = None
+    for name in full:  # a repo that is not a chosen project: try each owner the projects use
+        data, _ = run(["gh", "issue", "view", str(number), "-R", name, "--json", "title,body,url"], timeout=20)
+        if data:
+            lines = (data.get("body") or "").replace("\r", "").split("\n")
+            start = next((i + 1 for i, line in enumerate(lines) if CARD_SECTION.match(line.strip())), 0)
+            end = next((i for i in range(start, len(lines)) if lines[i].lstrip().startswith("#")), len(lines))
+            brief = next((re.sub(r"^\W*summary:\W*", "", line.strip(), flags=re.I) for line in lines
+                          if re.match(r"^\W*summary:", line.strip(), re.I)), None)  # an Agent Brief's Summary line
+            said = sentences(brief or "\n".join(lines[start:end])) or sentences("\n".join(lines))
+            text = ""
+            for x in said:
+                if len(text) + len(x) > 320 and text:
+                    break
+                text = f"{text} {x}".strip()
+            found = {"title": data.get("title"), "text": text, "url": data.get("url")}
+            break
+    if found:  # a failed read is tried again on the next hover
+        _cards[(repo, number)] = (time.time(), found)
+    return found
+
+
 def tickets():
     """Tickets that wait on a person (config "tickets": "each" lanes list every ticket in Needs attention, "count"
     lanes show one line with a count, and "command" prints one lane's tickets as JSON, with {lane} in place of the
@@ -832,6 +867,13 @@ class Handler(BaseHTTPRequestHandler):
             body, kind = json.dumps(vendors()).encode(), "application/json"
         elif self.path == "/api/tickets":
             body, kind = json.dumps(tickets()).encode(), "application/json"
+        elif self.path.startswith("/api/card?"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            repo, number = (q.get("repo") or [""])[0], (q.get("n") or [""])[0]
+            if not re.fullmatch(r"[\w.-]+", repo) or not number.isdigit():
+                self.send_error(400)
+                return
+            body, kind = json.dumps(card(repo, int(number))).encode(), "application/json"
         elif self.path == "/api/domains":
             body, kind = json.dumps(domains()).encode(), "application/json"
         elif self.path == "/api/repos":
