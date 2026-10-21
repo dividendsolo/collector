@@ -16,7 +16,7 @@ The Dashboard answers these questions at a glance:
    through Claude Code's own login in the macOS keychain (read only, never renewed), the MiniMax coding plan through
    `MINIMAX_API_KEY` in `~/.hermes/.env`, and Grok as a login check (xAI has no usage API for subscriptions).
    Pay-as-you-go credits (Nous, through Hermes's portal login) show the balance. Under $5, under 10% left, or a
-   failed login goes to Needs attention. The Subscriptions page has both panels and your subscriptions, with annual
+   failed login goes to Needs attention. The Subscriptions page has both panels on top, then your subscriptions, with annual
    charges counted as a twelfth a month; every eye button blurs every amount, so you can share the screen.
 5. **Cron jobs:** every scheduled job on every machine, with its status, machine, schedule, last run, and last result.
    Each job opens its own page: its setup (model, output, size in characters or lines and tokens), its schedule,

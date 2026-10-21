@@ -339,7 +339,7 @@
     </header>
     <main class="content">
       <div class="page" data-page="dashboard">
-      <div class="page-head"><h1>Dashboard</h1><p id="summary">Every cron job and agent run on your machines.</p></div>
+      <div class="page-head"><h1>Dashboard</h1></div>
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-play"/></svg><h2>Running now</h2><span class="count" data-run-count>0</span></div>
         <div class="wrap">
@@ -366,16 +366,16 @@
       </section>
       <div class="pair">
       <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI credits</h2>
+          <button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button>
+          <a class="more" href="#/subscriptions">All providers &rarr;</a></div>
+        <div id="ai-dash" class="plans"><div class="plan skel-row"><div class="plan-head"><span class="skel w1"></span></div><div class="stats"><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div></div></div><div class="plan skel-row"><div class="plan-head"><span class="skel w1"></span></div><div class="stats"><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span><div class="bar"></div></div></div></div></div>
+      </section>
+      <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-server"/></svg><h2>Service health</h2><span class="count" id="svc-count">0</span>
           <a class="more" href="#/services">All services &rarr;</a></div>
         <div class="spend-total" id="health-total"></div>
         <ul class="health" id="health"></ul>
-      </section>
-      <section class="panel">
-        <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI credits</h2>
-          <button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button>
-          <a class="more" href="#/subscriptions">All providers &rarr;</a></div>
-        <ul class="health" id="ai-dash" data-skel="5"></ul>
       </section>
       </div>
       </div>
@@ -552,18 +552,6 @@
       </div>
       <div class="page" data-page="subscriptions" hidden>
       <div class="page-head"><h1>Subscriptions</h1><p>What you pay for, largest first. Annual charges count as one twelfth a month.</p></div>
-      <section class="panel">
-        <div class="panel-head"><svg class="i"><use href="#i-receipt"/></svg><h2>Subscriptions</h2><span class="count" id="subs-count">0</span>
-          <span class="sub">from config.json</span>
-          <div class="tools"><button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button></div></div>
-        <div class="wrap">
-          <table>
-            <thead><tr><th>Name</th><th>Billing</th><th class="num">Charge</th><th class="num">Per month</th><th class="num">Per year</th></tr></thead>
-            <tbody id="subs"></tbody>
-            <tfoot id="subs-total"></tfoot>
-          </table>
-        </div>
-      </section>
       <div class="pair">
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-gauge"/></svg><h2>AI plans</h2><span class="count" id="ai-plan-count">0</span>
@@ -582,6 +570,18 @@
         </div>
       </section>
       </div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-receipt"/></svg><h2>Subscriptions</h2><span class="count" id="subs-count">0</span>
+          <span class="sub">from config.json</span>
+          <div class="tools"><button class="blur-toggle" type="button" aria-pressed="false" title="Blur the amounts"><svg class="i"><use href="#i-eye"/></svg></button></div></div>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Billing</th><th class="num">Charge</th><th class="num">Per month</th><th class="num">Per year</th></tr></thead>
+            <tbody id="subs"></tbody>
+            <tfoot id="subs-total"></tfoot>
+          </table>
+        </div>
+      </section>
       </div>
       <div class="page" data-page="proposals" hidden>
       <div class="page-head"><h1>Proposals</h1><p>Open client proposals and their value.</p></div>
@@ -716,9 +716,6 @@ function render(d) {
   const running = d.machines.flatMap((m) => (m.running || []).map((r) => ({ ...r, machine: m.name })))
     .sort((a, b) => b.seconds - a.seconds);
   document.querySelectorAll("[data-run-count]").forEach((e) => (e.textContent = running.length));
-  const jobsAll = d.machines.reduce((n, m) => n + (m.jobs || []).length, 0);
-  document.getElementById("summary").textContent =
-    `${d.machines.length} machines · ${jobsAll} cron jobs · ${running.length} running now`;
   const runRows = running.length
     ? running.map((r) => `
     <tr>
@@ -940,20 +937,23 @@ async function loadAi() {
     const time = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     return t - Date.now() < 864e5 ? time : `${t.toLocaleDateString([], { weekday: "short" })} ${time}`;
   };
-  document.getElementById("ai-plans").innerHTML = plans.map((a) => `<div class="plan">
+  const plan = (a) => `<div class="plan">
       <div class="plan-head"><span class="name">${provider(a)}</span><span class="sub">${esc(a.plan || "")}${a.plan ? " · " : ""}${a.profiles} ${a.profiles === 1 ? "profile" : "profiles"}</span></div>
       ${a.windows ? `<div class="stats">${a.windows.map((w) => `<div class="stat"><span class="label">${esc(w.label)}</span>
         <span class="value">${w.used}% <small>used${w.resets ? ` · resets ${resets(w.resets)}` : ""}</small></span>
         <div class="bar ${w.used > 90 ? "low" : ""}"><span style="width: ${Math.min(100, w.used)}%"></span></div></div>`).join("")}</div>`
+        : a.kind === "usage" ? `<div class="stats"><div class="stat"><span class="label">Balance</span>
+        <span class="value">${value(a)}</span>${a.detail ? `<span class="sub">${esc(a.detail)}</span>` : ""}</div></div>`
         : `<div class="note sub">${esc(a.note || a.detail || "")}</div>`}
-    </div>`).join("") || `<div class="note sub">No plan logins in the Hermes profiles.</div>`;
+    </div>`;
+  document.getElementById("ai-plans").innerHTML = plans.map(plan).join("") || `<div class="note sub">No plan logins in the Hermes profiles.</div>`;
   document.getElementById("ai-usage").innerHTML = usage.map((a) => `<tr>
       <td>${provider(a)}</td><td class="num mono">${a.profiles}</td>
       <td class="num">${value(a)}</td><td class="wide sub">${esc(a.detail || a.note || "")}</td></tr>`).join("")
     || `<tr><td colspan="4" class="sub">No pay-as-you-go providers in the Hermes profiles.</td></tr>`;
-  document.getElementById("ai-dash").innerHTML = rows.map((a) => `<li>
-      <div><div class="name">${esc(aiName(a.provider))}</div><div class="sub">${esc(a.plan || "")}${a.plan ? " · " : ""}${a.profiles} ${a.profiles === 1 ? "profile" : "profiles"}</div></div>
-      ${left(a)}</li>`).join("") || `<li><div class="sub">No Hermes profiles found.</div></li>`;
+  // The dashboard shows plans first (bars), then pay-as-you-go balances.
+  document.getElementById("ai-dash").innerHTML = [...plans, ...usage].map(plan).join("")
+    || `<div class="note sub">No Hermes profiles found.</div>`;
 }
 
 // Vendor status: open incidents from each vendor's status page. Outages first, then incidents, then the rest.
