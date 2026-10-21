@@ -269,10 +269,9 @@
   .pill.failed { color: var(--red); background: var(--red-bg); border-color: var(--red-line); }
   .pill.failed .dot { background: var(--red); box-shadow: 0 0 6px var(--red); }
   .pill.warning { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-line); }
-  .heat { padding: 14px 16px 16px; border-top: 1px solid var(--line); }
-  .heat .head { display: flex; align-items: baseline; margin-bottom: 10px; }
-  .heat .head .more { margin-left: auto; font-size: 12px; color: var(--muted); text-decoration: none; }
-  .heat .head .more:hover { color: var(--text); }
+  .heat { padding: 14px 16px 16px; }
+  #work-stats .stat { align-content: start; }  /* every number on one line, whatever sits under it */
+  #work-stats .stat .sub span { white-space: nowrap; }
   /* The map fills the panel: 53 week columns share the width and each day stays square. */
   .heat .months, .heat .grid { display: grid; grid-template-columns: repeat(var(--weeks), 1fr); gap: 3px; }
   .heat .months { margin-bottom: 6px; font-size: 11px; color: var(--faint); }
@@ -377,7 +376,6 @@
         <div class="panel-head"><svg class="i"><use href="#i-list"/></svg><h2>Work</h2>
           <a class="more" href="#/work">All cards &rarr;</a></div>
         <div class="stats" id="work-stats"><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div><div class="stat"><span class="skel short"></span><span class="skel w1" style="height:20px"></span></div></div>
-        <div class="heat" id="heat"></div>
       </section>
       <section class="panel" id="waiting-panel" hidden>
         <div class="panel-head"><svg class="i"><use href="#i-layers"/></svg><h2>Waiting on you</h2><span class="count" id="waiting-count">0</span>
@@ -610,6 +608,12 @@
       </div>
       <div class="page" data-page="work" hidden>
       <div class="page-head"><h1>Work</h1></div>
+      <section class="panel">
+        <div class="panel-head"><svg class="i"><use href="#i-activity"/></svg><h2>GitHub contributions</h2>
+          <span class="sub" id="heat-total"></span>
+          <a class="more" href="https://github.com" target="_blank" rel="noopener">GitHub &rarr;</a></div>
+        <div class="heat" id="heat"></div>
+      </section>
       <section class="panel">
         <div class="panel-head"><svg class="i"><use href="#i-list"/></svg><h2>Open cards</h2><span class="count" id="work-count">0</span>
           <span class="sub" id="work-sub">every lane on the board</span></div>
@@ -1063,12 +1067,12 @@ async function loadWorkStats() {
     stat("Open cards", num(d.open)),
     stat("Closed today", num(d.closed_today)),
     stat("Closed in 30 days", num(d.closed_30d)),
-    stat("Deploys today", num(deployed), esc((d.deploys || []).map((x) => `${x.repo} ${x.n}`).join(" · "))),
+    stat("Deploys today", num(deployed), (d.deploys || []).map((x) => `<span>${esc(x.repo)} ${x.n}</span>`).join(" · ")),
   ].join("");
   // The GitHub heat map: one square per day for the last year, a column per week, darker for more contributions.
   const c = d.contributions, LEVEL = { NONE: 0, FIRST_QUARTILE: 1, SECOND_QUARTILE: 2, THIRD_QUARTILE: 3, FOURTH_QUARTILE: 4 };
   const heat = document.getElementById("heat");
-  heat.hidden = !c;
+  heat.closest("section").hidden = !c;
   if (c) {
     // A month name over the first week that starts in that month.
     const months = c.weeks.map((w, k) => {
@@ -1076,9 +1080,8 @@ async function loadWorkStats() {
       return k && first.getMonth() !== prev.getMonth() ? first.toLocaleDateString([], { month: "short" }) : "";
     });
     heat.style.setProperty("--weeks", c.weeks.length);
-    heat.innerHTML = `<div class="head"><span class="sub">${c.total.toLocaleString()} contributions in the last year</span>
-        <a class="more" href="https://github.com" target="_blank" rel="noopener">GitHub &rarr;</a></div>
-      <div class="months">${months.map((m) => `<span>${m}</span>`).join("")}</div>
+    document.getElementById("heat-total").textContent = `${c.total.toLocaleString()} in the last year`;
+    heat.innerHTML = `<div class="months">${months.map((m) => `<span>${m}</span>`).join("")}</div>
       <div class="grid">${c.weeks.map((w, k) => (k ? "" : "<i style=\"visibility:hidden\"></i>".repeat(new Date(w[0][0] + "T12:00").getDay()))
         + w.map(([day, n, l]) => `<i data-l="${LEVEL[l] || 0}" title="${n} ${n === 1 ? "contribution" : "contributions"} on ${day}"></i>`).join("")).join("")}</div>`;
   }

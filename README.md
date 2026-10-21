@@ -19,14 +19,13 @@ The Dashboard answers these questions at a glance:
    failed login goes to Needs attention. The Subscriptions page has both panels on top, then your subscriptions, with annual
    charges counted as a twelfth a month; every eye button blurs every amount, so you can share the screen.
 5. **Work:** open cards on the board, cards closed as done today and in 30 days, deploys today per repo (production
-   GitHub deployments, or successful CI jobs named "deploy" on pushes to main), and your GitHub contribution heat
-   map. The Waiting on you panel lists every ticket in the `each` lanes, with one filter button per lane; its red
+   GitHub deployments, or successful CI jobs named "deploy" on pushes to main). The Waiting on you panel lists every ticket in the `each` lanes, with one filter button per lane; its red
    count, and a red dot on Work in the sidebar, are the P0s.
 6. **Cron jobs:** every scheduled job on every machine, with its status, machine, schedule, last run, and last result.
    Each job opens its own page: its setup (model, output, size in characters or lines and tokens), its schedule,
    its run counts, the agent's full prompt or the script's source, the last error, and its last 10 runs.
 
-The **Work** page lists every open card on the board (the `tickets` key's `all` lanes): repo, card, title, lane,
+The **Work** page shows your GitHub contribution heat map, then lists every open card on the board (the `tickets` key's `all` lanes): repo, card, title, lane,
 priority, labels, and how many days ago it was opened, in lane order, then priority, then oldest first.
 
 The **Agents** page shows Running now, then every Hermes profile on every machine, A to Z: a short note, the type,
