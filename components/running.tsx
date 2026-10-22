@@ -176,12 +176,12 @@ export function CurrentWork() {
           <thead>
             <tr>
               <th>State</th>
-              <th>Repo</th>
-              <th>Card</th>
               <th>Name / profile</th>
               <th>Model</th>
               <th>Task</th>
               <th>Machine</th>
+              <th>Card</th>
+              <th>Repo</th>
               <th className="num">Running for</th>
             </tr>
           </thead>
@@ -197,20 +197,6 @@ export function CurrentWork() {
                 return (
                   <tr key={row.key} className={row.state === "closed" ? "done" : ""}>
                     <StateCell row={row} />
-                    <td>{repo}</td>
-                    <td>
-                      <span className="mono card-tip" tabIndex={0} data-repo={repo} data-card={num}>
-                        #{num}
-                      </span>
-                      {c ? (
-                        <>
-                          {" "}
-                          <a className="plain" href={c.url} target="_blank" rel="noopener">
-                            {c.title}
-                          </a>
-                        </>
-                      ) : null}
-                    </td>
                     <td className="mono">{r ? r.name || "unknown" : <Dash />}</td>
                     <td>{r ? <ModelCell model={r.model} provider={r.provider} /> : <Dash />}</td>
                     <td>
@@ -229,6 +215,20 @@ export function CurrentWork() {
                       )}
                     </td>
                     <td>{r ? r.machine : row.local ? "local" : <Dash />}</td>
+                    <td className="mono">
+                      <a
+                        className="plain card-tip"
+                        href={c?.url}
+                        target="_blank"
+                        rel="noopener"
+                        tabIndex={0}
+                        data-repo={repo}
+                        data-card={num}
+                      >
+                        #{num}
+                      </a>
+                    </td>
+                    <td>{repo}</td>
                     {r ? (
                       <RunTime r={r} />
                     ) : (
