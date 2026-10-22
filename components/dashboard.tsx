@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { ago, waitingOrder } from "@/lib/format";
 import { AiPlan, useAi } from "./ai";
 import { useApi, useLive } from "./data";
-import { RunningNow } from "./running";
+import { CurrentWork } from "./running";
 import { ServiceRows, sortServices, useServices } from "./services";
 import { BlurToggle, Icon, PanelHead, Pill, SkelItems, SkelPlans, SkelRows, SkelStat } from "./ui";
 
@@ -299,7 +299,7 @@ export function Dashboard() {
       <div className="page-head">
         <h1>Dashboard</h1>
       </div>
-      <RunningNow />
+      <CurrentWork />
       <NeedsAttention />
       <WorkPanel />
       <Waiting />

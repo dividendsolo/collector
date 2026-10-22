@@ -15,10 +15,38 @@ export interface Row {
   priority: string | null;
   created: string;
   labels: string[];
+  hold?: Hold | null;
+}
+
+/** Why a card waits: the cards in its `Waiting on:` line and the date in its `Not before:` line. */
+export interface Hold {
+  after: { ref: string; url: string }[];
+  from: string | null;
+}
+
+const WAITING_ON = /Waiting on:\**([^\n]*)/i;
+const NOT_BEFORE = /Not before:\**\s*(\d{4}-\d{2}-\d{2})/i;
+
+/** The hold of a card from its body. `url` is the card's own issue URL, for the owner and repo of a bare `#n`. */
+export function parseHold(body: string | null | undefined, url: string): Hold | null {
+  if (!body) return null;
+  const [, owner, repo] = url.match(/github\.com\/([^/]+)\/([^/]+)\//) || [];
+  const after: Hold["after"] = [];
+  const waiting = body.match(WAITING_ON)?.[1].split("->")[0] || "";
+  for (const m of waiting.matchAll(/(?:([\w.-]+)\/([\w.-]+))?#(\d+)/g)) {
+    const o = m[1] || owner;
+    const r = m[2] || repo;
+    after.push({
+      ref: r === repo ? `#${m[3]}` : `${r}#${m[3]}`,
+      url: `https://github.com/${o}/${r}/issues/${m[3]}`,
+    });
+  }
+  const from = body.match(NOT_BEFORE)?.[1] ?? null;
+  return after.length || from ? { after, from } : null;
 }
 
 export const TICKET_TYPES = ["bug", "enhancement", "tech-debt"];
-const ISSUE = "number title url createdAt state repository{name} labels(first:30){nodes{name}}";
+const ISSUE = "number title url body createdAt state repository{name} labels(first:30){nodes{name}}";
 // Page sizes keep one read at 1 GraphQL point: 1 + 55 label lists + 1 + 40 label lists = 97 requests (under 100).
 const ITEMS_PAGE = 55;
 const SEARCH_PAGE = 40;
@@ -71,6 +99,7 @@ export function parseBoard(data: any, board: Board, lanes: Set<string>) {
       priority: priority.get(n.priority?.optionId) ?? null,
       created: c.createdAt,
       labels: (c.labels?.nodes || []).map((l: any) => l.name),
+      hold: parseHold(c.body, c.url),
     });
   }
   const search = data?.search;
@@ -89,6 +118,7 @@ export function parseBoard(data: any, board: Board, lanes: Set<string>) {
       priority: p,
       created: c.createdAt,
       labels,
+      hold: parseHold(c.body, c.url),
     });
   }
   return {
@@ -117,7 +147,13 @@ export function diffBoard(prev: Row[], next: Row[]): Diff {
     const o = before.get(r.url);
     if (!o) d.added.push(r);
     else if (o.lane !== r.lane) d.moved.push({ row: r, from: o.lane });
-    else if (o.title !== r.title || o.priority !== r.priority || o.labels.join() !== r.labels.join()) d.changed.push(r);
+    else if (
+      o.title !== r.title ||
+      o.priority !== r.priority ||
+      o.labels.join() !== r.labels.join() ||
+      JSON.stringify(o.hold) !== JSON.stringify(r.hold)
+    )
+      d.changed.push(r);
   }
   return d;
 }
@@ -170,6 +206,7 @@ interface BoardState {
   clients: number;
   lastClientAt: number;
   stats: Stats;
+  closed: Map<string, { row: Row; at: number }>;
 }
 
 const S = once<BoardState>("board", () => {
@@ -186,6 +223,7 @@ const S = once<BoardState>("board", () => {
     clients: 0,
     lastClientAt: 0,
     stats: { polls: 0, cost: 0, since: Date.now(), last_ms: 0, last_at: 0, remaining: null, costs: [] },
+    closed: new Map(),
   };
 });
 
@@ -299,6 +337,7 @@ export async function poll(reason = "timer"): Promise<void> {
     const hadError = S.error;
     S.error = null;
     const d = diffBoard(prev || [], rows);
+    keepClosed(S.closed, d, tickets().each || [], Date.now());
     if (prev === null || !isEmpty(d) || hadError) {
       if (prev !== null && !isEmpty(d))
         console.log(
@@ -371,6 +410,17 @@ async function fillReasons() {
   }
 }
 
+// ---- Cards that left the board: kept an hour so Current work shows them closed.
+
+export const CLOSED_SECONDS = 3600;
+
+/** Remember the work cards that left the board in this read; forget the ones back on it or older than an hour. */
+export function keepClosed(closed: Map<string, { row: Row; at: number }>, d: Diff, waiting: string[], now: number) {
+  for (const r of d.removed) if (!waiting.includes(r.lane)) closed.set(r.url, { row: r, at: now });
+  for (const r of d.added) closed.delete(r.url);
+  for (const [url, c] of closed) if (now - c.at > CLOSED_SECONDS * 1000) closed.delete(url);
+}
+
 // ---- The views the page uses.
 
 export function ticketsView() {
@@ -416,6 +466,19 @@ export function workView() {
         priority: r.priority,
         created: r.created,
         labels: r.labels.filter((l) => !known.has(l) && l !== r.priority),
+        hold: r.hold ?? null,
+      })),
+    closed: [...S.closed.values()]
+      .filter((c) => Date.now() - c.at <= CLOSED_SECONDS * 1000)
+      .map(({ row: r, at }) => ({
+        repo: r.repo,
+        number: r.number,
+        title: r.title,
+        url: r.url,
+        lane: r.lane,
+        priority: r.priority,
+        created: r.created,
+        closed_at: at / 1000,
       })),
     error: S.error,
     loaded: S.rows !== null,
