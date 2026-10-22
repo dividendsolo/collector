@@ -170,6 +170,9 @@ interface BoardState {
   clients: number;
   lastClientAt: number;
   stats: Stats;
+  gap: string[];
+  gapAt: number;
+  project: string | null;
 }
 
 const S = once<BoardState>("board", () => {
@@ -186,6 +189,9 @@ const S = once<BoardState>("board", () => {
     clients: 0,
     lastClientAt: 0,
     stats: { polls: 0, cost: 0, since: Date.now(), last_ms: 0, last_at: 0, remaining: null, costs: [] },
+    gap: [],
+    gapAt: 0,
+    project: null,
   };
 });
 
@@ -193,6 +199,46 @@ async function gql(query: string, vars: Record<string, string>) {
   const args = ["gh", "api", "graphql", "-f", `query=${query}`];
   for (const [k, v] of Object.entries(vars)) args.push("-f", `${k}=${v}`);
   return run(args, { timeout: 30 });
+}
+
+const GAP_SECONDS = 300;
+
+/** The board's search name ("owner/number"), asked once. */
+async function projectName(board: Board): Promise<string | null> {
+  if (S.project) return S.project;
+  const [data] = await gql(
+    "query($p:ID!){ node(id:$p){... on ProjectV2{ number owner{... on User{login} ... on Organization{login}} }} }",
+    { p: board.project_id },
+  );
+  const n = data?.data?.node;
+  S.project = n?.number && n.owner?.login ? `${n.owner.login}/${n.number}` : null;
+  return S.project;
+}
+
+/** Open board cards that issue search finds but the board's item list left out, as "repo#n". GitHub's item list can
+ * lag hours behind a card's move onto the board (2026-10-22: 11 of 25 open cards missing); search is the check. */
+export function missingFromBoard(found: { repo: string; number: number }[], rows: Row[], labelRepos: Set<string>) {
+  const seen = new Set(rows.map((r) => `${r.repo}#${r.number}`));
+  return found
+    .filter((f) => !labelRepos.has(f.repo))
+    .map((f) => `${f.repo}#${f.number}`)
+    .filter((k) => !seen.has(k));
+}
+
+/** Every five minutes, one search for the board's open issues, compared with the last read. */
+async function checkGap(board: Board, rows: Row[]) {
+  if (Date.now() - S.gapAt < GAP_SECONDS * 1000) return;
+  S.gapAt = Date.now();
+  const project = await projectName(board);
+  if (!project) return;
+  const [data] = await gql(
+    "query($q:String!){ search(query:$q,type:ISSUE,first:100){ nodes{... on Issue{ number repository{name} }} } }",
+    { q: `project:${project} is:issue is:open` },
+  );
+  const nodes = data?.data?.search?.nodes;
+  if (!Array.isArray(nodes)) return;
+  const found = nodes.filter((n: any) => n?.number).map((n: any) => ({ repo: n.repository.name, number: n.number }));
+  S.gap = missingFromBoard(found, rows, new Set((board.label_repos || []).map(short)));
 }
 
 /** One full read of the board: page 1 of both lists in one query, then only the lists that have more. */
@@ -284,6 +330,7 @@ export async function poll(reason = "timer"): Promise<void> {
       S.stats.cost += r.cost;
       S.stats.costs.push([Date.now(), r.cost]);
       S.stats.remaining = r.remaining;
+      await checkGap(cfg.board, r.rows).catch(() => {});
     } else if (cfg.tickets?.command?.length) {
       rows = await readCommand(cfg.tickets.command, lanesOf());
     } else {
@@ -424,6 +471,7 @@ export function workView() {
 
 export const view = () => ({ at: S.at, tickets: ticketsView(), work: workView() });
 export const boardError = () => S.error;
+export const boardGap = () => S.gap;
 export const boardRows = () => S.rows;
 
 export function boardStats() {

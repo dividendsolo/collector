@@ -1,5 +1,5 @@
 import { lastAi } from "./ai";
-import { boardError } from "./board";
+import { boardError, boardGap } from "./board";
 import { config } from "./config";
 import { lastDomains } from "./domains";
 import { snapshot } from "./machines";
@@ -28,6 +28,7 @@ export async function state() {
       services: lastServices(),
       domains: lastDomains(),
       ticketsError: boardError(),
+      boardGap: boardGap(),
       x,
       ai: lastAi(),
     }),
