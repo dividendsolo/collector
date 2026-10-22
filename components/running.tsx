@@ -176,12 +176,12 @@ export function CurrentWork() {
           <thead>
             <tr>
               <th>State</th>
+              <th>Machine</th>
               <th>Repo</th>
               <th>Card</th>
               <th>Name / profile</th>
               <th>Model</th>
               <th>Task</th>
-              <th>Machine</th>
               <th className="num">Running for</th>
             </tr>
           </thead>
@@ -197,6 +197,7 @@ export function CurrentWork() {
                 return (
                   <tr key={row.key} className={row.state === "closed" ? "done" : ""}>
                     <StateCell row={row} />
+                    <td>{r ? r.machine : row.local ? "local" : <Dash />}</td>
                     <td>{repo}</td>
                     <td>
                       <span className="mono card-tip" tabIndex={0} data-repo={repo} data-card={num}>
@@ -228,7 +229,6 @@ export function CurrentWork() {
                         <Dash />
                       )}
                     </td>
-                    <td>{r ? r.machine : row.local ? "local" : <Dash />}</td>
                     {r ? (
                       <RunTime r={r} />
                     ) : (
