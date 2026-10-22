@@ -109,7 +109,7 @@ export function useWaiting() {
   return { d, list, p0 };
 }
 
-/** Waiting on you: every ticket in the "each" lanes, P0 first, then oldest. The chip counts only the P0s, in red. */
+/** Waiting on you: every ticket in the "each" lanes, by priority, then lane (waitingOrder), then oldest. The chip counts only the P0s, in red. */
 function Waiting() {
   const w = useWaiting();
   const [lane, setLane] = useState("all");

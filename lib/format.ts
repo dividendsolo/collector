@@ -99,6 +99,18 @@ export function moneyParts(text: string): { text: string; money: boolean }[] {
   return out;
 }
 
-/** Waiting on you: highest priority first, then oldest. */
-export const waitingOrder = (a: { priority?: string | null; created?: string | null }, b: typeof a) =>
-  prio(a.priority) - prio(b.priority) || (a.created || "").localeCompare(b.created || "");
+/** Within one priority, the lanes James can finish fastest come first (James, 2026-10-22). */
+const WAITING_LANES = ["ready-for-human", "needs-manual-qa", "needs-info", "needs-triage"];
+const laneRank = (l?: string | null) => {
+  const i = WAITING_LANES.indexOf(l || "");
+  return i < 0 ? WAITING_LANES.length : i;
+};
+
+/** Waiting on you: highest priority first, then lane (WAITING_LANES), then oldest. */
+export const waitingOrder = (
+  a: { priority?: string | null; lane?: string | null; created?: string | null },
+  b: typeof a,
+) =>
+  prio(a.priority) - prio(b.priority) ||
+  laneRank(a.lane) - laneRank(b.lane) ||
+  (a.created || "").localeCompare(b.created || "");
