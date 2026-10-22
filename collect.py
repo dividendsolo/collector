@@ -2,8 +2,8 @@
 """Print one JSON snapshot of this machine's cron jobs and running agents.
 
 The server runs it locally and on each remote machine over `ssh <host> python3 - '<config>' < collect.py`,
-so it uses the standard library only. It reads Hermes's cron files (~/.hermes), launchd (macOS),
-ps, docker, and git, and changes nothing.
+so it uses the standard library only. It reads Hermes's cron files (~/.hermes), the foreman's host-broken
+markers, launchd (macOS), ps, docker, and git, and changes nothing.
 """
 import glob
 import json
@@ -37,6 +37,10 @@ WORK_STEPS = os.path.expanduser(WORK["steps"]) if WORK.get("steps") else None
 VERIFY_LABEL = CONFIG.get("verify_label")
 # The folder that holds the repos whose card worktrees the verify runs are matched to.
 REPOS = os.path.expanduser(CONFIG.get("repos_dir") or "~/code")
+# The foreman's scratch dir. One `host-broken-<repo>` marker (one line: the failing gate step and the base
+# SHA) sits here while this machine cannot pass that repo's checks on its base branch (agent-stack#151).
+FOREMAN = os.path.join(HERMES, "foreman")
+HOST_BROKEN = "host-broken-"
 
 
 def cron_dirs():
@@ -412,6 +416,22 @@ def hermes_profiles():
     return out
 
 
+def host_broken(scratch=FOREMAN):
+    """Each `host-broken-<repo>` marker in the foreman's scratch dir: the repo and its one line (the failing
+    gate step and the base SHA). A marker means this machine cannot pass that repo's base checks, so no card
+    of that repo builds here. No marker, no row."""
+    out = []
+    for path in sorted(glob.glob(os.path.join(scratch, HOST_BROKEN + "*"))):
+        if not os.path.isfile(path):
+            continue
+        repo = os.path.basename(path)[len(HOST_BROKEN):]
+        if not repo:
+            continue
+        text = (read_text(path, 500) or "").strip()
+        out.append({"repo": repo, "line": text.splitlines()[0] if text else ""})
+    return out
+
+
 def main():
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
@@ -421,6 +441,7 @@ def main():
         "now": now.isoformat(),
         "jobs": hermes_jobs(now) + launchd_jobs(),
         "running": running_agents(),
+        "host_broken": host_broken(),
         "profiles": hermes_profiles(),
         "work_ticks_10m": len(starts) if starts is not None else None,
         "work_starts_10m": starts,

@@ -36,6 +36,11 @@ export function warnings(w: WarningInputs): Warning[] {
   const workJobs = new Set(work.jobs || []);
   const workLabel = work.label || "The work script";
   for (const m of w.machines) {
+    // The foreman's host-broken-<repo> marker: this machine cannot pass that repo's base checks, so no card of
+    // that repo is built here. collect.py reports each marker with its one line (the failing step and base SHA).
+    for (const b of m.host_broken || [])
+      if (b?.repo)
+        out.push({ level: "error", text: `host broken: ${b.repo} on ${m.name}${b.line ? `: ${b.line}` : ""}` });
     for (const j of m.jobs || []) {
       j.machine = m.name;
       j.what = what[j.name] ?? (j.script || "");
