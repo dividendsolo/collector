@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { mutate } from "swr";
 import { ago, doing, money, monthly, plural } from "@/lib/format";
+import { reposToSave } from "@/lib/repos";
 import { useApi, useLive } from "./data";
 import { SVC_LABEL, type Svc, useServices } from "./services";
 import { BlurToggle, Icon, Money, PanelHead, SkelRows } from "./ui";
@@ -101,9 +102,7 @@ function Picker({ onClose }: { onClose: () => void }) {
     setSaving(true);
     try {
       // A to Z by repo name. Every chosen repo is saved, even one the list no longer shows.
-      const list = [...chosen].sort((a, b) =>
-        a.split("/")[1].localeCompare(b.split("/")[1], undefined, { sensitivity: "base" }),
-      );
+      const list = reposToSave(chosen);
       const d = await (
         await fetch("/api/projects", {
           method: "POST",
