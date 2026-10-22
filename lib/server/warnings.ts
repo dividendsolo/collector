@@ -20,7 +20,6 @@ export interface WarningInputs {
   services: Checked[];
   domains: Domain[];
   ticketsError: string | null;
-  boardGap?: string[];
   vendors?: VendorRow[];
   x: XUsage | null;
   ai: AiRow[];
@@ -101,11 +100,6 @@ export function warnings(w: WarningInputs): Warning[] {
     if (x.status === "down") out.push({ level: "error", text: `${x.name} is down: ${x.error} (${x.url})` });
   for (const m of w.machines) if (m.error) out.push({ level: "error", text: `Could not read ${m.name}: ${m.error}` });
   if (w.ticketsError) out.push({ level: "warn", text: `Could not list tickets: ${w.ticketsError}` });
-  if (w.boardGap?.length)
-    out.push({
-      level: "warn",
-      text: `Board read degraded: GitHub's board list is missing ${w.boardGap.length} open cards that search finds (${w.boardGap.slice(0, 8).join(", ")}${w.boardGap.length > 8 ? ", ..." : ""}). The panels and the lanes leave them out until GitHub catches up`,
-    });
   const watched = new Set((w.cfg.vendors || []).filter((v) => v.attention).map((v) => v.name));
   for (const v of w.vendors || [])
     if (watched.has(v.name) && v.incidents.length)

@@ -273,22 +273,6 @@ describe("warnings", () => {
     });
     expect(w.map((x) => x.text)).toEqual(["GitHub incident: Errors loading issues (minor)"]);
   });
-  it("says the board read is degraded when GitHub's board list misses cards", () => {
-    const w = warnings({
-      machines: [],
-      github: {},
-      cfg: {},
-      services: [],
-      domains: [],
-      ticketsError: null,
-      boardGap: ["collector#10", "studio#42"],
-      x: null,
-      ai: [],
-    });
-    expect(w.map((x) => x.text)).toEqual([
-      "Board read degraded: GitHub's board list is missing 2 open cards that search finds (collector#10, studio#42). The panels and the lanes leave them out until GitHub catches up",
-    ]);
-  });
   it("does not alarm on 17 starts spread over ten minutes (cron each minute plus hand-offs)", () => {
     const starts = at([0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 5, 65, 125, 185, 245, 305, 365]);
     expect(starts).toHaveLength(17);

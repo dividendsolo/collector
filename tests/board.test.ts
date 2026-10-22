@@ -5,7 +5,6 @@ import {
   isEmpty,
   laneSet,
   looksLikeEmptyGlitch,
-  missingFromBoard,
   parseBoard,
   type Row,
   reasonOf,
@@ -155,29 +154,5 @@ describe("looksLikeEmptyGlitch", () => {
   });
   it("an empty label-repo search right after a read with label-repo cards is the glitch too", () => {
     expect(looksLikeEmptyGlitch({ itemNodes: 30, searchNodes: 0 }, [row("app"), row("labels")], board)).toBe(true);
-  });
-});
-
-describe("missingFromBoard", () => {
-  const row = (repo: string, number: number): Row => ({
-    repo,
-    number,
-    title: "T",
-    url: `https://github.com/acme/${repo}/issues/${number}`,
-    lane: "needs-triage",
-    priority: null,
-    created: "2026-10-01T00:00:00Z",
-    labels: [],
-  });
-  it("names the open cards search finds that the board read left out", () => {
-    const found = [
-      { repo: "app", number: 1 },
-      { repo: "app", number: 10 },
-      { repo: "web", number: 4 },
-    ];
-    expect(missingFromBoard(found, [row("app", 1)], new Set())).toEqual(["app#10", "web#4"]);
-  });
-  it("ignores label repos, which never sit on the board", () => {
-    expect(missingFromBoard([{ repo: "labels", number: 2 }], [], new Set(["labels"]))).toEqual([]);
   });
 });
