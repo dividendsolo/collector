@@ -142,13 +142,17 @@ describe("looksLikeEmptyGlitch", () => {
     labels: [],
   });
   it("an empty Board right after a read with Board cards is the glitch", () => {
-    expect(looksLikeEmptyGlitch(0, [row("app"), row("labels")], board)).toBe(true);
+    expect(looksLikeEmptyGlitch({ itemNodes: 0, searchNodes: 5 }, [row("app"), row("labels")], board)).toBe(true);
   });
   it("a Board that answers with items is a real read", () => {
-    expect(looksLikeEmptyGlitch(30, [row("app")], board)).toBe(false);
+    expect(looksLikeEmptyGlitch({ itemNodes: 30, searchNodes: 5 }, [row("app")], board)).toBe(false);
   });
-  it("an empty Board is real when the last read had only label-repo cards, or there was none", () => {
-    expect(looksLikeEmptyGlitch(0, [row("labels")], board)).toBe(false);
-    expect(looksLikeEmptyGlitch(0, null, board)).toBe(false);
+  it("an empty list is real when the last read had no cards from it, or there was none", () => {
+    expect(looksLikeEmptyGlitch({ itemNodes: 0, searchNodes: 5 }, [row("labels")], board)).toBe(false);
+    expect(looksLikeEmptyGlitch({ itemNodes: 30, searchNodes: 0 }, [row("app")], board)).toBe(false);
+    expect(looksLikeEmptyGlitch({ itemNodes: 0, searchNodes: 0 }, null, board)).toBe(false);
+  });
+  it("an empty label-repo search right after a read with label-repo cards is the glitch too", () => {
+    expect(looksLikeEmptyGlitch({ itemNodes: 30, searchNodes: 0 }, [row("app"), row("labels")], board)).toBe(true);
   });
 });

@@ -94,6 +94,7 @@ export function parseBoard(data: any, board: Board, lanes: Set<string>) {
   return {
     rows,
     itemNodes: items?.nodes?.length ?? 0,
+    searchNodes: search?.nodes?.length ?? 0,
     items: items?.pageInfo as { hasNextPage: boolean; endCursor: string } | undefined,
     search: search?.pageInfo as { hasNextPage: boolean; endCursor: string } | undefined,
     cost: data?.rateLimit as { cost: number; remaining: number; resetAt: string } | undefined,
@@ -121,12 +122,19 @@ export function diffBoard(prev: Row[], next: Row[]): Diff {
   return d;
 }
 
-/** GitHub now and then answers the Board's items with none at all and no error (seen 2026-10-22: 0 of 30, then
- * 30 again three seconds later). An empty Board right after a read that had Board cards is that glitch, not a
- * Board that emptied in a minute. */
-export function looksLikeEmptyGlitch(itemNodes: number, prev: Row[] | null, board: Board): boolean {
+/** GitHub now and then answers one of the two lists with nothing and no error (seen 2026-10-22: the Board's
+ * items 0 of 30, then 30 three seconds later; the label-repo search 0, then 21 ten seconds later). An empty list
+ * right after a read that had cards from it is that glitch, not every card of that list leaving in seconds. */
+export function looksLikeEmptyGlitch(
+  read: { itemNodes: number; searchNodes: number },
+  prev: Row[] | null,
+  board: Board,
+): boolean {
   const labelRepos = new Set((board.label_repos || []).map(short));
-  return itemNodes === 0 && (prev || []).some((r) => !labelRepos.has(r.repo));
+  const had = prev || [];
+  const boardEmpty = read.itemNodes === 0 && had.some((r) => !labelRepos.has(r.repo));
+  const searchEmpty = read.searchNodes === 0 && had.some((r) => labelRepos.has(r.repo));
+  return boardEmpty || searchEmpty;
 }
 
 export const isEmpty = (d: Diff) => !d.added.length && !d.removed.length && !d.moved.length && !d.changed.length;
@@ -191,7 +199,7 @@ async function gql(query: string, vars: Record<string, string>) {
 async function readBoard(
   board: Board,
   all: string[],
-): Promise<{ rows: Row[]; cost: number; remaining: number | null; itemNodes: number }> {
+): Promise<{ rows: Row[]; cost: number; remaining: number | null; itemNodes: number; searchNodes: number }> {
   const lanes = laneSet(board, all);
   const q = (board.label_repos || []).map((r) => `repo:${r}`).join(" ");
   let items: string | null | undefined = null; // undefined: done
@@ -200,6 +208,7 @@ async function readBoard(
   let cost = 0;
   let remaining: number | null = null;
   let itemNodes = 0;
+  let searchNodes = 0;
   while (items !== undefined || search !== undefined) {
     const vars: Record<string, string> = {};
     if (items !== undefined) {
@@ -215,12 +224,13 @@ async function readBoard(
     const page = parseBoard(data.data, board, lanes);
     rows.push(...page.rows);
     itemNodes += page.itemNodes;
+    searchNodes += page.searchNodes;
     cost += page.cost?.cost ?? 1;
     remaining = page.cost?.remaining ?? remaining;
     items = items !== undefined && page.items?.hasNextPage ? page.items.endCursor : undefined;
     search = search !== undefined && page.search?.hasNextPage ? page.search.endCursor : undefined;
   }
-  return { rows, cost, remaining, itemNodes };
+  return { rows, cost, remaining, itemNodes, searchNodes };
 }
 
 /** No board in config.json: the old way, one tickets command per lane ("{lane}" in "command"). */
@@ -265,11 +275,10 @@ export async function poll(reason = "timer"): Promise<void> {
     let rows: Row[];
     if (cfg.board?.project_id) {
       let r = await readBoard(cfg.board, cfg.tickets?.all || []);
-      if (looksLikeEmptyGlitch(r.itemNodes, S.rows, cfg.board)) {
+      for (let tries = 1; looksLikeEmptyGlitch(r, S.rows, cfg.board); tries++) {
+        if (tries === 3) throw new Error("GitHub answered a list with no cards 3 times; the last good read stays");
         S.stats.cost += r.cost;
         r = await readBoard(cfg.board, cfg.tickets?.all || []);
-        if (looksLikeEmptyGlitch(r.itemNodes, S.rows, cfg.board))
-          throw new Error("GitHub answered the Board with no items twice; the last good read stays");
       }
       rows = r.rows;
       S.stats.cost += r.cost;
