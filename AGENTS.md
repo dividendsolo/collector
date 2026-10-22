@@ -31,6 +31,8 @@ python3 collect.py | python3 -m json.tool   # one machine snapshot
 - `collect.py` runs on remote machines through `ssh host python3 -`: standard library only, read only.
 - The board poll costs 1 GraphQL point per read (about 360 an hour while a page is open). Keep it at 1: the page
   sizes in `lib/server/board.ts` keep the query under 100 connection requests.
+- A write endpoint (`POST /api/projects`) writes the real `config.json`. Probe or test it only against a temp copy:
+  `COLLECTOR_CONFIG=/tmp/collector-test.json`. A curl test on 2026-10-21 replaced the real projects with `["x/y"]`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
