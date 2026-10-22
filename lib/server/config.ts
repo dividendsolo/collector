@@ -15,6 +15,7 @@ export interface Vendor {
   url: string;
   feed?: string;
   probe?: string;
+  attention?: boolean;
 }
 export interface Subscription {
   name: string;

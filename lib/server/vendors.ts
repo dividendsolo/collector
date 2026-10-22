@@ -136,4 +136,6 @@ const cache = swr<{ at: number; vendors: VendorRow[] }>("vendors", 300_000, asyn
 }));
 
 /** Every vendor in config.json "vendors", checked every five minutes. */
+export const lastVendors = () => cache.peek()?.vendors ?? [];
+
 export const vendors = () => cache.get({ key: (config().vendors || []).map((v) => v.name).join(",") });

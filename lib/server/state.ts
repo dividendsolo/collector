@@ -4,6 +4,7 @@ import { config } from "./config";
 import { lastDomains } from "./domains";
 import { snapshot } from "./machines";
 import { lastServices } from "./services";
+import { lastVendors } from "./vendors";
 import { warnings } from "./warnings";
 import { lastX, xUsage } from "./x";
 
@@ -29,6 +30,7 @@ export async function state() {
       domains: lastDomains(),
       ticketsError: boardError(),
       boardGap: boardGap(),
+      vendors: lastVendors(),
       x,
       ai: lastAi(),
     }),

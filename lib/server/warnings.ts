@@ -4,6 +4,7 @@ import type { Config } from "./config";
 import type { Domain } from "./domains";
 import type { GithubLimit } from "./machines";
 import type { Checked } from "./services";
+import type { VendorRow } from "./vendors";
 import type { XUsage } from "./x";
 
 export interface Warning {
@@ -20,13 +21,14 @@ export interface WarningInputs {
   domains: Domain[];
   ticketsError: string | null;
   boardGap?: string[];
+  vendors?: VendorRow[];
   x: XUsage | null;
   ai: AiRow[];
 }
 
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
  * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, tickets that did not list, and
- * low AI or X credit. Errors first. Adds `machine` and `what` to each job. */
+ * low AI or X credit, and open incidents of the vendors marked "attention" in config.json. Errors first. Adds `machine` and `what` to each job. */
 export function warnings(w: WarningInputs): Warning[] {
   const out: Warning[] = [];
   const byScript = new Map<string, string[]>();
@@ -104,6 +106,14 @@ export function warnings(w: WarningInputs): Warning[] {
       level: "warn",
       text: `Board read degraded: GitHub's board list is missing ${w.boardGap.length} open cards that search finds (${w.boardGap.slice(0, 8).join(", ")}${w.boardGap.length > 8 ? ", ..." : ""}). The panels and the lanes leave them out until GitHub catches up`,
     });
+  const watched = new Set((w.cfg.vendors || []).filter((v) => v.attention).map((v) => v.name));
+  for (const v of w.vendors || [])
+    if (watched.has(v.name) && v.incidents.length)
+      out.push({
+        level: v.state === "major" || v.state === "critical" ? "error" : "warn",
+        text: `${v.name} incident: ${v.incidents.map((i) => `${i.name} (${i.impact})`).join("; ")}`,
+        url: v.url,
+      });
   const xc = w.x?.credits?.total;
   if (typeof xc === "number" && xc < AI_LOW_USD)
     out.push({

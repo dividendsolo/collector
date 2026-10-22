@@ -248,6 +248,31 @@ describe("warnings", () => {
     expect(w.some((x) => x.text.startsWith("The same script (x.py) starts from 2 jobs on m1"))).toBe(true);
     expect(machines[0].jobs[0]).toMatchObject({ machine: "m1", what: "Does A" });
   });
+  it("raises open incidents only for vendors marked attention", () => {
+    const inc = (name: string) => ({
+      name,
+      url: `https://${name}.example.com`,
+      state: "minor",
+      incidents: [{ name: "Errors loading issues", impact: "minor", url: "" }],
+    });
+    const w = warnings({
+      machines: [],
+      github: {},
+      cfg: {
+        vendors: [
+          { name: "GitHub", url: "", attention: true },
+          { name: "OpenAI", url: "" },
+        ],
+      },
+      services: [],
+      domains: [],
+      ticketsError: null,
+      vendors: [inc("GitHub"), inc("OpenAI")],
+      x: null,
+      ai: [],
+    });
+    expect(w.map((x) => x.text)).toEqual(["GitHub incident: Errors loading issues (minor)"]);
+  });
   it("says the board read is degraded when GitHub's board list misses cards", () => {
     const w = warnings({
       machines: [],
