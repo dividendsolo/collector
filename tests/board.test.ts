@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { boardQuery, diffBoard, isEmpty, laneSet, parseBoard, type Row, reasonOf } from "@/lib/server/board";
+import {
+  boardQuery,
+  diffBoard,
+  isEmpty,
+  laneSet,
+  looksLikeEmptyGlitch,
+  parseBoard,
+  type Row,
+  reasonOf,
+} from "@/lib/server/board";
 import type { Board } from "@/lib/server/config";
 
 const board: Board = {
@@ -118,5 +127,28 @@ describe("reasonOf", () => {
   it("falls back to the newest comment that reads like a reason", () => {
     const r = reasonOf({ comments: { nodes: comments }, timelineItems: { nodes: [] } }, "needs-info");
     expect(r?.url).toBe("c2");
+  });
+});
+
+describe("looksLikeEmptyGlitch", () => {
+  const row = (repo: string): Row => ({
+    repo,
+    number: 1,
+    title: "T",
+    url: `https://github.com/acme/${repo}/issues/1`,
+    lane: "needs-info",
+    priority: null,
+    created: "2026-10-01T00:00:00Z",
+    labels: [],
+  });
+  it("an empty Board right after a read with Board cards is the glitch", () => {
+    expect(looksLikeEmptyGlitch(0, [row("app"), row("labels")], board)).toBe(true);
+  });
+  it("a Board that answers with items is a real read", () => {
+    expect(looksLikeEmptyGlitch(30, [row("app")], board)).toBe(false);
+  });
+  it("an empty Board is real when the last read had only label-repo cards, or there was none", () => {
+    expect(looksLikeEmptyGlitch(0, [row("labels")], board)).toBe(false);
+    expect(looksLikeEmptyGlitch(0, null, board)).toBe(false);
   });
 });
