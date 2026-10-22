@@ -86,7 +86,7 @@ path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Libra
 | `jobs` | One plain-words line per job name, shown in the "What it does" column. |
 | `launchd_prefixes` | macOS: launchd jobs whose label starts with one of these show in the table. |
 | `ok_exits` | launchd exit codes that mean success for one job: `{"<label>": {"<code>": "<text>"}}`. |
-| `work_script` | A script that picks up cards and starts agents. `jobs` are the cron jobs that start it, `log` is its log (each start writes `=== tick <time> ===`), `name` is the name shown when it runs a step itself, `steps` is an optional folder where it writes what it does on each card now (one JSON file per card: `repo`, `card`, `step`, `since`, `pid`; the step shows instead of "building"), and `max_starts_10m` is the loop alarm. |
+| `work_script` | A script that picks up cards and starts agents. `jobs` are the cron jobs that start it, `log` is its log (each start writes `=== tick <time> ===`), `name` is the name shown when it runs a step itself, `steps` is an optional folder where it writes what it does on each card now (one JSON file per card: `repo`, `card`, `step`, `since`, `pid`; the step shows instead of "building"), and `max_starts_60s` (default 5) is the loop alarm. |
 | `verify_label` | The Docker label prefix your verify tool puts on its containers (`<prefix>.run`, `<prefix>.commit`). A running verify shows as the card's current task. |
 | `services` | Sites to check once a minute: `[{"name": "My app", "url": "https://example.com"}]`. A project whose repo name matches a service name shows that service's status. |
 | `vendors` | The outside services you depend on, by their public status page: `[{"name": "GitHub", "url": "https://www.githubstatus.com"}]`. The Collector reads the page's feed by its shape: Statuspage (`/api/v2/summary.json`), Datadog status pages (`/config.json`), Better Stack (`/index.json`) and Stripe (`/current`) are found from `url`; any other feed goes in `"feed"` (Google Cloud's `incidents.json` is read too; for example X: `{"name": "X API", "url": "https://docs.x.com/status", "feed": "https://developer.x.com/api/status"}`). Open incidents show on the APIs page, and the APIs item in the sidebar counts the vendors with one (red for a major or critical one); they never go to Needs attention, since there is nothing to do about them. A service with no status page can use `"probe"`: one GET of an API that answers without a key (Nous: `https://inference-api.nousresearch.com/v1/models`), slow over 3 seconds, an outage on an error. A page with no feed it can read shows as a link. Checked every 5 minutes. |
@@ -99,6 +99,11 @@ path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Libra
 | `X_BEARER_TOKEN` (`.env`) | Optional: the X API app's bearer token. The APIs page then shows the credit balance (`/2/usage/credits`) and posts read against the monthly cap (`/2/usage/tweets`); under $5 of credit goes to Needs attention. |
 | `billing` | Each project's payment providers: `{"owner/repo": [{"provider": "stripe", "key": "MYAPP_STRIPE_KEY"}]}`. `provider` is `stripe` or `polar`; `key` names a line in `.env` (gitignored) that holds a read-only key. |
 | `repos_dir` | The folder that holds your repos (default `~/code`). |
+
+The work script writes `=== tick <time> ===` to its log on each start. The Collector reads the starts in the
+last 10 minutes and raises the loop alarm when `max_starts_60s` of them (default 5) fall within any 60 seconds:
+a script starting itself again seconds later, not a busy ten minutes whose starts are a minute apart. The alarm
+reads `<work script> on <machine> started N times in 60 s: it is starting itself in a loop`.
 
 ## How it finds things
 

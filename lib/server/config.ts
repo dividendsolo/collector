@@ -52,7 +52,7 @@ export interface Config {
     jobs?: string[];
     log?: string;
     steps?: string;
-    max_starts_10m?: number;
+    max_starts_60s?: number;
   };
   verify_label?: string;
   services?: Service[];

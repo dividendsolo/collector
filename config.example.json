@@ -24,7 +24,7 @@
     ],
     "log": "~/.hermes/scratch/pickup.log",
     "steps": "~/.work/steps",
-    "max_starts_10m": 15
+    "max_starts_60s": 5
   },
   "verify_label": "my-verify",
   "repos_dir": "~/code",
