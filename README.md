@@ -6,7 +6,8 @@ Built for [Hermes Agent](https://github.com/NousResearch/hermes-agent) setups: a
 Hermes cron jobs, launchd jobs on the Mac, and coding agents that build and review cards in git worktrees.
 The Dashboard answers these questions at a glance:
 
-1. **Needs attention:** which job failed, which script starts itself in a loop, which GitHub limit is nearly gone (the API limits, and GitHub Actions minutes at 90% of what the plan
+1. **Needs attention:** which job failed, which script starts itself in a loop, which host cannot pass a repo's
+   checks, which GitHub limit is nearly gone (the API limits, and GitHub Actions minutes at 90% of what the plan
    includes).
 2. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long. Hover a card number to read what the card is for.
    A build turns amber after 30 minutes and red after an hour.
@@ -123,6 +124,10 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
   and Priority, plus the open issues of the label repos. A change goes to every open page at once (`/api/events`).
   The reason a ticket waits is read on a slower cache (ten minutes per ticket and lane, ten tickets per query).
   `/api/board` shows the reads and the GraphQL points they used in the last hour.
+- **Host broken:** the foreman writes `~/.hermes/foreman/host-broken-<repo>` (one line: the failing gate step and
+  the base SHA) while a machine cannot pass that repo's checks on its base branch, so no card of that repo is
+  built there. Each marker shows on its machine in Needs attention as `host broken: <repo> on <host>`, with that
+  line. No marker, no row.
 - **Caching:** each reader keeps its last answer and its own refresh rate (machines 10 s, AI and vendors 5 min,
   projects 5 min, DataFast and revenue 10 min, domains 12 h). A stale answer is served while a new one is read in the
   background; only the very first read after a start waits, and the server starts every reader when it boots.

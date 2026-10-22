@@ -288,6 +288,32 @@ describe("warnings", () => {
     });
     expect(w.map((x) => x.text)).toEqual([]);
   });
+  it("shows a host-broken marker as a row with the repo, the host and the marker's line", () => {
+    const w = warnings({
+      machines: [{ name: "laptop", host_broken: [{ repo: "collector", line: "bun run build: base 7f3a2b1" }] }],
+      github: {},
+      cfg: {},
+      services: [],
+      domains: [],
+      ticketsError: null,
+      x: null,
+      ai: [],
+    });
+    expect(w).toEqual([{ level: "error", text: "host broken: collector on laptop: bun run build: base 7f3a2b1" }]);
+  });
+  it("shows no host-broken row without a marker", () => {
+    const w = warnings({
+      machines: [{ name: "laptop" }, { name: "vps", host_broken: [] }],
+      github: {},
+      cfg: {},
+      services: [],
+      domains: [],
+      ticketsError: null,
+      x: null,
+      ai: [],
+    });
+    expect(w).toEqual([]);
+  });
   it("alarms when 5 starts fall within 40 seconds", () => {
     const w = warnings({
       machines: [{ name: "m1", work_starts_10m: at([0, 10, 20, 30, 40]) }],
