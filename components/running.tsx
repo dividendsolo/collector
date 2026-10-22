@@ -228,7 +228,7 @@ export function CurrentWork() {
                         <Dash />
                       )}
                     </td>
-                    <td>{r ? r.machine : <Dash />}</td>
+                    <td>{r ? r.machine : row.local ? "local" : <Dash />}</td>
                     {r ? (
                       <RunTime r={r} />
                     ) : (

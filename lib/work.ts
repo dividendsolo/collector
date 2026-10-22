@@ -24,15 +24,18 @@ export interface WorkCard {
   created: string;
   hold?: { after: { ref: string; url: string }[]; from: string | null } | null;
   closed_at?: number;
+  labels?: string[];
 }
 
-/** One Current work row: a card, a live run, or both. `group` orders the rows. */
+/** One Current work row: a card, a live run, or both. `group` orders the rows. `local`: an interactive
+ * session works the card by hand (the card's `local` label). */
 export interface WorkRow {
   key: string;
   group: number;
   state: string;
   card: WorkCard | null;
   run: WorkRun | null;
+  local?: boolean;
 }
 
 const REVIEW = new Set([
@@ -61,7 +64,8 @@ export function currentWork(
   const byCard = new Map<string, WorkRow>();
   for (const c of cards) {
     if (waiting.includes(c.lane)) continue;
-    const row: WorkRow = { key: c.url, group: groupOf(c.lane), state: c.lane, card: c, run: null };
+    const local = Boolean(c.labels?.includes("local"));
+    const row: WorkRow = { key: c.url, group: local ? 0 : groupOf(c.lane), state: c.lane, card: c, run: null, local };
     byCard.set(`${c.repo}#${c.number}`, row);
     rows.push(row);
   }

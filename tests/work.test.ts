@@ -52,6 +52,14 @@ describe("currentWork", () => {
     ];
     expect(currentWork(cards, [], [], WAITING, 0).map((r) => r.card?.number)).toEqual([2, 3, 1]);
   });
+  it("marks a card labelled local as worked in a session and puts it with the live work", () => {
+    const cards = [card("app", 1, "scheduled"), card("app", 2, "agent-in-progress", { labels: ["local"] })];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.map((r) => [r.card?.number, r.local])).toEqual([
+      [2, true],
+      [1, false],
+    ]);
+  });
   it("shows a card closed in the last hour as closed, and drops it after the hour", () => {
     const closed = [card("app", 5, "code-review", { closed_at: 1000 })];
     expect(currentWork([], closed, [], WAITING, 1000 + 3599).map((r) => r.state)).toEqual(["closed"]);
