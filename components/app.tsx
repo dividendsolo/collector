@@ -138,7 +138,7 @@ function ProjectCrumb({ repo }: { repo: string }) {
 }
 
 function Topbar({ r }: { r: ReturnType<typeof route> }) {
-  const { updated, liveClass, next } = useLive();
+  const { updated, liveClass } = useLive();
   return (
     <header className="topbar">
       <div className="brand">
@@ -149,7 +149,6 @@ function Topbar({ r }: { r: ReturnType<typeof route> }) {
       <div className={liveClass} id="live">
         <span className="pulse" />
         <span id="updated">{updated}</span>
-        <b id="countdown">{next ? `${next}s` : ""}</b>
       </div>
     </header>
   );

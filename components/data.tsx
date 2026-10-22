@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import useSWR from "swr";
 
 const fetcher = async (url: string) => {
@@ -18,7 +18,6 @@ export interface Live {
   state: any | null;
   updated: string;
   liveClass: string;
-  next: number;
   tick: () => void;
   board: { tickets: any; work: any } | null;
 }
@@ -26,19 +25,15 @@ export interface Live {
 const LiveContext = createContext<Live | null>(null);
 export const useLive = () => useContext(LiveContext) as Live;
 
-/** The main read every 15 seconds with a visible countdown, the board pushed over server-sent events, and a reload
+/** The main read every 15 seconds, the board pushed over server-sent events, and a reload
  * when the server runs a new build. */
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<any | null>(null);
   const [updated, setUpdated] = useState("Loading…");
   const [liveClass, setLiveClass] = useState("live");
-  const [next, setNext] = useState(0);
   const [board, setBoard] = useState<Live["board"]>(null);
-  const nextRef = useRef(0);
 
   const tick = useCallback(async () => {
-    nextRef.current = 0;
-    setNext(0);
     setLiveClass("live busy");
     try {
       const r = await fetch("/api/state", { cache: "no-store" });
@@ -50,18 +45,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setUpdated(`Could not reach the Collector server: ${(e as Error).message}`);
       setLiveClass("live down");
     }
-    nextRef.current = 15;
-    setNext(15);
   }, []);
 
   useEffect(() => {
     tick();
-    const t = setInterval(() => {
-      if (!nextRef.current) return;
-      nextRef.current -= 1;
-      setNext(nextRef.current);
-      if (nextRef.current === 0) tick();
-    }, 1000);
+    const t = setInterval(tick, 15_000);
     return () => clearInterval(t);
   }, [tick]);
 
@@ -88,7 +76,5 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, []);
 
-  return (
-    <LiveContext.Provider value={{ state, updated, liveClass, next, tick, board }}>{children}</LiveContext.Provider>
-  );
+  return <LiveContext.Provider value={{ state, updated, liveClass, tick, board }}>{children}</LiveContext.Provider>;
 }
