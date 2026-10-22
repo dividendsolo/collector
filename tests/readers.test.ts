@@ -221,11 +221,12 @@ describe("env and AI", () => {
 });
 
 describe("warnings", () => {
+  const at = (seconds: number[]) => seconds.map((s) => 1_700_000_000 + s);
   it("lists errors before warnings and tags each job with its machine and note", () => {
     const machines = [
       {
         name: "m1",
-        work_ticks_10m: 20,
+        work_starts_10m: at([0, 10, 20, 30, 40]),
         jobs: [
           { name: "a", enabled: true, last_status: "error", last_error: "boom", script: "x.py" },
           { name: "b", enabled: true, last_status: "ok", script: "x.py" },
@@ -235,7 +236,7 @@ describe("warnings", () => {
     const w = warnings({
       machines,
       github: { graphql: { used: 4800, limit: 5000, reset: 0 } },
-      cfg: { jobs: { a: "Does A" }, work_script: { label: "Foreman", max_starts_10m: 15 } },
+      cfg: { jobs: { a: "Does A" }, work_script: { label: "Foreman", max_starts_60s: 5 } },
       services: [],
       domains: [{ name: "x.com", registered: true, days: 5, expires: "2026-10-26", registrar: "R", ssl_days: 40 }],
       ticketsError: "board down",
@@ -246,5 +247,35 @@ describe("warnings", () => {
     expect(w[0].text).toBe("a on m1: last run error (boom)");
     expect(w.some((x) => x.text.startsWith("The same script (x.py) starts from 2 jobs on m1"))).toBe(true);
     expect(machines[0].jobs[0]).toMatchObject({ machine: "m1", what: "Does A" });
+  });
+  it("does not alarm on 17 starts spread over ten minutes (cron each minute plus hand-offs)", () => {
+    const starts = at([0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 5, 65, 125, 185, 245, 305, 365]);
+    expect(starts).toHaveLength(17);
+    const w = warnings({
+      machines: [{ name: "m1", work_starts_10m: starts }],
+      github: {},
+      cfg: { work_script: { label: "Foreman" } },
+      services: [],
+      domains: [],
+      ticketsError: null,
+      x: null,
+      ai: [],
+    });
+    expect(w.map((x) => x.text)).toEqual([]);
+  });
+  it("alarms when 5 starts fall within 40 seconds", () => {
+    const w = warnings({
+      machines: [{ name: "m1", work_starts_10m: at([0, 10, 20, 30, 40]) }],
+      github: {},
+      cfg: { work_script: { label: "Foreman" } },
+      services: [],
+      domains: [],
+      ticketsError: null,
+      x: null,
+      ai: [],
+    });
+    expect(w).toEqual([
+      { level: "error", text: "Foreman on m1 started 5 times in 60 s: it is starting itself in a loop" },
+    ]);
   });
 });

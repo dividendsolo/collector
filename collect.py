@@ -351,15 +351,25 @@ def work_steps():
     return out
 
 
-def work_script_ticks(now_local):
-    """Work-script starts in the last 10 minutes, from its own log (a script that starts itself never hits cron)."""
+def work_script_starts(now_local):
+    """The work script's start times in the last 10 minutes, as epoch seconds, from its own log (a script that
+    starts itself never hits cron). Each start writes "=== tick <local time> ===", so the page can catch starts
+    that fall seconds apart, not only count them."""
     if not WORK_LOG or not os.path.exists(WORK_LOG):
         return None
     with open(WORK_LOG, "rb") as f:
         f.seek(max(0, os.path.getsize(WORK_LOG) - 3_000_000))
         tail = f.read().decode(errors="ignore")
     since = (now_local - timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
-    return sum(1 for t in re.findall(r"=== tick (\S+ \S+) ===", tail) if t >= since)
+    out = []
+    for t in re.findall(r"=== tick (\S+ \S+) ===", tail):
+        if t < since:
+            continue
+        try:
+            out.append(int(datetime.strptime(t, "%Y-%m-%d %H:%M:%S").timestamp()))
+        except ValueError:
+            continue
+    return out
 
 
 def profile_model(config_path):
@@ -404,6 +414,7 @@ def hermes_profiles():
 
 def main():
     now = datetime.now(timezone.utc).astimezone()
+    starts = work_script_starts(now.replace(tzinfo=None))
     print(json.dumps({
         "host": socket.gethostname(),
         "tz": time.strftime("%Z"),
@@ -411,7 +422,8 @@ def main():
         "jobs": hermes_jobs(now) + launchd_jobs(),
         "running": running_agents(),
         "profiles": hermes_profiles(),
-        "work_ticks_10m": work_script_ticks(now.replace(tzinfo=None)),
+        "work_ticks_10m": len(starts) if starts is not None else None,
+        "work_starts_10m": starts,
     }))
 
 

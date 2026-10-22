@@ -49,12 +49,20 @@ export function warnings(w: WarningInputs): Warning[] {
         byScript.set(k, [...(byScript.get(k) || []), j.name]);
       }
     }
-    const ticks = m.work_ticks_10m;
-    const limit = work.max_starts_10m ?? 15;
-    if (ticks && ticks > limit)
+    const starts: number[] = Array.isArray(m.work_starts_10m) ? m.work_starts_10m : [];
+    const limit = work.max_starts_60s ?? 5;
+    // collect.py reports the starts as epoch seconds.
+    const stamps = starts.filter((t) => typeof t === "number").sort((a, b) => a - b);
+    let burst = 0;
+    for (let i = 0; i < stamps.length; i++) {
+      let j = i;
+      while (j < stamps.length && stamps[j] - stamps[i] <= 60) j++;
+      if (j - i > burst) burst = j - i;
+    }
+    if (burst >= limit)
       out.push({
         level: "error",
-        text: `${workLabel} on ${m.name} started ${ticks} times in the last 10 minutes (more than ${limit}): it is starting itself in a loop`,
+        text: `${workLabel} on ${m.name} started ${burst} times in 60 s: it is starting itself in a loop`,
       });
   }
   for (const [k, where] of byScript) {
