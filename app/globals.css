@@ -761,13 +761,6 @@
   .wrap {
     overflow-x: auto;
   }
-  #current-work td:nth-child(4) a {
-    display: inline-block;
-    max-width: 36ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: bottom;
-  }
   #current-work tr.done td {
     opacity: 0.6;
   }
