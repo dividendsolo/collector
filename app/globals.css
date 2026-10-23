@@ -740,6 +740,14 @@
   .alert .i {
     margin-top: 3px;
   }
+  /* A warning's right-side value (GitHub Actions sets the dollars billed this month): the row is a flex line,
+     so the free space before it pushes it to the right edge. */
+  .alert .aside {
+    margin-left: auto;
+    font: 500 12px / 20px var(--mono);
+    color: var(--faint);
+    white-space: nowrap;
+  }
   .alert.error .i {
     color: var(--red);
   }

@@ -36,12 +36,24 @@ export interface GithubLimit {
   actions?: ActionsUsage;
 }
 
-/** GitHub Actions minutes this month: used (all Actions SKUs) against the minutes the plan includes. */
+/** GitHub Actions this month: used minutes (all Actions SKUs) against the minutes the plan includes, and the
+ * dollars billed for them (0 until the included minutes run out, then every extra minute is billed). */
 export interface ActionsUsage {
   error?: string | null;
   used?: number;
+  billed?: number;
   limit?: number;
   reset?: number;
+}
+
+/** The dollars a billing usage report bills for Actions: netAmount (gross less discounts) summed over its Actions
+ * items, rounded to cents. The report covers one month (GitHub's default is the current one), so this is the
+ * month's Actions bill. */
+export function actionsBilled(sum: any): number {
+  const net = (sum?.usageItems || [])
+    .filter((x: any) => String(x.product ?? "").toLowerCase() === "actions")
+    .reduce((t: number, x: any) => t + (x.netAmount || 0), 0);
+  return Math.round(net * 100) / 100;
 }
 
 // Minutes a month each GitHub plan includes for private repos (docs.github.com, "GitHub Actions billing").
@@ -59,6 +71,7 @@ const actionsUsage = swr<ActionsUsage>("actions-usage", 5 * 60_000, async () => 
   const now = new Date();
   return {
     used: Math.round(used),
+    billed: actionsBilled(sum),
     limit: config().actions_minutes ?? PLAN_MINUTES[user.plan?.name] ?? 2000,
     reset: Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1) / 1000,
   };
