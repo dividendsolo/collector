@@ -3,9 +3,10 @@
 
 The server runs it locally and on each remote machine over `ssh <host> python3 - '<config>' < collect.py`,
 so it uses the standard library only. It reads Hermes's cron files (~/.hermes), the foreman's host-broken
-markers, launchd (macOS), ps, docker, and git, and changes nothing.
+markers, launchd (macOS), this user's plain crontab, systemd timers, ps, docker, and git, and changes nothing.
 """
 import glob
+import hashlib
 import json
 import os
 import platform
@@ -242,6 +243,293 @@ def launchd_jobs():
     return jobs
 
 
+# Plain cron and systemd timers: what most machines are scheduled with when they are not on Hermes. Read only,
+# and a machine that has neither (a Mac, a container) returns no rows rather than an error.
+
+# A cron field's three-letter names: jan..dec, sun..sat (7 is Sunday as well as 0).
+CRON_MONTHS = {n: i + 1 for i, n in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
+CRON_DAYS = {n: i for i, n in enumerate("sun mon tue wed thu fri sat".split())}
+# crontab's @-shortcuts, as the five fields they stand for. @reboot runs at boot: it has no next run.
+CRON_MACROS = {
+    "@yearly": "0 0 1 1 *",
+    "@annually": "0 0 1 1 *",
+    "@monthly": "0 0 1 * *",
+    "@weekly": "0 0 * * 0",
+    "@daily": "0 0 * * *",
+    "@midnight": "0 0 * * *",
+    "@hourly": "0 * * * *",
+}
+
+
+def read_command(cmd, timeout=10):
+    """One read-only command's output, or None when the tool is not on this machine, the command fails or it
+    hangs. No tool is not an error: a Mac has no systemctl, and `crontab -l` exits 1 with no crontab."""
+    try:
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def cron_numbers(field, low, high, names=None):
+    """One cron field -> the numbers it matches, sorted. Reads *, */n, a-b, a-b/n, a,b, and a name where the
+    field takes one. Raises ValueError on a field that is not a cron field, so a line that is not a crontab
+    line is not shown as a job."""
+
+    def one(text):
+        text = text.strip().lower()
+        if names and text[:3] in names:
+            return names[text[:3]]
+        return int(text)
+
+    out = set()
+    for part in field.split(","):
+        step = 1
+        if "/" in part:
+            part, _, by = part.partition("/")
+            step = int(by)
+            if step < 1:
+                raise ValueError(by)
+        if part in ("*", "?"):
+            first, last = low, high
+        elif "-" in part:
+            first, _, second = part.partition("-")
+            first, last = one(first), one(second)
+        else:
+            first = last = one(part)
+        out.update(range(first, last + 1, step))
+    return sorted(n for n in out if low <= n <= high)
+
+
+def cron_next(expr, now):
+    """The next time five-field cron text runs, after `now`, in `now`'s own zone, or None when it does not run
+    again within a year (@reboot never comes back). Raises ValueError on text that is not a schedule."""
+    f = expr.split()
+    if len(f) != 5:
+        raise ValueError(expr)
+    minutes = cron_numbers(f[0], 0, 59)
+    hours = cron_numbers(f[1], 0, 23)
+    days = cron_numbers(f[2], 1, 31)
+    months = cron_numbers(f[3], 1, 12, CRON_MONTHS)
+    dows = sorted({n % 7 for n in cron_numbers(f[4], 0, 7, CRON_DAYS)})
+    if not (minutes and hours and days and months and dows):
+        return None
+    every_day, every_dow = f[2].strip() == "*", f[4].strip() == "*"
+    start = now.date()
+    for i in range(400):
+        day = start + timedelta(days=i)
+        if day.month not in months:
+            continue
+        # Vixie cron: with both day fields set, either may match; with one of them *, the other decides.
+        dow = (day.weekday() + 1) % 7
+        if every_day and every_dow:
+            pass
+        elif every_day:
+            if dow not in dows:
+                continue
+        elif every_dow:
+            if day.day not in days:
+                continue
+        elif day.day not in days and dow not in dows:
+            continue
+        for hour in hours:
+            for minute in minutes:
+                at = datetime(day.year, day.month, day.day, hour, minute, tzinfo=now.tzinfo)
+                if at > now:
+                    return at
+    return None
+
+
+def command_script(command):
+    """The script a cron line runs, for the "What it does" column and the one-script-two-jobs warning: the
+    basename of the first word naming a script file, else of its first path-shaped word, else "". A line that
+    changes folder first (`cd /srv/app && ./deploy.sh`) still names the script it runs."""
+    words = re.findall(r"(?<![\w:>/])((?:~/|/|\./)[^\s;&|<>\"']*)", command)
+    scripts = [w for w in words if w.endswith((".sh", ".py", ".rb", ".js", ".pl", ".bash"))]
+    for word in scripts or words:
+        base = os.path.basename(word.rstrip("/"))
+        if base:
+            return base
+    return ""
+
+
+def parse_crontab(text, now):
+    """`crontab -l` output -> one job row per line. Blank lines, comments and NAME=value settings are not jobs,
+    and neither is a line whose fields are not a schedule. A crontab records nothing about a run, so its rows
+    carry no history instead of a guessed result."""
+    jobs = []
+    for line in text.splitlines():
+        line = " ".join(line.split())
+        if not line or line.startswith("#") or re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*=", line):
+            continue
+        if line.startswith("@"):
+            macro, _, command = line.partition(" ")
+            expr = CRON_MACROS.get(macro.lower())
+            if not command or (expr is None and macro.lower() != "@reboot"):
+                continue
+            schedule, raw = (expr or "@reboot"), macro
+        else:
+            f = line.split(" ", 5)
+            if len(f) < 6:
+                continue
+            schedule = raw = " ".join(f[:5])
+            command = f[5]
+        try:
+            nxt = cron_next(schedule, now) if schedule != "@reboot" else None
+        except ValueError:
+            continue
+        jobs.append({
+            "scheduler": "cron",
+            # The line itself, hashed: a crontab has no ids, and an edit to the line is a new job.
+            "id": "cron-" + hashlib.sha1(line.encode()).hexdigest()[:12],
+            "name": command[:60],
+            "schedule": schedule,
+            "schedule_raw": raw,
+            "state": None,
+            "enabled": True,
+            "script": command_script(command),
+            "agent": False,
+            "last_run_at": None,
+            "last_status": None,
+            "last_error": "",
+            "next_run_at": nxt.isoformat() if nxt else None,
+            "failure_streak": 0,
+            "runs_1h": None,
+            "runs_24h": None,
+            "fails_24h": None,
+            # cron keeps no run history: the row says so rather than reading as a failure.
+            "history": False,
+            "command": command,
+            "runs": [],
+        })
+    return jobs
+
+
+def timer_units(listed):
+    """`systemctl list-timers --all` output -> [(timer, the unit it starts)], as systemd lists them. The columns
+    are NEXT, LEFT, LAST, PASSED, UNIT, ACTIVATES; a unit name holds no space, so the two are found by name."""
+    out = []
+    for line in listed.splitlines():
+        f = line.split()
+        i = next((n for n, word in enumerate(f) if word.endswith(".timer")), None)
+        if i is None:
+            continue
+        out.append((f[i], f[i + 1] if i + 1 < len(f) and f[i + 1] != "-" else ""))
+    return out
+
+
+def show_blocks(text):
+    """`systemctl show <unit>...` output -> [(unit, its property lines)], in the order asked: systemd writes
+    `Id=` first and a blank line between one unit and the next."""
+    out = []
+    for line in (text or "").splitlines():
+        if line.startswith("Id="):
+            out.append((line[3:], []))
+        elif out and "=" in line:
+            out[-1][1].append(line)
+    return [(unit, "\n".join(lines)) for unit, lines in out]
+
+
+def show_value(block, key, default=""):
+    """One property out of a `systemctl show` block, or `default` when the unit does not carry it."""
+    m = re.search(rf"^{re.escape(key)}=(.*)$", block, re.M)
+    return m.group(1).strip() if m else default
+
+
+def timer_time(text, tz):
+    """A `systemctl show` time ("Fri 2026-10-23 18:10:00 UTC") as ISO in the machine's own zone, or None when a
+    timer never ran or only counts seconds since boot. systemd writes these as text, in the machine's local
+    time, so the day name and the zone at the end are read past rather than parsed."""
+    f = (text or "").split()
+    if len(f) < 3:
+        return None
+    try:
+        at = datetime.strptime(" ".join(f[1:3]), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    return at.replace(tzinfo=tz).isoformat()
+
+
+def service_status(status, result):
+    """A systemd service's last exit as the page's last status: "ok" when it worked, and otherwise why not
+    ("exit 1", "timeout"), so a run that failed shows as failed."""
+    if not status:
+        return None
+    if status != "0":
+        return f"exit {status}"
+    return "ok" if result in ("", "success") else result
+
+
+def parse_timers(listed, timers_show, services_show, now):
+    """The rows for the timers in a `systemctl list-timers --all` listing: each one's next and last run from
+    `systemctl show <timer>`, and the last exit of the service it starts from `systemctl show <service>`."""
+    timers = dict(show_blocks(timers_show))
+    services = dict(show_blocks(services_show))
+    jobs = []
+    for unit, service in timer_units(listed):
+        block, service_block = timers.get(unit, ""), services.get(service, "")
+        active = show_value(block, "ActiveState")
+        specs = [s.strip() for s in re.findall(r"OnCalendar=([^;]*)", block) if s.strip()]
+        # A service that never ran carries no exit timestamp: its last result is unknown, not "ok".
+        ran = show_value(service_block, "ExecMainExitTimestamp")
+        jobs.append({
+            "scheduler": "systemd",
+            "id": unit,
+            "name": unit[: -len(".timer")],
+            "schedule": " ; ".join(specs),
+            "schedule_raw": " ; ".join(specs),
+            "state": active,
+            # A timer that is not active will not run again: it reads as paused, like a paused Hermes job.
+            "enabled": active != "inactive",
+            "script": service,
+            "agent": False,
+            "last_run_at": timer_time(show_value(block, "LastTriggerUSec"), now.tzinfo),
+            "last_status": service_status(show_value(service_block, "ExecMainStatus"),
+                                          show_value(service_block, "Result")) if ran else None,
+            "last_error": "",
+            "next_run_at": timer_time(show_value(block, "NextElapseUSecRealtime"), now.tzinfo),
+            "failure_streak": 0,
+            "runs_1h": None,
+            "runs_24h": None,
+            "fails_24h": None,
+            "history": True,
+            "unit": unit,
+            "service": service,
+            "runs": [],
+        })
+    return jobs
+
+
+def crontab_jobs(now):
+    """This user's plain crontab. No crontab is not an error: `crontab -l` says "no crontab for <user>" on
+    stderr and exits 1, which `read_command` reads as nothing to show."""
+    return parse_crontab(read_command(["crontab", "-l"]) or "", now)
+
+
+def systemd_jobs(now):
+    """Every systemd timer on this machine, the system's and this user's, each with its next run, its last run
+    and the last exit of the service it starts. A machine with no systemd, or none running (a Mac, a
+    container), has no timers and shows no error."""
+    jobs = []
+    for scope in ([], ["--user"]):
+        listed = read_command(["systemctl", *scope, "list-timers", "--all", "--no-pager", "--no-legend"])
+        if not listed:
+            continue
+        units = timer_units(listed)
+        if not units:
+            continue
+        timers = read_command(["systemctl", *scope, "show", "--no-pager",
+                               "-p", "Id", "-p", "ActiveState", "-p", "TimersCalendar",
+                               "-p", "NextElapseUSecRealtime", "-p", "LastTriggerUSec",
+                               *[u for u, _ in units]]) or ""
+        services = sorted({s for _, s in units if s})
+        exits = read_command(["systemctl", *scope, "show", "--no-pager",
+                              "-p", "Id", "-p", "ExecMainStatus", "-p", "Result", "-p", "ExecMainExitTimestamp",
+                              *services]) or ""
+        jobs += parse_timers(listed, timers, exits, now)
+    return jobs
+
+
 def seconds(etime):
     """ps etime ([[dd-]hh:]mm:ss) -> seconds."""
     days, _, rest = etime.strip().rpartition("-")
@@ -439,7 +727,7 @@ def main():
         "host": socket.gethostname(),
         "tz": time.strftime("%Z"),
         "now": now.isoformat(),
-        "jobs": hermes_jobs(now) + launchd_jobs(),
+        "jobs": hermes_jobs(now) + launchd_jobs() + crontab_jobs(now) + systemd_jobs(now),
         "running": running_agents(),
         "host_broken": host_broken(),
         "profiles": hermes_profiles(),
