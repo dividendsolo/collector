@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ago, daysAgo, duration, moneyParts, schedule, shortRole, status, waitingOrder } from "@/lib/format";
+import {
+  ago,
+  daysAgo,
+  duration,
+  historyless,
+  lastResult,
+  moneyParts,
+  schedule,
+  shortRole,
+  status,
+  waitingOrder,
+} from "@/lib/format";
 
 describe("format", () => {
   it("says how long ago", () => {
@@ -28,6 +39,22 @@ describe("format", () => {
     expect(status({ enabled: true, last_status: "delivery_failed" })).toBe("Warning");
     expect(status({ enabled: true, last_status: "error" })).toBe("Failed");
     expect(status({ enabled: true, last_status: "ok (opened a PR)" })).toBe("OK");
+  });
+  it("says no history for a job whose scheduler keeps none, rather than a failure", () => {
+    expect(lastResult({ last_status: "ok" })).toBe("ok");
+    expect(lastResult({ history: true, last_status: null })).toBe("—");
+    expect(lastResult({ history: false })).toBe("no history");
+    // A plain crontab line is green, and its row says it kept no history: not a failure.
+    expect(historyless({ history: false })).toBe(true);
+    expect(historyless({ history: true })).toBe(false);
+    expect(historyless({})).toBe(false);
+    // A plain crontab line, as collect.py reports it, is green and never reads as a failure.
+    const plain: { enabled: boolean; history: boolean; last_status: null } = {
+      enabled: true,
+      history: false,
+      last_status: null,
+    };
+    expect(status(plain)).toBe("OK");
   });
   it("splits dollar amounts out of a sentence for the blur", () => {
     expect(moneyParts("usable on the $22/month plan")).toEqual([
