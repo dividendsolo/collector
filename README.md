@@ -58,11 +58,15 @@ It reads only. It never changes a job or a card. Its one write is your repo choi
 ```bash
 git clone https://github.com/dividendsolo/collector.git
 cd collector
-cp config.example.json config.json   # then edit it
 bun install
 bun run build
 bun start                            # http://localhost:4000
 ```
+
+Then settings: [SETUP.md](SETUP.md) holds one prompt. Start your coding agent (Claude Code, Codex, Hermes) in this
+folder, paste it, and it looks around your machine read-only and writes `config.json` for you, then starts Collector
+and says what it found and what it skipped. To do it by hand instead: `cp config.example.json config.json` and edit
+it — every key is in [Configure it](#configure-it) below.
 
 `bun dev` runs it with hot reload while you change the code. Set `COLLECTOR_PORT` for another port (both commands
 read it) and `COLLECTOR_CONFIG` for a config file somewhere else.
@@ -99,6 +103,7 @@ path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Libra
 | `agent_notes` | One short note per Hermes profile, shown in the Agents table: `{"builder": "Builds cards"}`. A profile with no note shows "No note yet". |
 | `X_BEARER_TOKEN` (`.env`) | Optional: the X API app's bearer token. The APIs page then shows the credit balance (`/2/usage/credits`) and posts read against the monthly cap (`/2/usage/tweets`); under $5 of credit goes to Needs attention. |
 | `billing` | Each project's payment providers: `{"owner/repo": [{"provider": "stripe", "key": "MYAPP_STRIPE_KEY"}]}`. `provider` is `stripe` or `polar`; `key` names a line in `.env` (gitignored) that holds a read-only key. |
+| `actions_minutes` | The Actions minutes a month your GitHub plan includes. Left out, the plan's own numbers are used; set it when the page reads your plan wrong. |
 | `repos_dir` | The folder that holds your repos (default `~/code`). |
 
 The work script writes `=== tick <time> ===` to its log on each start. The Collector reads the starts in the
