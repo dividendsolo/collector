@@ -130,6 +130,20 @@ describe("tool_rows", () => {
   });
 });
 
+describe("process_cwd", () => {
+  // macOS has no /proc, so collect.py asks lsof for the folder. This is real `lsof -a -p <pid> -d cwd -Fn` output,
+  // the shape taken from a run on ezio; /proc is hidden for the call so that is the branch under test.
+  const lsof = "p4242\nn/home/me/code/collector/.worktrees/build-21\n";
+
+  it("reads the folder out of lsof where there is no /proc", () => {
+    expect(drive({ fn: "cwd_lsof", pid: 4242, lsof })).toBe("/home/me/code/collector/.worktrees/build-21");
+  });
+  it("leaves the folder unknown when lsof says nothing, and when a machine has no lsof", () => {
+    expect(drive({ fn: "cwd_lsof", pid: 4242, lsof: "" })).toBe(null);
+    expect(drive({ fn: "cwd_lsof", pid: 4242, lsof_error: "lsof: command not found" })).toBe(null);
+  });
+});
+
 describe("session_place", () => {
   it("reads the repo and the card from a card worktree's path, however deep the session sits", () => {
     expect(

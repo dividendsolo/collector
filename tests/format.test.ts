@@ -6,11 +6,24 @@ import {
   historyless,
   lastResult,
   moneyParts,
+  runLabel,
   schedule,
   shortRole,
   status,
   waitingOrder,
 } from "@/lib/format";
+import type { WorkRun } from "@/lib/work";
+
+const run = (extra: Partial<WorkRun>): WorkRun => ({
+  type: "agent",
+  name: "claude",
+  kind: "session",
+  machine: "m1",
+  card: null,
+  repo: null,
+  seconds: 8,
+  ...extra,
+});
 
 describe("format", () => {
   it("says how long ago", () => {
@@ -65,6 +78,33 @@ describe("format", () => {
   });
   it("shortens a role", () => {
     expect(shortRole("The builder (Mac): builds cards")).toBe("builder");
+  });
+});
+
+describe("runLabel", () => {
+  // A run on a card, a Claude Code session in a plain checkout, and a session in the home folder — the three
+  // rows collect.py reports (card #21). The project page's "Agent now" fact and the Agents page pills all
+  // print this, so a session with no card must name the tool and never read "#null".
+  const onCard = run({ name: "collector-builder", kind: "build", card: 21, repo: "collector" });
+  const inCheckout = run({ repo: "collector" });
+  const inHome = run({ name: "codex" });
+
+  it("names the tool for a session with no card, never #null", () => {
+    expect(runLabel(inCheckout)).toBe("claude session");
+    expect(runLabel(inHome)).toBe("codex session");
+    expect(runLabel(inCheckout)).not.toContain("null");
+    expect(runLabel(inHome)).not.toContain("null");
+    expect(runLabel(run({ card: null, kind: "build", name: "backup.sh" }))).toBe("backup.sh building");
+  });
+  it("keeps the card and what the run is doing when it has one", () => {
+    expect(runLabel(onCard)).toBe("#21 building");
+    expect(runLabel(run({ name: "claude", kind: "review", card: 7 }))).toBe("#7 reviewing");
+  });
+  it("reads as the project page's Agent now fact with a card-less session among the runs", () => {
+    // The fact's own expression, character for character as projects.tsx writes it.
+    const fact = (agents: WorkRun[]) => (agents.length ? agents.map(runLabel).join(", ") : "—");
+    expect(fact([onCard, inCheckout])).toBe("#21 building, claude session");
+    expect(fact([])).toBe("—");
   });
 });
 

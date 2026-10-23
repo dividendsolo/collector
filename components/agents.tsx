@@ -1,6 +1,6 @@
 "use client";
 
-import { ago, doing, STATUS_RANK, schedule, shortRole, status } from "@/lib/format";
+import { ago, runLabel, STATUS_RANK, schedule, shortRole, status } from "@/lib/format";
 import { jobHref, useZones } from "./cron";
 import { useLive } from "./data";
 import { ModelCell, RunningNow, useRunning } from "./running";
@@ -101,9 +101,7 @@ export function AgentsPage() {
                           p.busy.map((r, i) => (
                             <span key={i}>
                               {i ? " " : ""}
-                              <span className="pill agent">
-                                #{r.card} {doing(r.kind)}
-                              </span>
+                              <span className="pill agent">{runLabel(r)}</span>
                             </span>
                           ))
                         ) : (
@@ -185,7 +183,8 @@ export function AgentPage({ machine, name }: { machine: string; name: string }) 
                       <span key={i}>
                         {i ? " " : ""}
                         <span className="pill agent">
-                          #{r.card} {doing(r.kind)} · {r.repo}
+                          {runLabel(r)}
+                          {r.repo ? ` · ${r.repo}` : ""}
                         </span>
                       </span>
                     ))

@@ -9,6 +9,7 @@ does on a machine is tested without a running session. By hand:
 """
 import json
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,6 +27,25 @@ def models_of(case):
     return {(tool, cwd): model for tool, cwd, model in case.get("models", [])}
 
 
+def cwd_without_proc(case):
+    """The folder process_cwd reads where there is no /proc — macOS, where it runs lsof. /proc is hidden for the call,
+    so the branch a Mac takes is the branch that runs, and the case carries real `lsof -a -p <pid> -d cwd -Fn` output,
+    or the error of a machine with no lsof at all."""
+    real_exists, real_run = os.path.exists, subprocess.run
+    os.path.exists = lambda p: False if str(p).startswith("/proc/") else real_exists(p)
+
+    def run(*args, **kwargs):
+        if case.get("lsof_error"):
+            raise OSError(case["lsof_error"])
+        return subprocess.CompletedProcess(args[0] if args else "", 0, case.get("lsof") or "", "")
+
+    subprocess.run = run
+    try:
+        return collect.process_cwd(case["pid"])
+    finally:
+        os.path.exists, subprocess.run = real_exists, real_run
+
+
 def main():
     case = json.load(sys.stdin)
     fn = case["fn"]
@@ -33,6 +53,8 @@ def main():
         out = collect.tool_rows(case["ps"], facts_of(case), models_of(case))
     elif fn == "place":
         out = collect.session_place(case.get("cwd"), case.get("branch"), case.get("root"))
+    elif fn == "cwd_lsof":
+        out = cwd_without_proc(case)
     elif fn == "claude_model":
         out = collect.claude_model(case["cwd"], case["home"])
     elif fn == "codex_model":
