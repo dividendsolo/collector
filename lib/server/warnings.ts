@@ -1,6 +1,6 @@
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
-import type { Config } from "./config";
+import { type Config, unknownConfigKeys } from "./config";
 import type { Domain } from "./domains";
 import type { GithubLimit } from "./machines";
 import type { Checked } from "./services";
@@ -28,11 +28,18 @@ export interface WarningInputs {
 }
 
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
- * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, tickets that did not list, and
- * low AI or X credit, and open incidents of the vendors marked "attention" in config.json. Errors first. Adds `machine` and `what` to each job. */
+ * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, tickets that did not list,
+ * low AI or X credit, open incidents of the vendors marked "attention" in config.json, and a config.json key
+ * Collector does not read. Errors first. Adds `machine` and `what` to each job. */
 export function warnings(w: WarningInputs): Warning[] {
   const out: Warning[] = [];
   const byScript = new Map<string, string[]>();
+  const unknown = unknownConfigKeys(w.cfg);
+  if (unknown.length)
+    out.push({
+      level: "warn",
+      text: `config.json has ${unknown.length === 1 ? "a key" : `${unknown.length} keys`} Collector does not read: ${unknown.join(", ")}`,
+    });
   const what = w.cfg.jobs || {};
   const work = w.cfg.work_script || {};
   const workJobs = new Set(work.jobs || []);

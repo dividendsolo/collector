@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:config": "bun scripts/check-config.ts"
   },
   "dependencies": {
     "next": "16.4.2",

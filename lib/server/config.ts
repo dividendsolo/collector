@@ -71,6 +71,37 @@ export interface Config {
   [key: string]: unknown;
 }
 
+/** Every top-level key Collector reads, in the order README's "Configure it" table documents them. A key outside
+ * this list does nothing: it is a typo, or a key a setup agent invented. */
+export const CONFIG_KEYS = [
+  "machines",
+  "jobs",
+  "launchd_prefixes",
+  "ok_exits",
+  "work_script",
+  "verify_label",
+  "services",
+  "vendors",
+  "domains",
+  "tickets",
+  "board",
+  "subscriptions",
+  "projects",
+  "agent_notes",
+  "billing",
+  "actions_minutes",
+  "repos_dir",
+] as const;
+
+const KNOWN_KEYS = new Set<string>(CONFIG_KEYS);
+
+/** The top-level keys in a candidate config that Collector would never read. Reported rather than obeyed (as a row in
+ * Needs attention, by `bun run check:config`, and by SETUP.md's prompt), since such a key is a setting that does nothing. */
+export function unknownConfigKeys(cfg: unknown): string[] {
+  if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return [];
+  return Object.keys(cfg).filter((k) => !KNOWN_KEYS.has(k));
+}
+
 let cached: { stamp: number; cfg: Config } | null = null;
 
 /** config.json, re-read whenever the file changes, so an edit shows on the next refresh. No file: this machine only. */
