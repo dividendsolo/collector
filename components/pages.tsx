@@ -163,6 +163,8 @@ const VENDOR_PILL: Record<string, [string, string]> = {
   ok: ["ok", "Operational"],
 };
 const VENDOR_RANK: Record<string, number> = { critical: 0, major: 1, minor: 2, ok: 3, "no feed": 4 };
+/** A vendor with a live incident. An "ok" vendor can still list a notice (impact "none", e.g. planned maintenance). */
+export const vendorHit = (v: any) => VENDOR_RANK[v.state] <= VENDOR_RANK.minor;
 
 export const useVendors = () => {
   const { data } = useApi("/api/vendors");

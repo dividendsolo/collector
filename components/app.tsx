@@ -7,7 +7,7 @@ import { CardTip } from "./card-tip";
 import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
 import { LiveProvider, useLive } from "./data";
-import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, WorkPage } from "./pages";
+import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, vendorHit, WorkPage } from "./pages";
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
 import { useRunning } from "./running";
 import { ServicesPage, ServicesWatcher } from "./services";
@@ -79,7 +79,7 @@ function useTags(): Record<string, { text: string; hot: boolean }> {
     ? state.machines.flatMap((m: any) => m.jobs || []).filter((j: any) => ["Failed", "Warning"].includes(status(j)))
         .length
     : 0;
-  const hit = (vendors || []).filter((v) => v.incidents.length);
+  const hit = (vendors || []).filter(vendorHit);
   return {
     attention: { text: w.length ? String(w.length) : "", hot: w.length > 0 && w.some((x) => x.level === "error") },
     running: { text: running?.length ? String(running.length) : "", hot: false },
