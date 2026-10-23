@@ -1,0 +1,206 @@
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+/** collect.py's Claude Code and Codex helpers, driven on fixtures: `tests/tools.driver.py` runs the real Python, so
+ * the parsing under test here is the parsing a machine runs. */
+const ROOT = process.cwd();
+
+function drive<T>(probe: unknown): T {
+  const out = execFileSync("python3", [path.join(ROOT, "tests", "tools.driver.py")], {
+    cwd: ROOT,
+    input: JSON.stringify(probe),
+    encoding: "utf8",
+  });
+  return JSON.parse(out) as T;
+}
+
+/** A `ps -axo pid=,etime=,command=` list, one line per process. */
+const ps = (...lines: string[]) => lines.join("\n");
+const proc = (pid: number, etime: string, command: string) => `${pid} ${etime} ${command}`;
+
+/** One row collect.py prints for a tool session, as the page reads it. */
+interface Run {
+  type: string;
+  name: string;
+  kind: string;
+  repo: string | null;
+  card: number | null;
+  seconds: number;
+  model?: string;
+}
+
+/** A throwaway home holding the session files a tool writes locally. */
+function home(files: Record<string, string>) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-tools-"));
+  for (const [rel, body] of Object.entries(files)) {
+    const p = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, body);
+  }
+  return dir;
+}
+const jsonl = (...rows: unknown[]) => `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`;
+
+describe("tool_rows", () => {
+  it("shows a Claude Code session in a card worktree as one live agent run", () => {
+    const cwd = "/home/me/code/collector/.worktrees/build-21";
+    expect(
+      drive<Run[]>({
+        fn: "rows",
+        ps: ps(proc(4242, "01:12", "/home/me/.local/bin/claude --print hi")),
+        facts: { 4242: { cwd, branch: "agent/21", root: cwd } },
+        models: [["claude", cwd, { model: "claude-opus-5-5" }]],
+      }),
+    ).toEqual([
+      {
+        type: "agent",
+        name: "claude",
+        kind: "session",
+        repo: "collector",
+        card: 21,
+        seconds: 72,
+        model: "claude-opus-5-5",
+      },
+    ]);
+  });
+  it("counts the Codex shim and the binary under it as one session, its own model on the row", () => {
+    const cwd = "/home/me/code/situation";
+    expect(
+      drive<Run[]>({
+        fn: "rows",
+        ps: ps(
+          proc(100, "00:30", "/usr/bin/node /usr/lib/node_modules/@openai/codex/bin/codex.js"),
+          proc(101, "00:29", "/home/me/.codex/bin/codex-x86_64-unknown-linux-musl"),
+        ),
+        facts: {
+          100: { cwd, branch: "main", root: cwd },
+          101: { cwd, branch: "main", root: cwd },
+        },
+        models: [["codex", cwd, { model: "gpt-5-codex" }]],
+      }),
+    ).toEqual([
+      {
+        type: "agent",
+        name: "codex",
+        kind: "session",
+        repo: "situation",
+        card: null,
+        seconds: 30,
+        model: "gpt-5-codex",
+      },
+    ]);
+  });
+  it("cards a session on an agent/<n> branch, and leaves the model blank when none was recorded", () => {
+    expect(
+      drive<Run[]>({
+        fn: "rows",
+        ps: ps(proc(7, "10:00", "claude")),
+        facts: { 7: { cwd: "/home/me/code/collector/lib", branch: "agent/21", root: "/home/me/code/collector" } },
+        models: [],
+      }),
+    ).toEqual([{ type: "agent", name: "claude", kind: "session", repo: "collector", card: 21, seconds: 600 }]);
+  });
+  it("shows a session outside any repo as no repo, not as an error", () => {
+    expect(
+      drive<Run[]>({
+        fn: "rows",
+        ps: ps(proc(55, "00:05", "/home/me/.local/bin/claude")),
+        facts: { 55: { cwd: "/home/me", branch: null, root: null } },
+        models: [],
+      }),
+    ).toEqual([{ type: "agent", name: "claude", kind: "session", repo: null, card: null, seconds: 5 }]);
+  });
+  it("leaves every other process alone", () => {
+    expect(
+      drive<Run[]>({
+        fn: "rows",
+        ps: ps(
+          proc(9, "10:00", "/usr/bin/python3 /home/me/code/agent-stack/foreman/foreman.py"),
+          proc(8, "00:10", "/bin/bash -lc claude"),
+          proc(6, "00:01", "/home/me/.local/bin/claudette notes"),
+          proc(5, "00:02", "codex-notes --watch"),
+        ),
+        facts: {},
+        models: [],
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("session_place", () => {
+  it("reads the repo and the card from a card worktree's path, however deep the session sits", () => {
+    expect(
+      drive({
+        fn: "place",
+        cwd: "/home/me/code/collector/.worktrees/build-21/components",
+        branch: "agent/21",
+        root: "/home/me/code/collector/.worktrees/build-21",
+      }),
+    ).toEqual(["collector", 21]);
+  });
+  it("names the repo of a plain checkout, with no card on a normal branch", () => {
+    expect(
+      drive({ fn: "place", cwd: "/home/me/code/situation", branch: "main", root: "/home/me/code/situation" }),
+    ).toEqual(["situation", null]);
+  });
+  it("is no repo outside one", () => {
+    expect(drive({ fn: "place", cwd: "/Users/me", branch: null, root: null })).toEqual([null, null]);
+  });
+});
+
+describe("claude_model", () => {
+  const cwd = "/home/me/code/collector";
+  const transcript = path.join(".claude", "projects", "-home-me-code-collector", "s1.jsonl");
+
+  it("reads the model the folder's transcript recorded", () => {
+    const dir = home({
+      [transcript]: jsonl({ message: { model: "claude-sonnet-4-5" } }, { message: { model: "claude-opus-5-5" } }),
+    });
+    expect(drive({ fn: "claude_model", home: dir, cwd })).toEqual({ model: "claude-opus-5-5" });
+  });
+  it("skips Claude Code's own <synthetic> placeholder and keeps the model that ran", () => {
+    const dir = home({
+      [transcript]: jsonl({ message: { model: "claude-opus-5-5" } }, { message: { model: "<synthetic>" } }),
+    });
+    expect(drive({ fn: "claude_model", home: dir, cwd })).toEqual({ model: "claude-opus-5-5" });
+  });
+  it("reads the newest transcript when the folder holds several", () => {
+    const dir = home({ [transcript]: jsonl({ message: { model: "claude-sonnet-4-5" } }) });
+    fs.utimesSync(path.join(dir, transcript), new Date(1000), new Date(1000));
+    fs.writeFileSync(
+      path.join(path.dirname(path.join(dir, transcript)), "s2.jsonl"),
+      jsonl({ message: { model: "claude-opus-5-5" } }),
+    );
+    expect(drive({ fn: "claude_model", home: dir, cwd })).toEqual({ model: "claude-opus-5-5" });
+  });
+  it("is blank for a folder Claude Code wrote no transcript for", () => {
+    expect(drive({ fn: "claude_model", home: home({}), cwd: "/home/me/nowhere" })).toEqual({});
+  });
+});
+
+describe("codex_model", () => {
+  const cwd = "/home/me/code/situation";
+  const rollout = path.join(".codex", "sessions", "2026", "10", "23", "rollout-2026-10-23T10-00-00-abc.jsonl");
+
+  it("reads the model the rollout for that folder recorded", () => {
+    const dir = home({
+      [rollout]: jsonl(
+        { type: "session_meta", payload: { id: "abc", cwd, git: { branch: "main" } } },
+        { type: "turn_context", payload: { model: "gpt-5-codex", cwd } },
+      ),
+    });
+    expect(drive({ fn: "codex_model", home: dir, cwd })).toEqual({ model: "gpt-5-codex" });
+  });
+  it("is blank for another folder's rollout, so a session is never shown another session's model", () => {
+    const dir = home({
+      [rollout]: jsonl(
+        { type: "session_meta", payload: { cwd: "/home/me/elsewhere" } },
+        { type: "turn_context", payload: { model: "gpt-5-codex" } },
+      ),
+    });
+    expect(drive({ fn: "codex_model", home: dir, cwd })).toEqual({});
+  });
+});

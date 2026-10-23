@@ -129,3 +129,6 @@ cp config.example.json config.json   # then edit it
 
 Every key is optional and the README table documents them all. With no `config.json` at all Collector still runs: it
 shows the Hermes cron jobs of the machine it is on.
+
+A running Claude Code or Codex session needs no setup either: Collector finds it on its own and shows it on Current
+work, with the folder it runs in and the model it recorded.
