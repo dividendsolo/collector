@@ -9,8 +9,10 @@ export interface WorkRun {
   kind: string;
   feature?: string;
   machine: string;
-  card: number;
-  repo: string;
+  /** The card the run works on. A Claude Code or Codex session outside a card worktree has none. */
+  card?: number | null;
+  /** The repo the run's folder is in. A session outside any repo has none, and the page says "no repo". */
+  repo?: string | null;
   seconds: number;
 }
 
@@ -74,7 +76,7 @@ export function currentWork(
     rows.push({ key: `closed-${c.url}`, group: 2, state: "closed", card: c, run: null });
   }
   runs.forEach((r, i) => {
-    const row = byCard.get(`${r.repo}#${r.card}`);
+    const row = r.repo && r.card != null ? byCard.get(`${r.repo}#${r.card}`) : undefined;
     if (row && !row.run) {
       row.run = r;
       row.group = 0;

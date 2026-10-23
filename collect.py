@@ -3,7 +3,8 @@
 
 The server runs it locally and on each remote machine over `ssh <host> python3 - '<config>' < collect.py`,
 so it uses the standard library only. It reads Hermes's cron files (~/.hermes), the foreman's host-broken
-markers, launchd (macOS), this user's plain crontab, systemd timers, ps, docker, and git, and changes nothing.
+markers, launchd (macOS), this user's plain crontab, systemd timers, ps, docker, git, and the session files Claude
+Code and Codex keep on this machine, and changes nothing.
 """
 import glob
 import hashlib
@@ -539,6 +540,180 @@ def seconds(etime):
     return int(days or 0) * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2]
 
 
+def process_lines(out):
+    """(pid, etime, command) for each line of `ps -axo pid=,etime=,command=`."""
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) == 3:
+            yield parts[0], parts[1], parts[2]
+
+
+def tool_of(command):
+    """The coding tool one process runs: 'claude', 'codex', or None. An npm shim shows as `node .../codex.js`, so the
+    program and its first argument are both read; a name that only holds the word (`claudette`, `codex-notes`) is not
+    the tool."""
+    for token in (command or "").split(None, 2)[:2]:
+        name = re.sub(r"\.(?:js|cjs|mjs|exe)$", "", os.path.basename(token))
+        if name in ("claude", "codex"):
+            return name
+        # codex's own binary, named after its Rust target: codex-x86_64-unknown-linux-musl, codex-aarch64-apple-darwin
+        if name.startswith("codex-") and any(target in name for target in ("linux", "darwin", "windows", "musl", "gnu")):
+            return "codex"
+    return None
+
+
+def worktree_place(path):
+    """(repo, card) when a folder sits in a card worktree (<repo>/.worktrees/<something>-<card>), else None."""
+    m = re.search(r"/([\w.-]+)/\.worktrees/[^/]*-(\d+)(?:/|$)", path or "")
+    return (m.group(1), int(m.group(2))) if m else None
+
+
+def session_place(cwd, branch=None, root=None):
+    """(repo, card) for a session's folder: the repo it runs in, and the card when the folder is a card worktree —
+    the path of one of the foreman's worktrees, or a checkout on an agent/<card> branch. (None, None) outside a repo,
+    which the page shows as "no repo"."""
+    place = worktree_place(cwd)
+    if place:
+        return place
+    if not root:
+        return (None, None)
+    m = re.fullmatch(r"agent/(\d+)", (branch or "").strip())
+    return (os.path.basename(root.rstrip("/")) or None, int(m.group(1)) if m else None)
+
+
+def git_facts(directory):
+    """(branch, top level) of the checkout a folder belongs to, or (None, None) when it is in none."""
+    if not directory:
+        return (None, None)
+    try:
+        out = subprocess.run(["git", "-C", directory, "rev-parse", "--abbrev-ref", "HEAD", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return (None, None)
+    lines = out.stdout.splitlines() if out.returncode == 0 else []
+    branch = lines[0].strip() if lines and lines[0].strip() != "HEAD" else None  # detached: no branch, no card
+    return (branch, lines[1].strip() if len(lines) > 1 else None)
+
+
+def process_cwd(pid):
+    """One process's working directory: /proc on Linux, lsof elsewhere (macOS has no /proc)."""
+    proc = f"/proc/{pid}/cwd"
+    if os.path.exists(proc):
+        try:
+            return os.readlink(proc)
+        except OSError:
+            return None
+    try:
+        out = subprocess.run(["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return next((line[1:] for line in out.splitlines() if line.startswith("n/")), None)
+
+
+def tail_text(path, size=65536):
+    """The last bytes of a file: a session file can run to megabytes, and its newest lines say what is true now."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, os.path.getsize(path) - size))
+            return f.read().decode(errors="ignore")
+    except OSError:
+        return ""
+
+
+def model_in(text):
+    """The last model a session file names, or None. `<synthetic>` is Claude Code's own placeholder, not a model."""
+    for model in reversed(re.findall(r'"model"\s*:\s*"([^"]+)"', text or "")):
+        if not model.startswith("<"):
+            return model
+    return None
+
+
+def newest_file(paths):
+    """The newest file of a list, or None when there is none (or one vanished under us)."""
+    try:
+        return max(paths, key=os.path.getmtime) if paths else None
+    except OSError:
+        return None
+
+
+def claude_model(cwd, home=HOME):
+    """{"model": name} when a running Claude Code session in this folder recorded one under ~/.claude/projects,
+    else {}. Claude Code names a folder there after its path, with dots and slashes as dashes."""
+    if not cwd:
+        return {}
+    slug = cwd.replace("/", "-").replace(".", "-")
+    path = newest_file(glob.glob(os.path.join(home, ".claude", "projects", slug, "*.jsonl")))
+    model = model_in(tail_text(path)) if path else None
+    return {"model": model} if model else {}
+
+
+def codex_model(cwd, home=HOME):
+    """{"model": name} when a running Codex session in this folder recorded one in its rollout file under
+    ~/.codex/sessions, else {}. Codex writes one jsonl per session, its first line naming the folder it runs in."""
+    if not cwd:
+        return {}
+    files = glob.glob(os.path.join(home, ".codex", "sessions", "**", "*.jsonl"), recursive=True)
+    try:
+        files = sorted(files, key=os.path.getmtime, reverse=True)[:20]
+    except OSError:
+        files = files[:20]
+    for path in files:
+        try:
+            with open(path, errors="replace") as f:
+                head = f.readline(4000)
+        except OSError:
+            continue
+        m = re.search(r'"cwd"\s*:\s*"([^"]*)"', head)
+        if not m or m.group(1).rstrip("/") != cwd.rstrip("/"):
+            continue
+        model = model_in(tail_text(path))
+        return {"model": model} if model else {}
+    return {}
+
+
+def tool_model(tool, cwd, home=HOME):
+    """What a tool's own session files say about a session in this folder: {"model": name}, or {} when it recorded
+    none. Nothing here goes near the network."""
+    return claude_model(cwd, home) if tool == "claude" else codex_model(cwd, home)
+
+
+def tool_rows(out, facts, models=None):
+    """One row per running Claude Code or Codex session: the tool, the repo and card its folder is a card worktree
+    for, and how long it has run. `facts` maps a pid to (folder, branch, checkout top level) and `models` maps
+    (tool, folder) to what the tool's session files record. One session per folder: Codex's npm shim and the binary
+    under it are two processes of one run, so the longest-lived process is the one that shows."""
+    models = models or {}
+    found = {}
+    for pid, etime, command in process_lines(out):
+        tool = tool_of(command)
+        if not tool:
+            continue
+        cwd, branch, root = facts.get(pid, (None, None, None))
+        key = (tool, cwd or f"pid {pid}")
+        if key in found and found[key]["seconds"] >= seconds(etime):
+            continue
+        repo, card = session_place(cwd, branch, root)
+        found[key] = {"repo": repo, "kind": "session", "card": card, "seconds": seconds(etime),
+                      "type": "agent", "name": tool, **models.get((tool, cwd), {})}
+    return [found[k] for k in sorted(found)]
+
+
+def tool_sessions(out):
+    """Every running Claude Code or Codex session on this machine, with the model its own session files record."""
+    facts, models = {}, {}
+    for pid, _, command in process_lines(out):
+        tool = tool_of(command)
+        if not tool:
+            continue
+        cwd = process_cwd(pid)
+        branch, root = git_facts(cwd)
+        facts[pid] = (cwd, branch, root)
+        if cwd and (tool, cwd) not in models:
+            models[(tool, cwd)] = tool_model(tool, cwd)
+    return tool_rows(out, facts, models)
+
+
 def verify_runs():
     """Verify runs going on now, from the verify tool's Docker labels: [(commit, feature, seconds)]."""
     if not VERIFY_LABEL:
@@ -580,18 +755,19 @@ def agent_model(profile, worktree):
 
 
 def running_agents():
-    """One row per agent run: a Hermes agent working in a card worktree (<repo>/.worktrees/<build|review>-<card>).
+    """One row per agent run: a Hermes agent working in a card worktree (<repo>/.worktrees/<build|review>-<card>),
+    and a running Claude Code or Codex session, with its own folder, card and model.
     While a verify run is going on for the card's commit, the row shows that verify and its own time."""
-    out = subprocess.run(["ps", "-axo", "etime=,command="], capture_output=True, text=True).stdout
+    out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
     found = {}
-    for line in out.splitlines():
+    for _, etime, line in process_lines(out):
         m = re.search(r"/([\w.-]+)/\.worktrees/(build|review)-(\d+)", line)
         path = re.search(r"(/[^\s'\"`]*/\.worktrees/(?:build|review)-\d+)", line)
         if not m:
             continue
         key = (m.group(1), m.group(2), int(m.group(3)))
         row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "seconds": 0, "type": "script", "name": None})
-        row["seconds"] = max(row["seconds"], seconds(line.split(None, 1)[0]))
+        row["seconds"] = max(row["seconds"], seconds(etime))
         # `hermes -p <name> chat`, or the same argv inside a Python launcher: '-p', '<name>', 'chat'
         profile = re.search(r"(?:^|[\s'\"])-p'?,?\s+'?([\w.-]+)'?,?\s+'?chat\b", line)
         if profile:
@@ -625,7 +801,7 @@ def running_agents():
             row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script", "name": WORK_SCRIPT})
             # The newest verify for the card wins; the sort puts it last.
             row.update(kind="verify", feature=feature, seconds=secs)
-    return [found[k] for k in sorted(found)]
+    return [found[k] for k in sorted(found)] + tool_sessions(out)
 
 
 def work_steps():

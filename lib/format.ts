@@ -21,6 +21,15 @@ const DOING: Record<string, string> = {
 };
 export const doing = (kind: string) => DOING[kind] || kind;
 
+/** One run in a compact cell: the card it works on and what it is doing ("#21 building"). A run with no card —
+ * a Claude Code or Codex session in a plain checkout — shows the tool's own name instead ("claude session"),
+ * and never "#null" (card #21). */
+export const runLabel = (r: { card?: number | null; kind?: string | null; name?: string | null }) => {
+  const task = doing(r.kind || "");
+  const tail = task ? ` ${task}` : "";
+  return r.card == null ? `${r.name || "unknown"}${tail}` : `#${r.card}${tail}`;
+};
+
 export function duration(s: number): string {
   if (s < 3600) return `${Math.round(s / 60)} min`;
   return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;

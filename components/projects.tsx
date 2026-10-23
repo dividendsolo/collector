@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { mutate } from "swr";
-import { ago, doing, money, monthly, plural } from "@/lib/format";
+import { ago, money, monthly, plural, runLabel } from "@/lib/format";
 import { reposToSave } from "@/lib/repos";
 import { useApi, useLive } from "./data";
 import { SVC_LABEL, type Svc, useServices } from "./services";
@@ -436,9 +436,7 @@ export function ProjectPage({ repo }: { repo: string }) {
               "—"
             )}
           </Fact>
-          <Fact label="Agent now">
-            {agents.length ? agents.map((r: any) => `#${r.card} ${doing(r.kind)}`).join(", ") : "—"}
-          </Fact>
+          <Fact label="Agent now">{agents.length ? agents.map((r: any) => runLabel(r)).join(", ") : "—"}</Fact>
           <Fact label="Health">
             {live.svc ? (
               <>

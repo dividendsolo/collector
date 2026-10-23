@@ -80,11 +80,15 @@ export function RunningNow() {
                   </td>
                   <td>{r.machine}</td>
                   <td className="mono">
-                    <span className="card-tip" tabIndex={0} data-repo={r.repo} data-card={r.card}>
-                      #{r.card}
-                    </span>
+                    {r.card == null ? (
+                      <Dash />
+                    ) : (
+                      <span className="card-tip" tabIndex={0} data-repo={r.repo} data-card={r.card}>
+                        #{r.card}
+                      </span>
+                    )}
                   </td>
-                  <td>{r.repo}</td>
+                  <td>{r.repo ? r.repo : <span className="sub">no repo</span>}</td>
                   <RunTime r={r} />
                 </tr>
               ))
@@ -217,19 +221,23 @@ export function CurrentWork() {
                     </td>
                     <td>{r ? r.machine : row.local ? "local" : <Dash />}</td>
                     <td className="mono">
-                      <a
-                        className="plain card-tip"
-                        href={c?.url}
-                        target="_blank"
-                        rel="noopener"
-                        tabIndex={0}
-                        data-repo={repo}
-                        data-card={num}
-                      >
-                        #{num}
-                      </a>
+                      {num == null ? (
+                        <Dash />
+                      ) : (
+                        <a
+                          className="plain card-tip"
+                          href={c?.url}
+                          target="_blank"
+                          rel="noopener"
+                          tabIndex={0}
+                          data-repo={repo}
+                          data-card={num}
+                        >
+                          #{num}
+                        </a>
+                      )}
                     </td>
-                    <td>{repo}</td>
+                    <td>{repo ? repo : <span className="sub">no repo</span>}</td>
                     {r ? (
                       <RunTime r={r} />
                     ) : (

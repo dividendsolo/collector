@@ -64,6 +64,11 @@ describe("SETUP.md", () => {
     expect(prompt[0]).toMatch(/bun start|COLLECTOR_PORT/);
     expect(prompt[0]).toMatch(/skipped/i);
   });
+  it("says a running Claude Code or Codex session is found with no setup", () => {
+    expect(setup).toMatch(/Claude Code/);
+    expect(setup).toMatch(/Codex/);
+    expect(setup).toMatch(/no setup/i);
+  });
 });
 
 describe("Needs attention", () => {
