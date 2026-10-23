@@ -104,6 +104,7 @@ export function RunningNow() {
 
 const SCHEDULED_SHOWN = 10;
 const LANE_PILL: Record<string, string> = {
+  "ready-for-agent": "human",
   closed: "ok",
   "ready-to-merge": "ok",
   merging: "ok",
