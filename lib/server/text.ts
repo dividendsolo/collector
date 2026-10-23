@@ -30,9 +30,21 @@ export interface Reason {
   at: string;
 }
 
-/** Why a ticket sits in its lane: the comment that moved it there (the newest one up to when the lane label went on,
+/** Why a ticket sits in its lane: the newest Ask lane posted up to the move (shown as "kind: ask"), else the comment
+ * that moved it there (the newest one up to when the lane label went on,
  * else the newest that reads like a reason, else the newest), cut to one sentence. */
+/** The Ask `lane set` posts before it moves a card into a James lane (agent-stack#139): "**Ask (kind):** text". */
+const ASK = /\*\*Ask \(([a-z]+)\):\*\*\s*([^\n]+)/;
+
 export function pickReason(comments: Comment[], labeledAt: string[]): Reason | null {
+  const moved = labeledAt[labeledAt.length - 1];
+  const asks = comments.filter((c) => ASK.test(c.body) && (!moved || c.createdAt <= moved));
+  const ask = asks[asks.length - 1];
+  if (ask) {
+    const [, kind, text] = ask.body.match(ASK) ?? [];
+    const line = `${kind}: ${text.trim()}`;
+    return { text: line.slice(0, 220) + (line.length > 220 ? "…" : ""), url: ask.url, at: ask.createdAt };
+  }
   let pick: Comment | undefined;
   if (labeledAt.length) {
     const moved = labeledAt[labeledAt.length - 1];
