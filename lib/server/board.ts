@@ -313,8 +313,9 @@ export async function poll(reason = "timer"): Promise<void> {
     let rows: Row[];
     if (cfg.board?.project_id) {
       let r = await readBoard(cfg.board, cfg.tickets?.all || []);
-      for (let tries = 1; looksLikeEmptyGlitch(r, S.rows, cfg.board); tries++) {
-        if (tries === 3) throw new Error("GitHub answered a list with no cards 3 times; the last good read stays");
+      // The glitch clears in seconds. A list still empty on the third read is real: the last Board card left
+      // (dotfiles#1, 2026-10-23), and keeping the old read froze Current work for over an hour.
+      for (let tries = 1; tries < 3 && looksLikeEmptyGlitch(r, S.rows, cfg.board); tries++) {
         S.stats.cost += r.cost;
         r = await readBoard(cfg.board, cfg.tickets?.all || []);
       }
