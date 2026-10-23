@@ -3,7 +3,8 @@
 One local page that shows every cron job and every agent run on all your machines, live.
 
 Built for [Hermes Agent](https://github.com/NousResearch/hermes-agent) setups: a laptop and a VPS or two, each with
-Hermes cron jobs, launchd jobs on the Mac, and coding agents that build and review cards in git worktrees.
+Hermes cron jobs, launchd jobs on the Mac, plain cron and systemd timers on Linux, and coding agents that build and
+review cards in git worktrees.
 The Dashboard answers these questions at a glance:
 
 1. **Needs attention:** which job failed, which script starts itself in a loop, which host cannot pass a repo's
@@ -23,7 +24,10 @@ The Dashboard answers these questions at a glance:
 5. **Work:** open cards on the board, cards closed as done today and in 30 days, deploys today per repo (production
    GitHub deployments, or successful CI jobs named "deploy" on pushes to main). The Waiting on you panel lists every ticket in the `each` lanes, with one filter button per lane; its red
    count, and a red dot on Work in the sidebar, are the P0s.
-6. **Cron jobs:** every scheduled job on every machine, with its status, machine, schedule, last run, and last result.
+6. **Cron jobs:** every scheduled job on every machine — Hermes's own, launchd's on a Mac, this user's plain
+   `crontab` lines and the systemd timers on Linux — with its status, machine, schedule, last run, and last result.
+   A crontab line keeps no run history, so its row says so instead of reading as a failure; a systemd timer shows the
+   last exit of the service it starts, so a run that failed shows as failed.
    Each job opens its own page: its setup (model, output, size in characters or lines and tokens), its schedule,
    its run counts, the agent's full prompt or the script's source, the last error, and its last 10 runs.
 
@@ -114,7 +118,10 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
 ## How it finds things
 
 - **Cron jobs:** Hermes's `~/.hermes/cron/jobs.json` and each profile's `~/.hermes/profiles/<profile>/cron/jobs.json`,
-  with run counts from the `executions.db` beside them. On macOS also `~/Library/LaunchAgents/*.plist`.
+  with run counts from the `executions.db` beside them. On macOS also `~/Library/LaunchAgents/*.plist`. On any machine
+  also this user's `crontab -l`, and on Linux `systemctl list-timers --all` for this user's timers and the system's,
+  with each timer's next run, last run and its service's last exit from `systemctl show`. Both are read only, and a
+  machine that has neither shows no job and no error.
 - **Agent runs:** processes that work in a card worktree, `<repo>/.worktrees/build-<card>` or `review-<card>`. A Hermes
   process (`hermes -p <profile> chat`) makes the row an agent; anything else is the work script.
 - **Coding agents:** a running `claude` or `codex` process, with no setup: the repo from the process's own folder

@@ -53,6 +53,10 @@ What to look at — read-only, and only what exists on this machine
   success for a job that exits non-zero when it worked: `{"<label>": {"3": "ok (opened a PR)"}}`. Read the plists'
   paths and their `StartInterval` or `StartCalendarInterval`. If several jobs do not share a prefix, leave
   `launchd_prefixes` out and say so. Not macOS, or no plists: leave both keys out.
+- Plain cron and systemd timers: Collector reads this user's `crontab -l` lines and its own and the system's
+  systemd timers (`systemctl list-timers --all`, with each timer's service read by `systemctl show`) by itself on
+  every refresh, so write no key for them — only a plain-words line in `jobs` for one whose command or unit name
+  does not say what it does.
 - The repos, usually under `~/code`: list that folder (or `repos_dir`, or wherever they are). In each repo read the
   dependency manifests (`package.json`, `Gemfile`, `requirements.txt`, `go.mod`, `pyproject.toml`) and the deploy files
   (`vercel.json`, `fly.toml`, `netlify.toml`, `wrangler.toml`, `.kamal`, `config/deploy.yml`, `Dockerfile`,

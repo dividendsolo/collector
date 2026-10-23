@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { ago, duration, STATUS_RANK, schedule, status } from "@/lib/format";
+import { ago, duration, historyless, lastResult, STATUS_RANK, schedule, status } from "@/lib/format";
 import { useLive } from "./data";
 import { PanelHead, SkelRows } from "./ui";
 
@@ -99,7 +99,7 @@ export function CronPage() {
                     <td>{schedule(j.schedule, zones.zone(j.machine), zones.first)}</td>
                     <td className="sub">{ago(j.last_run_at)}</td>
                     <td>
-                      {j.last_status || "—"}
+                      {lastResult(j)}
                       {j.last_error ? <div className="err">{j.last_error.slice(0, 120)}</div> : null}
                     </td>
                   </tr>
@@ -205,7 +205,7 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
                     ))}
                   </Fact>
                 ) : null}
-                {j.scheduler !== "launchd" ? <Fact label="Output">{sendsTo}</Fact> : null}
+                {j.scheduler?.startsWith("Hermes") ? <Fact label="Output">{sendsTo}</Fact> : null}
                 {j.workdir ? (
                   <Fact label="Folder">
                     <span className="mono">{j.workdir}</span>
@@ -214,6 +214,16 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
                 {j.command ? (
                   <Fact label="Command">
                     <span className="mono">{j.command}</span>
+                  </Fact>
+                ) : null}
+                {j.unit ? (
+                  <Fact label="Unit">
+                    <span className="mono">{j.unit}</span>
+                  </Fact>
+                ) : null}
+                {j.unit && j.service ? (
+                  <Fact label="Service">
+                    <span className="mono">{j.service}</span>
                   </Fact>
                 ) : null}
                 {j.plist ? (
@@ -260,7 +270,7 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
                 </Fact>
                 <Fact label="Schedule">{schedule(j.schedule, zones.zone(machine), zones.first)}</Fact>
                 <Fact label="Cron text">
-                  {/^[\d*]/.test(j.schedule_raw || "") ? <span className="mono">{j.schedule_raw}</span> : "—"}
+                  {/^[\d*@]/.test(j.schedule_raw || "") ? <span className="mono">{j.schedule_raw}</span> : "—"}
                 </Fact>
                 <Fact label="Next run">
                   <When iso={j.next_run_at} />
@@ -268,7 +278,7 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
                 <Fact label="Last run">
                   <When iso={j.last_run_at} />
                 </Fact>
-                <Fact label="Last result">{j.last_status || "—"}</Fact>
+                <Fact label="Last result">{lastResult(j)}</Fact>
                 {j.paused_reason ? <Fact label="Paused because">{j.paused_reason}</Fact> : null}
               </>
             )}
@@ -314,7 +324,7 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
           <pre className="code">{j.script_body ?? "The script file is not on this machine."}</pre>
         </section>
       ) : null}
-      {j?.scheduler !== "launchd" ? (
+      {j && !historyless(j) && j.scheduler !== "launchd" ? (
         <section className="panel">
           <PanelHead icon="clock" title="Recent runs">
             <span className="count">{runs.length}</span>

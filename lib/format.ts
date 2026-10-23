@@ -59,6 +59,16 @@ export function status(j: { enabled?: boolean; state?: string; last_status?: str
 }
 export const STATUS_RANK: Record<JobStatus, number> = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
 
+/** A job whose scheduler keeps no run history at all: a plain crontab line, which records nothing about how its
+ * runs went. Its row says so rather than reading as a failure (collect.py marks it `history: false`). */
+export const historyless = (j: { history?: boolean }) => j.history === false;
+
+/** A job's last result in words: its own last status, "no history" for a scheduler that keeps none, and a dash
+ * for a job that has not run yet. */
+export function lastResult(j: { history?: boolean; last_status?: string | null }): string {
+  return historyless(j) ? "no history" : j.last_status || "—";
+}
+
 /** A note when config.json has none: the role's first clause, without the parentheses. */
 export const shortRole = (role?: string | null) =>
   (role || "")
