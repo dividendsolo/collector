@@ -6,7 +6,7 @@ import { AiPlan, useAi } from "./ai";
 import { useApi, useLive } from "./data";
 import { CurrentWork } from "./running";
 import { ServiceRows, sortServices, useServices } from "./services";
-import { BlurToggle, Icon, PanelHead, Pill, SkelItems, SkelPlans, SkelRows, SkelStat } from "./ui";
+import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelItems, SkelPlans, SkelRows, SkelStat } from "./ui";
 
 function NeedsAttention() {
   const { state } = useLive();
@@ -34,6 +34,11 @@ function NeedsAttention() {
               ) : (
                 <span>{x.text}</span>
               )}
+              {x.aside ? (
+                <span className="aside">
+                  <BlurText text={x.aside} />
+                </span>
+              ) : null}
             </div>
           ))
         ) : (

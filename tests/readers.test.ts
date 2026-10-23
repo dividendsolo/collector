@@ -3,6 +3,7 @@ import { clock, renewsText } from "@/lib/server/ai";
 import { perMonth, polarRevenue, stripeRevenue } from "@/lib/server/billing";
 import { daysLeft, parseRdap, parseWhois } from "@/lib/server/domains";
 import { parseEnv } from "@/lib/server/env";
+import { actionsBilled } from "@/lib/server/machines";
 import { hostingOf } from "@/lib/server/projects";
 import { hostFromHeaders } from "@/lib/server/services";
 import { gemsOf, near, stackChips } from "@/lib/server/stack";
@@ -328,5 +329,60 @@ describe("warnings", () => {
     expect(w).toEqual([
       { level: "error", text: "Foreman on m1 started 5 times in 60 s: it is starting itself in a loop" },
     ]);
+  });
+  it("puts the month's Actions bill on the right of the Actions row", () => {
+    const w = warnings({
+      machines: [],
+      github: { actions: { used: 2100, limit: 2000, billed: 0.51 } },
+      cfg: {},
+      services: [],
+      domains: [],
+      ticketsError: null,
+      x: null,
+      ai: [],
+    });
+    expect(w).toEqual([
+      {
+        level: "error",
+        text: "GitHub Actions: 2,100 of 2,000 included minutes used this month (each extra minute is billed)",
+        url: "https://github.com/settings/billing",
+        aside: "$0.51 billed",
+      },
+    ]);
+  });
+  it("says $0.00 billed on the Actions row when nothing is billed yet, and sets no other row's aside", () => {
+    const w = warnings({
+      machines: [],
+      github: { actions: { used: 1900, limit: 2000 } },
+      cfg: {},
+      services: [],
+      domains: [],
+      ticketsError: "board down",
+      x: null,
+      ai: [],
+    });
+    expect(w.map((x) => [x.level, x.aside])).toEqual([
+      ["warn", "$0.00 billed"],
+      ["warn", undefined],
+    ]);
+  });
+});
+
+describe("actionsBilled", () => {
+  it("sums netAmount over the Actions items of a usage report and leaves other products out", () => {
+    expect(
+      actionsBilled({
+        usageItems: [
+          { product: "Actions", sku: "actions_linux", unitType: "minutes", grossQuantity: 1000, netAmount: 8 },
+          { product: "Actions", sku: "actions_macos", unitType: "minutes", grossQuantity: 70, netAmount: 0.51 },
+          { product: "Packages", sku: "packages_storage", unitType: "gigabyte-hours", netAmount: 3.2 },
+        ],
+      }),
+    ).toBe(8.51);
+  });
+  it("is zero for a report with no Actions items, for an empty report, and for no report at all", () => {
+    expect(actionsBilled({ usageItems: [{ product: "Copilot", netAmount: 12 }] })).toBe(0);
+    expect(actionsBilled({ usageItems: [] })).toBe(0);
+    expect(actionsBilled(undefined)).toBe(0);
   });
 });

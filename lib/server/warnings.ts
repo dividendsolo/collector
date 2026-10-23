@@ -11,6 +11,8 @@ export interface Warning {
   level: "error" | "warn";
   text: string;
   url?: string;
+  /** A value for the row's right side (GitHub Actions sets the dollars billed this month). */
+  aside?: string;
 }
 
 export interface WarningInputs {
@@ -100,6 +102,7 @@ export function warnings(w: WarningInputs): Warning[] {
       level: ga.used >= ga.limit ? "error" : "warn",
       text: `GitHub Actions: ${ga.used.toLocaleString()} of ${ga.limit.toLocaleString()} included minutes used this month${ga.used >= ga.limit ? " (each extra minute is billed)" : ""}`,
       url: "https://github.com/settings/billing",
+      aside: `$${(ga.billed ?? 0).toFixed(2)} billed`,
     });
   for (const x of w.services)
     if (x.status === "down") out.push({ level: "error", text: `${x.name} is down: ${x.error} (${x.url})` });
