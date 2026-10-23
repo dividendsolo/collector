@@ -45,7 +45,7 @@ export function parseHold(body: string | null | undefined, url: string): Hold | 
   return after.length || from ? { after, from } : null;
 }
 
-export const TICKET_TYPES = ["bug", "enhancement", "tech-debt"];
+export const TICKET_TYPES = ["bug", "enhancement", "tech-debt", "security"];
 const ISSUE = "number title url body createdAt state repository{name} labels(first:30){nodes{name}}";
 // Page sizes keep one read at 1 GraphQL point: 1 + 55 label lists + 1 + 40 label lists = 97 requests (under 100).
 const ITEMS_PAGE = 55;
