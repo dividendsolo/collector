@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p ${COLLECTOR_PORT:-4000}",
     "build": "next build",
+    "postbuild": "bun scripts/build-stamp.ts",
     "start": "next start -H 127.0.0.1 -p ${COLLECTOR_PORT:-4000}",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
