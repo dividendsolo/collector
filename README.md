@@ -85,8 +85,9 @@ With no `config.json`, Collector shows the Hermes cron jobs of the machine it ru
 To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/Library/LaunchAgents/`, set the
 path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
 Then `launchd/com.example.collector-rebuild.plist` the same way: every five minutes it checks whether the build the
-page serves is behind `main` and, when it is, pulls, runs `bun run build` and restarts the job above, so a merge
-shows up with no hand step. A failed build is logged (`[rebuild] build failed`) and the old build keeps serving.
+page serves is behind `main` and, when it is, pulls, builds into `.next-rebuild` beside the served `.next`, moves
+that build into `.next` only once it succeeded, and restarts the job above, so a merge shows up with no hand step. A
+failed build is logged (`[rebuild] build failed`) and the served `.next` is left as it was.
 `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check.
 
 ## Configure it

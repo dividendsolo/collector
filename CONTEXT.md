@@ -52,13 +52,20 @@ in the checkout every five minutes, and that script:
 - fetches `origin/main` and compares it with the commit the served build was made from. `bun run build` records that
   commit in `.next/collector-build.json` (`scripts/build-stamp.ts`, run as `postbuild`); a build that fails writes
   nothing, so the old stamp stands and the next run tries again;
-- when the two differ: `git pull --ff-only origin main` if the checkout is behind, `bun run build`, then
+- when the two differ: `git pull --ff-only origin main` if the checkout is behind, then `bun run build` with
+  `COLLECTOR_DIST_DIR=.next-rebuild`, so the build goes into `.next-rebuild` beside the served `.next`
+  (`next.config.ts` reads that variable as its `distDir`; `postbuild` stamps the same folder). `next build` empties
+  its own folder before it compiles, so a build in `.next` itself would leave the page with no build for as long as
+  the build ran, and with none at all when it failed. Only once the build succeeded does the script move `.next`
+  aside, rename `.next-rebuild` to `.next`, delete the old one, and run
   `launchctl kickstart -k gui/$(id -u)/com.james.collector` — the restart that makes every open page reload onto the
-  new build;
+  new build. `tsconfig.json` already lists `.next-rebuild/types`, so the build leaves no tracked file changed for the
+  next pull to trip on;
 - is silent when the build is current, and writes one `[rebuild]` line per step it takes otherwise, both streams to
   `~/Library/Logs/collector.log` beside the server's own;
-- refuses a checkout that is not on `main`, and logs and stops on a failed fetch, pull, build or restart: the old
-  build keeps serving rather than a half-built page. It always names what it did in the log, so a main that will not
+- refuses a checkout that is not on `main`, and logs and stops on a failed fetch, pull, build, swap or restart. A
+  failed build deletes `.next-rebuild` and never touches `.next`: its BUILD_ID, its chunks and its stamp stay as they
+  were, and the page keeps serving them. It always names what it did in the log, so a main that will not
   build shows up as one `build failed` line every five minutes, not as a silent old page.
 
 `bun scripts/rebuild-if-stale.ts --check` is the read-only form — no fetch, no pull, no build, no restart — and says
