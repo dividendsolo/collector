@@ -130,6 +130,77 @@ describe("tool_rows", () => {
   });
 });
 
+describe("lab_droid", () => {
+  /** A `ps -axo user=,pid=,etime=,command=` list: one user column in front of the plain list. */
+  const withUser = (...lines: string[]) => lines.join("\n");
+  const owned = (user: string, pid: number, etime: string, command: string) => `${user} ${pid} ${etime} ${command}`;
+
+  it("shows the lab droid's run as one row while a claude process of user lab is going", () => {
+    expect(
+      drive<{ pids: [string, number][]; rows: Run[] }>({
+        fn: "droid",
+        ps: withUser(
+          owned("div", 4242, "01:12", "/usr/bin/timeout 2h claude -p build"),
+          owned("lab", 5001, "07:30", "claude -p 'Today is 2026-10-25, day 1 of 14' --model claude-opus-5-5"),
+        ),
+      }),
+    ).toEqual({
+      pids: [["5001", 450]],
+      rows: [{ repo: "lab", kind: "lab", card: 111, type: "agent", name: "lab-droid", seconds: 450 }],
+    });
+  });
+  it("shows no row when the droid is not running", () => {
+    expect(
+      drive({
+        fn: "droid",
+        ps: withUser(
+          owned("div", 9, "10:00", "/usr/bin/python3 /home/me/code/agent-stack/foreman/foreman.py"),
+          owned("div", 8, "00:10", "/bin/bash -lc /home/me/.local/bin/hermes -p builder chat"),
+        ),
+      }),
+    ).toEqual({ pids: [], rows: [] });
+  });
+  it("leaves another user's claude alone, and a card worktree line", () => {
+    expect(
+      drive<{ rows: Run[] }>({
+        fn: "droid",
+        ps: withUser(
+          owned("div", 7, "00:30", "claude --print hi"),
+          owned("div", 5, "10:00", "/home/me/code/collector/.worktrees/build-21/scripts/run.sh"),
+          owned("lab", 6, "00:20", "/usr/bin/timeout 2h bash /home/lab/app/run.sh"),
+        ),
+      }).rows,
+    ).toEqual([]);
+  });
+  it("counts two processes of one run as that run, the longer one on the row", () => {
+    expect(
+      drive<{ pids: [string, number][]; rows: Run[] }>({
+        fn: "droid",
+        ps: withUser(
+          owned("lab", 100, "00:42", "/usr/bin/node /home/lab/.local/bin/codex.js --print go"),
+          owned("lab", 101, "00:41", "/home/lab/.codex/bin/codex-x86_64-unknown-linux-musl"),
+        ),
+      }),
+    ).toEqual({
+      pids: [
+        ["100", 42],
+        ["101", 41],
+      ],
+      rows: [{ repo: "lab", kind: "lab", card: 111, type: "agent", name: "lab-droid", seconds: 42 }],
+    });
+  });
+});
+
+describe("tool_sessions", () => {
+  it("skips the pids another reader already shows, so the droid's run is one row and not two", () => {
+    const line = proc(987654, "07:30", "claude -p 'day 1 of 14'");
+    expect(drive<Run[]>({ fn: "sessions", ps: ps(line) })).toEqual([
+      { repo: null, kind: "session", card: null, seconds: 450, type: "agent", name: "claude" },
+    ]);
+    expect(drive<Run[]>({ fn: "sessions", ps: ps(line), skip: ["987654"] })).toEqual([]);
+  });
+});
+
 describe("process_cwd", () => {
   // macOS has no /proc, so collect.py asks lsof for the folder. This is real `lsof -a -p <pid> -d cwd -Fn` output,
   // the shape taken from a run on ezio; /proc is hidden for the call so that is the branch under test.

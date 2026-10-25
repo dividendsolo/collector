@@ -127,6 +127,9 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
 - **Coding agents:** a running `claude` or `codex` process, with no setup: the repo from the process's own folder
   (its card too, in a card worktree or on an `agent/<card>` branch), and the model the tool recorded in its session
   files under `~/.claude` or `~/.codex`. Only the model name is taken out of those files; their content is never kept.
+- **The lab droid:** a `claude` process owned by a user of its own (agent-stack#111). It works in its own home
+  rather than a card worktree, so its user is what marks it: it shows as one row, in its own colour and under its
+  own name, linking to that experiment's card, and the coding-agents reader leaves its process to that row.
 - **Models:** the agent's open session in the profile's `state.db` (Hermes), read only.
 - **Revenue:** Stripe charges and Polar orders (paid, less refunds) for total revenue; active subscriptions for MRR.
   Clerk Billing makes plain charges, so a charge named "(annual)" or "(monthly)" counts toward MRR until its term ends.
