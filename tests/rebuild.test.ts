@@ -152,6 +152,15 @@ describe("next.config.ts", () => {
   });
 });
 
+describe("tsconfig.json", () => {
+  it("already names the staging folder's types, so a build there leaves the live checkout's tsconfig as committed", () => {
+    // `next build` adds `<distDir>/types/**/*.ts` to tsconfig's include when it is missing, which would leave the
+    // live checkout with a changed file every run and in the way of the next pull.
+    const include = JSON.parse(fs.readFileSync(path.join(ROOT, "tsconfig.json"), "utf8")).include as string[];
+    expect(include).toEqual(expect.arrayContaining([`${STAGING}/types/**/*.ts`, `${STAGING}/dev/types/**/*.ts`]));
+  });
+});
+
 describe("swapIn", () => {
   it("puts the staged build where the page serves it and deletes the old one", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-swap-"));
