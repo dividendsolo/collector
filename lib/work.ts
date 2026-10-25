@@ -16,6 +16,24 @@ export interface WorkRun {
   seconds: number;
 }
 
+/** The lab droid's own run (agent-stack#111): a headless Claude Code process under its own `lab` user on ezio,
+ * working in its own home rather than a card worktree. Its row carries that marker repo and kind, and the card it
+ * links to is the experiment's own card — not a card of the marker repo. */
+export const LAB = {
+  marker: "lab",
+  repo: "agent-stack",
+  card: 111,
+  url: "https://github.com/dividendsolo/agent-stack/issues/111",
+} as const;
+
+/** Whether a run is the lab droid's own, which the panel draws in its own colour. */
+export const labRun = (r: { repo?: string | null; kind?: string | null }) =>
+  r.repo === LAB.marker && r.kind === LAB.marker;
+
+/** The name a run's row shows: the droid is "Lab droid", every other run the name it reported, or "unknown". */
+export const runName = (r: { name?: string | null; repo?: string | null; kind?: string | null }) =>
+  labRun(r) ? "Lab droid" : r.name || "unknown";
+
 export interface WorkCard {
   repo: string;
   number: number;

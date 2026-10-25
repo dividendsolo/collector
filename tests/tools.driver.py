@@ -51,6 +51,11 @@ def main():
     fn = case["fn"]
     if fn == "rows":
         out = collect.tool_rows(case["ps"], facts_of(case), models_of(case))
+    elif fn == "sessions":
+        out = collect.tool_sessions(case["ps"], skip=set(case.get("skip", [])))
+    elif fn == "droid":
+        pids, rows = collect.lab_droid(case["ps"])
+        out = {"pids": [[pid, secs] for pid, secs in pids], "rows": rows}
     elif fn == "place":
         out = collect.session_place(case.get("cwd"), case.get("branch"), case.get("root"))
     elif fn == "cwd_lsof":

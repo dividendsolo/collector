@@ -43,6 +43,10 @@ REPOS = os.path.expanduser(CONFIG.get("repos_dir") or "~/code")
 # SHA) sits here while this machine cannot pass that repo's checks on its base branch (agent-stack#151).
 FOREMAN = os.path.join(HERMES, "foreman")
 HOST_BROKEN = "host-broken-"
+# The lab droid (agent-stack#111): a headless Claude Code run under its own Linux user on ezio, working in its own
+# home rather than a card worktree. Nothing else in the panel would show it, so its user is what marks it.
+DROID_USER = "lab"
+DROID_CARD = 111
 
 
 def cron_dirs():
@@ -562,6 +566,27 @@ def tool_of(command):
     return None
 
 
+def lab_droid(out):
+    """The lab droid's run in `ps -axo user=,pid=,etime=,command=` output: ([(pid, seconds)], [row]). The droid
+    (agent-stack#111) runs as its own Linux user, in its own home rather than a card worktree, so its user is what
+    marks it; another user's `claude` is left to the worktree and session readers. The pids go back so the session
+    reader can skip the same process, which would otherwise show the one run twice.
+    The row carries repo and kind "lab" — the marker the page draws in the droid's own colour and name."""
+    found = {}
+    for line in (out or "").splitlines():
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            continue
+        user, pid, etime, command = parts
+        if user == DROID_USER and tool_of(command):
+            found[pid] = seconds(etime)
+    if not found:
+        return [], []
+    row = {"repo": "lab", "kind": "lab", "card": DROID_CARD, "type": "agent", "name": "lab-droid",
+           "seconds": max(found.values())}
+    return sorted(found.items()), [row]
+
+
 def worktree_place(path):
     """(repo, card) when a folder sits in a card worktree (<repo>/.worktrees/<something>-<card>), else None."""
     m = re.search(r"/([\w.-]+)/\.worktrees/[^/]*-(\d+)(?:/|$)", path or "")
@@ -678,14 +703,17 @@ def tool_model(tool, cwd, home=HOME):
     return claude_model(cwd, home) if tool == "claude" else codex_model(cwd, home)
 
 
-def tool_rows(out, facts, models=None):
+def tool_rows(out, facts, models=None, skip=()):
     """One row per running Claude Code or Codex session: the tool, the repo and card its folder is a card worktree
     for, and how long it has run. `facts` maps a pid to (folder, branch, checkout top level) and `models` maps
     (tool, folder) to what the tool's session files record. One session per folder: Codex's npm shim and the binary
-    under it are two processes of one run, so the longest-lived process is the one that shows."""
+    under it are two processes of one run, so the longest-lived process is the one that shows. `skip` holds the pids
+    of processes another reader already shows — the lab droid's run, which has its own row."""
     models = models or {}
     found = {}
     for pid, etime, command in process_lines(out):
+        if pid in skip:
+            continue
         tool = tool_of(command)
         if not tool:
             continue
@@ -699,10 +727,13 @@ def tool_rows(out, facts, models=None):
     return [found[k] for k in sorted(found)]
 
 
-def tool_sessions(out):
-    """Every running Claude Code or Codex session on this machine, with the model its own session files record."""
+def tool_sessions(out, skip=()):
+    """Every running Claude Code or Codex session on this machine, with the model its own session files record.
+    `skip` holds the pids of processes another reader already shows — the lab droid's run, which has its own row."""
     facts, models = {}, {}
     for pid, _, command in process_lines(out):
+        if pid in skip:
+            continue
         tool = tool_of(command)
         if not tool:
             continue
@@ -711,7 +742,7 @@ def tool_sessions(out):
         facts[pid] = (cwd, branch, root)
         if cwd and (tool, cwd) not in models:
             models[(tool, cwd)] = tool_model(tool, cwd)
-    return tool_rows(out, facts, models)
+    return tool_rows(out, facts, models, skip)
 
 
 def verify_runs():
@@ -756,9 +787,12 @@ def agent_model(profile, worktree):
 
 def running_agents():
     """One row per agent run: a Hermes agent working in a card worktree (<repo>/.worktrees/<build|review>-<card>),
-    and a running Claude Code or Codex session, with its own folder, card and model.
+    a running Claude Code or Codex session, with its own folder, card and model, and the lab droid on its own user.
     While a verify run is going on for the card's commit, the row shows that verify and its own time."""
     out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
+    # The droid is not this user's worktree, so it is read on its own with its user in front.
+    droid_out = subprocess.run(["ps", "-axo", "user=,pid=,etime=,command="], capture_output=True, text=True).stdout
+    droid_pids, droid = lab_droid(droid_out)
     found = {}
     for _, etime, line in process_lines(out):
         m = re.search(r"/([\w.-]+)/\.worktrees/(build|review)-(\d+)", line)
@@ -801,7 +835,7 @@ def running_agents():
             row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script", "name": WORK_SCRIPT})
             # The newest verify for the card wins; the sort puts it last.
             row.update(kind="verify", feature=feature, seconds=secs)
-    return [found[k] for k in sorted(found)] + tool_sessions(out)
+    return [found[k] for k in sorted(found)] + tool_sessions(out, skip={pid for pid, _ in droid_pids}) + droid
 
 
 def work_steps():

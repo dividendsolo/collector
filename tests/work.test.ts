@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Diff, keepClosed, parseHold, type Row } from "@/lib/server/board";
-import { currentWork, holdText, type WorkCard, type WorkRun } from "@/lib/work";
+import { currentWork, holdText, LAB, labRun, runName, type WorkCard, type WorkRun } from "@/lib/work";
 
 const WAITING = ["needs-triage", "needs-info", "ready-for-human", "needs-manual-qa"];
 const card = (repo: string, number: number, lane: string, extra: Partial<WorkCard> = {}): WorkCard => ({
@@ -64,6 +64,36 @@ describe("currentWork", () => {
     const closed = [card("app", 5, "code-review", { closed_at: 1000 })];
     expect(currentWork([], closed, [], WAITING, 1000 + 3599).map((r) => r.state)).toEqual(["closed"]);
     expect(currentWork([], closed, [], WAITING, 1000 + 3601)).toEqual([]);
+  });
+});
+
+describe("labRun", () => {
+  const droid: WorkRun = {
+    type: "agent",
+    name: "lab-droid",
+    kind: "lab",
+    repo: "lab",
+    card: 111,
+    machine: "m1",
+    seconds: 450,
+  };
+  it("is the lab droid's own run, and no other run, whatever the row says", () => {
+    expect(labRun(droid)).toBe(true);
+    expect(runName(droid)).toBe("Lab droid");
+    expect(labRun({ repo: "lab", kind: "build" })).toBe(false);
+    expect(labRun({ repo: "collector", kind: "lab" })).toBe(false);
+  });
+  it("links to the experiment's own card, which is not a card of its marker repo", () => {
+    expect(LAB).toEqual({
+      marker: "lab",
+      repo: "agent-stack",
+      card: 111,
+      url: "https://github.com/dividendsolo/agent-stack/issues/111",
+    });
+  });
+  it("leaves every other run its own name, and an unnamed one unknown", () => {
+    expect(runName({ name: "claude", repo: "collector", kind: "session" })).toBe("claude");
+    expect(runName({ name: null, repo: "collector", kind: "build" })).toBe("unknown");
   });
 });
 

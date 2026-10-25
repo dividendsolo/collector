@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { doing, duration } from "@/lib/format";
-import { currentWork, holdText, type WorkRow, type WorkRun } from "@/lib/work";
+import { currentWork, holdText, LAB, labRun, runName, type WorkRow, type WorkRun } from "@/lib/work";
 import { useLive } from "./data";
 import { Dash, Icon, PanelHead, Pill, SkelRows } from "./ui";
 
@@ -31,7 +31,8 @@ export const ModelCell = ({ model, provider }: { model?: string; provider?: stri
     <Dash />
   );
 
-/** Running now: which agent or script works on which card, longest first. A build is amber after 30 minutes, red after an hour. */
+/** Running now: which agent or script works on which card, longest first. A build is amber after 30 minutes, red
+ * after an hour. The lab droid's own run has its own colour and its own card. */
 export function RunningNow() {
   const running = useRunning();
   return (
@@ -57,41 +58,56 @@ export function RunningNow() {
             {!running ? (
               <SkelRows n={2} cols={8} />
             ) : running.length ? (
-              running.map((r, i) => (
-                <tr key={`${r.machine}-${r.repo}-${r.card}-${i}`}>
-                  <td>
-                    <span className={`pill ${r.type}`}>
-                      <Icon name={r.type === "agent" ? "bot" : "term"} />
-                      {r.type}
-                    </span>
-                  </td>
-                  <td className="mono">{r.name || "unknown"}</td>
-                  <td>
-                    <ModelCell model={r.model} provider={r.provider} />
-                  </td>
-                  <td>
-                    {doing(r.kind)}
-                    {r.feature ? (
-                      <>
-                        {" "}
-                        <span className="sub">{r.feature}</span>
-                      </>
-                    ) : null}
-                  </td>
-                  <td>{r.machine}</td>
-                  <td className="mono">
-                    {r.card == null ? (
-                      <Dash />
-                    ) : (
-                      <span className="card-tip" tabIndex={0} data-repo={r.repo} data-card={r.card}>
-                        #{r.card}
+              running.map((r, i) => {
+                const lab = labRun(r);
+                return (
+                  <tr key={`${r.machine}-${r.repo}-${r.card}-${i}`}>
+                    <td>
+                      <span className={`pill ${lab ? LAB.marker : r.type}`}>
+                        <Icon name={r.type === "agent" ? "bot" : "term"} />
+                        {r.type}
                       </span>
-                    )}
-                  </td>
-                  <td>{r.repo ? r.repo : <span className="sub">no repo</span>}</td>
-                  <RunTime r={r} />
-                </tr>
-              ))
+                    </td>
+                    <td className={lab ? "mono lab" : "mono"}>{runName(r)}</td>
+                    <td>
+                      <ModelCell model={r.model} provider={r.provider} />
+                    </td>
+                    <td>
+                      {doing(r.kind)}
+                      {r.feature ? (
+                        <>
+                          {" "}
+                          <span className="sub">{r.feature}</span>
+                        </>
+                      ) : null}
+                    </td>
+                    <td>{r.machine}</td>
+                    <td className="mono">
+                      {r.card == null ? (
+                        <Dash />
+                      ) : lab ? (
+                        <a
+                          className="plain card-tip"
+                          href={LAB.url}
+                          target="_blank"
+                          rel="noopener"
+                          tabIndex={0}
+                          data-repo={LAB.repo}
+                          data-card={r.card}
+                        >
+                          #{r.card}
+                        </a>
+                      ) : (
+                        <span className="card-tip" tabIndex={0} data-repo={r.repo} data-card={r.card}>
+                          #{r.card}
+                        </span>
+                      )}
+                    </td>
+                    <td>{r.repo ? r.repo : <span className="sub">no repo</span>}</td>
+                    <RunTime r={r} />
+                  </tr>
+                );
+              })
             ) : (
               <tr>
                 <td colSpan={8} className="sub">
@@ -115,7 +131,8 @@ const LANE_PILL: Record<string, string> = {
   "changes-requested": "warning",
 };
 
-/** The age cell of a live run: amber after 30 minutes of a build, red after an hour. */
+/** The age cell of a live run: amber after 30 minutes of a build, red after an hour. A build only: a review, a
+ * verify and the lab droid's runs (up to two hours by design) never turn amber or red. */
 const RunTime = ({ r }: { r: Run }) => (
   <td
     className={`num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}`}
@@ -129,7 +146,7 @@ function StateCell({ row }: { row: WorkRow }) {
   return (
     <td>
       {row.run ? (
-        <span className={`pill ${row.run.type}`}>
+        <span className={`pill ${labRun(row.run) ? LAB.marker : row.run.type}`}>
           <Icon name={row.run.type === "agent" ? "bot" : "term"} />
           {row.run.type}
         </span>
@@ -197,12 +214,13 @@ export function CurrentWork() {
               shown.map((row) => {
                 const r = row.run;
                 const c = row.card;
+                const lab = r ? labRun(r) : false;
                 const repo = c?.repo ?? r?.repo;
                 const num = c?.number ?? r?.card;
                 return (
                   <tr key={row.key} className={row.state === "closed" ? "done" : ""}>
                     <StateCell row={row} />
-                    <td className="mono">{r ? r.name || "unknown" : <Dash />}</td>
+                    <td className={lab ? "mono lab" : "mono"}>{r ? runName(r) : <Dash />}</td>
                     <td>{r ? <ModelCell model={r.model} provider={r.provider} /> : <Dash />}</td>
                     <td>
                       {r ? (
@@ -226,11 +244,11 @@ export function CurrentWork() {
                       ) : (
                         <a
                           className="plain card-tip"
-                          href={c?.url}
+                          href={c?.url ?? (lab ? LAB.url : undefined)}
                           target="_blank"
                           rel="noopener"
                           tabIndex={0}
-                          data-repo={repo}
+                          data-repo={c?.repo ?? (lab ? LAB.repo : repo)}
                           data-card={num}
                         >
                           #{num}

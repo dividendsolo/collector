@@ -57,6 +57,10 @@
     --green: oklch(0.78 0.15 150);
     --green-bg: oklch(0.78 0.15 150 / 0.1);
     --green-line: oklch(0.78 0.15 150 / 0.3);
+    /* The lab droid's own colour: the one colour in the palette no other row uses. */
+    --violet: oklch(0.78 0.16 305);
+    --violet-bg: oklch(0.78 0.16 305 / 0.1);
+    --violet-line: oklch(0.78 0.16 305 / 0.3);
     --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
@@ -90,6 +94,10 @@
     --green: oklch(0.55 0.15 150);
     --green-bg: oklch(0.55 0.15 150 / 0.08);
     --green-line: oklch(0.55 0.15 150 / 0.3);
+    /* The droid's colour, dark enough to read as text on the light panels. */
+    --violet: oklch(0.48 0.19 305);
+    --violet-bg: oklch(0.48 0.19 305 / 0.08);
+    --violet-line: oklch(0.48 0.19 305 / 0.3);
     --topbar: oklch(0.985 0.002 var(--hue) / 0.85);
     color-scheme: light;
   }
@@ -1148,6 +1156,15 @@
     color: var(--blue-2);
     background: var(--blue-bg);
     border-color: var(--blue-line);
+  }
+  /* The lab droid's own row: its pill and its name in the one colour no other row uses (agent-stack#111). */
+  .pill.lab,
+  .lab {
+    color: var(--violet);
+  }
+  .pill.lab {
+    background: var(--violet-bg);
+    border-color: var(--violet-line);
   }
   .dot {
     width: 6px;
