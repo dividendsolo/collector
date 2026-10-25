@@ -84,6 +84,10 @@ With no `config.json`, Collector shows the Hermes cron jobs of the machine it ru
 
 To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/Library/LaunchAgents/`, set the
 path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
+Then `launchd/com.example.collector-rebuild.plist` the same way: every five minutes it checks whether the build the
+page serves is behind `main` and, when it is, pulls, runs `bun run build` and restarts the job above, so a merge
+shows up with no hand step. A failed build is logged (`[rebuild] build failed`) and the old build keeps serving.
+`bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check.
 
 ## Configure it
 
@@ -127,6 +131,9 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
 - **Coding agents:** a running `claude` or `codex` process, with no setup: the repo from the process's own folder
   (its card too, in a card worktree or on an `agent/<card>` branch), and the model the tool recorded in its session
   files under `~/.claude` or `~/.codex`. Only the model name is taken out of those files; their content is never kept.
+  The row names the tool as itself — Claude Code, Codex, never the binary — its Machine reads `local`, since the
+  session runs where the page is served, and its Running for reads `interactive`: it waits on you, so a length there
+  would read as a stuck run (card #29).
 - **The lab droid:** a `claude` process owned by a user of its own (agent-stack#111). It works in its own home
   rather than a card worktree, so its user is what marks it: it shows as one row, in its own colour and under its
   own name, linking to that experiment's card, and the coding-agents reader leaves its process to that row.

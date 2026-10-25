@@ -33,7 +33,48 @@ launchctl kickstart -k gui/$(id -u)/com.james.collector
 - An open page needs no manual refresh. Every page polls `/api/version` (the `.next` build id) every two seconds
   and reloads itself when it moves, which is what a build plus a restart makes it do.
 
-Agents do not run the kickstart: it restarts James's live Collector. Restarting it is his.
+That pair is what the job below runs after a merge. By hand it is James's: an agent builds in its own worktree and
+leaves port 4000 alone.
+
+## The live Collector rebuilds itself after a merge (card #29)
+
+On 2026-10-25 the page served a build from two days before, while `collect.py` — which runs from source on every
+request — sent it the Claude Code and Codex session rows #24 had added, and the old page drew them wrong. The job
+that keeps it current is `com.james.collector-rebuild`
+(`~/Library/LaunchAgents/com.james.collector-rebuild.plist`, `StartInterval` 300, no `KeepAlive`). It runs
+
+```bash
+bun scripts/rebuild-if-stale.ts
+```
+
+in the checkout every five minutes, and that script:
+
+- fetches `origin/main` and compares it with the commit the served build was made from. `bun run build` records that
+  commit in `.next/collector-build.json` (`scripts/build-stamp.ts`, run as `postbuild`); a build that fails writes
+  nothing, so the old stamp stands and the next run tries again;
+- when the two differ: `git pull --ff-only origin main` if the checkout is behind, `bun run build`, then
+  `launchctl kickstart -k gui/$(id -u)/com.james.collector` — the restart that makes every open page reload onto the
+  new build;
+- is silent when the build is current, and writes one `[rebuild]` line per step it takes otherwise, both streams to
+  `~/Library/Logs/collector.log` beside the server's own;
+- refuses a checkout that is not on `main`, and logs and stops on a failed fetch, pull, build or restart: the old
+  build keeps serving rather than a half-built page. It always names what it did in the log, so a main that will not
+  build shows up as one `build failed` line every five minutes, not as a silent old page.
+
+`bun scripts/rebuild-if-stale.ts --check` is the read-only form — no fetch, no pull, no build, no restart — and says
+what a run would do from the last fetch.
+
+Install it once, after this card's code has landed in the checkout:
+
+```bash
+cp launchd/com.example.collector-rebuild.plist ~/Library/LaunchAgents/com.james.collector-rebuild.plist
+# set the two paths to /Users/james/.bun/bin/bun and /Users/james/code/collector, the label to com.james.collector,
+# and both log paths to /Users/james/Library/Logs/collector.log, the log the serving job already writes
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.james.collector-rebuild.plist
+```
+
+`RunAtLoad` means bootstrapping runs it at once, so the first build it finds stale — the one serving today, which
+has no stamp — is rebuilt and the page restarted straight away.
 
 To work on the code without touching the live one, use `bun dev` for hot reload on another port, since the live
 Collector holds 4000:
