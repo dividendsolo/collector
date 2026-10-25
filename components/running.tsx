@@ -154,6 +154,7 @@ const RunTime = ({ r }: { r: Run }) => (
 
 function StateCell({ row }: { row: WorkRow }) {
   const hold = row.card?.lane === "scheduled" ? row.card.hold : null;
+  const deck = row.onDeck ?? [];
   return (
     <td>
       {row.run ? (
@@ -167,12 +168,17 @@ function StateCell({ row }: { row: WorkRow }) {
         </Pill>
       )}
       {hold?.after.length ? (
-        <span className="sub">
+        <span className={`sub${deck.length ? " on-deck" : ""}`}>
           {" after "}
           {hold.after.map((a, i) => (
             <span key={a.url}>
               {i ? ", " : ""}
-              <a className="plain" href={a.url} target="_blank" rel="noopener">
+              <a
+                className={`plain${deck.includes(a.ref) ? " moving" : ""}`}
+                href={a.url}
+                target="_blank"
+                rel="noopener"
+              >
                 {a.ref}
               </a>
             </span>
@@ -181,13 +187,21 @@ function StateCell({ row }: { row: WorkRow }) {
       ) : hold ? (
         <span className="sub"> {holdText(hold)}</span>
       ) : null}
+      {deck.length ? (
+        <>
+          {" "}
+          <Pill cls="deck" dot={false}>
+            on deck
+          </Pill>
+        </>
+      ) : null}
     </td>
   );
 }
 
 /** Current work: every open card that is not waiting on James, with the live agent or script on it when one runs,
  * and the cards closed in the last hour. Live runs first, then review and merge, closed, ready-for-agent, and
- * scheduled (ten, then "Show all"). */
+ * scheduled (the cards whose blocker is being worked on first, then ten, then "Show all"). */
 export function CurrentWork() {
   const { state, board } = useLive();
   const [all, setAll] = useState(false);
