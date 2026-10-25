@@ -792,33 +792,163 @@ def agent_model(profile, worktree):
     return {"model": model, "provider": provider}
 
 
-def running_agents():
-    """One row per agent run: a Hermes agent working in a card worktree (<repo>/.worktrees/<build|review>-<card>),
-    a running Claude Code or Codex session, with its own folder, card and model, and the lab droid on its own user.
-    While a verify run is going on for the card's commit, the row shows that verify and its own time."""
-    out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
-    # The droid is not this user's worktree, so it is read on its own with its user in front.
-    droid_out = subprocess.run(["ps", "-axo", "user=,pid=,etime=,command="], capture_output=True, text=True).stdout
-    droid_pids, droid = lab_droid(droid_out)
+# Programs whose own argument is the thing they run: `bun start`, `next start`, `node next-server`, `python3 serve.py`.
+RUNNERS = {"bun", "node", "deno", "next", "ruby", "npx", "pnpm", "yarn"}
+# Sub-commands that only name the program again: `bun run dev` runs `dev`.
+SUBCOMMANDS = {"run", "exec", "x"}
+# Wrappers that stand in front of the program: `env A=1 bun start`, `timeout 2h bun start`, `script -c bun start`.
+WRAPPERS = {"env", "sudo", "nice", "ionice", "nohup", "setsid", "stdbuf", "command", "exec", "script"}
+# A shell holding the command as its own argument (`bash -lc 'cd <worktree> && bun start'`): the program is inside it.
+SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+
+
+def program_name(command, depth=0):
+    """The program a process runs, as a person would name it: `bun start`, `next-server`, `node next-server`. Wrappers
+    and flags are dropped, a shell's own argument is read for the program inside it, and an interpreter or runner is
+    named with the script under it. The ports it listens on are their own cell, so they are not here."""
+    text = re.sub(r"^\s*cd\s+\S+\s*(?:&&|;|\|\|)\s*", "", command or "")
+    # In a chain, the command still running is the last one: `cd <worktree> && bun start`.
+    tokens = text.split("&&")[-1].split()
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token.startswith("-") or "=" in token or token in WRAPPERS:
+            i += 1
+        elif os.path.basename(token) == "timeout":
+            i += 2  # `timeout 2h <program>`: the duration is not the program
+        else:
+            break
+    if i >= len(tokens):
+        return ""
+    name = os.path.basename(tokens[i])
+    if name in SHELLS:
+        flag = next((j for j in range(i + 1, len(tokens)) if tokens[j].startswith("-") and "c" in tokens[j]), None)
+        if flag is None or flag + 1 >= len(tokens) or depth > 2:
+            return name
+        return program_name(" ".join(tokens[flag + 1:]), depth + 1)
+    if name in RUNNERS or re.fullmatch(r"python[\d.]*", name):
+        rest = tokens[i + 1: i + 3]
+        if name.startswith("python") and rest and rest[0] == "-m":  # `python3 -m http.server` runs http.server
+            rest = tokens[i + 2: i + 3]
+        if rest and rest[0] in SUBCOMMANDS:
+            rest = rest[1:]
+        if rest and not rest[0].startswith("-"):
+            name = f"{name} {os.path.basename(rest[0])}"
+    return name
+
+
+def listen_ports():
+    """Every TCP port a process of this machine listens on now, as pid -> [ports]. `ss` on Linux, `lsof` elsewhere (a
+    Mac has no ss); {} when the machine has neither. One read-only call for the whole machine."""
+    if platform.system() == "Linux":
+        ss = read_command(["ss", "-ltnpH"])
+        ports = {}
+        for line in (ss or "").splitlines():
+            # LISTEN 0 511 127.0.0.1:4123 0.0.0.0:* users:(("bun",pid=1701,fd=22))
+            fields, owner = line.split(), re.search(r"pid=(\d+)", line)
+            port = fields[3].rsplit(":", 1)[-1] if len(fields) > 3 else ""
+            if owner and port.isdigit():
+                ports.setdefault(owner.group(1), []).append(int(port))
+        return ports
+    lsof = read_command(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn"])
+    ports, pid = {}, None
+    for line in (lsof or "").splitlines():
+        # lsof prints `p<pid>` once, then one `n<address>` line per socket that pid listens on.
+        if re.match(r"p\d+$", line):
+            pid = line[1:]
+            continue
+        port = line[1:].rsplit(":", 1)[-1] if line.startswith("n") else ""
+        if pid and port.isdigit():
+            ports.setdefault(pid, []).append(int(port))
+    return ports
+
+
+def child_pids():
+    """pid -> the pids started under it, from `ps -axo pid=,ppid=`. A leftover often holds no socket itself: the
+    server it started listens (a shell runs `bun start`, and the server under that holds the port)."""
+    children = {}
+    for line in (read_command(["ps", "-axo", "pid=,ppid="]) or "").splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0] != fields[1]:
+            children.setdefault(fields[1], []).append(fields[0])
+    return children
+
+
+def descendants(pids, children, depth=3):
+    """`pids` and everything started under them, a few levels deep: `script` runs a shell, the shell runs `bun start`,
+    and the server under that holds the port."""
+    seen, level = list(pids), list(pids)
+    while level and depth:
+        level = [kid for pid in level for kid in children.get(pid, []) if kid not in seen]
+        seen.extend(level)
+        depth -= 1
+    return seen
+
+
+def worktree_rows(out, steps=(), verifying=(), ports=None, children=None):
+    """One row per card worktree with a process in it, from `ps -axo pid=,etime=,command=` output: a Hermes agent
+    working in a worktree is its own row, named after its profile with the model that profile records. A worktree the
+    work script says it is on now — a live step file in `steps`, or a key in `verifying`, a worktree a verify run
+    matched — gets no row here: `running_agents` writes that row from the step. Anything else is a leftover, a process
+    nothing is working for: its own row, named after the program it runs and the port it listens on (`ports`, with
+    `children` to reach the process that holds the socket), never after the work script (James, 2026-10-25: "Foreman
+    should never show building")."""
+    ports, children = ports or {}, children or {}
+    stepped = {(st.get("repo"), st.get("card")) for st in steps}
     found = {}
-    for _, etime, line in process_lines(out):
+    for pid, etime, line in process_lines(out):
         m = re.search(r"/([\w.-]+)/\.worktrees/(build|review)-(\d+)", line)
-        path = re.search(r"(/[^\s'\"`]*/\.worktrees/(?:build|review)-\d+)", line)
         if not m:
             continue
         key = (m.group(1), m.group(2), int(m.group(3)))
-        row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "seconds": 0, "type": "script", "name": None})
-        row["seconds"] = max(row["seconds"], seconds(etime))
+        row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script",
+                                     "name": None, "seconds": -1, "command": "", "pids": []})
+        row["pids"].append(pid)
+        # The longest-lived process of the worktree names its row: it is the one that started the run there.
+        if seconds(etime) >= row["seconds"]:
+            row.update(seconds=seconds(etime), command=line)
         # `hermes -p <name> chat`, or the same argv inside a Python launcher: '-p', '<name>', 'chat'
         profile = re.search(r"(?:^|[\s'\"])-p'?,?\s+'?([\w.-]+)'?,?\s+'?chat\b", line)
         if profile:
             row.update(type="agent", name=profile.group(1))
+            path = re.search(r"(/[^\s'\"`]*/\.worktrees/(?:build|review)-\d+)", line)
             if path and "model" not in row:
                 row.update(agent_model(profile.group(1), path.group(1)) or {})
-    for row in found.values():
-        # No Hermes agent in the worktree: the work script runs its own step there (the verify gate).
-        row["name"] = row["name"] or WORK_SCRIPT
-    for st in work_steps():
+    rows = []
+    for key, row in found.items():
+        command, pids = row.pop("command", ""), row.pop("pids", [])
+        if row["type"] == "agent":
+            rows.append(row)  # the agent's own row, whether or not the work script has a step file for the card
+            continue
+        if (key[0], key[2]) in stepped or key in verifying:
+            continue  # the work script's own step: running_agents writes that row from the step
+        # A process nothing is working for: not an agent, no step of the work script's own on the card, no verify run
+        # for its commit. It is never named after the work script (collector#32).
+        row.update(type="leftover", kind="leftover", name=program_name(command))
+        # The socket belongs to the process that listens, usually a child of the one the row is named after.
+        listening = sorted({port for pid in descendants(pids, children) for port in ports.get(pid, [])})
+        if listening:
+            row["port"] = listening[0]
+        rows.append(row)
+    return rows
+
+
+def running_agents():
+    """One row per agent run: a Hermes agent working in a card worktree (<repo>/.worktrees/<build|review>-<card>),
+    a running Claude Code or Codex session, with its own folder, card and model, the work script on the cards it says
+    it is on now, the process left behind in a worktree nothing works on, and the lab droid on its own user. While a
+    verify run is going on for the card's commit, the row shows that verify and its own time."""
+    out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
+    # The droid is not this user's worktree, so it is read on its own with its user in front.
+    droid_out = subprocess.run(["ps", "-axo", "user=,pid=,etime=,command="], capture_output=True, text=True).stdout
+    droid_pids, droid = lab_droid(droid_out)
+    steps, verifies = work_steps(), verify_runs()
+    heads = verify_heads() if verifies else {}
+    found = {}
+    for row in worktree_rows(out, steps=steps, verifying={heads[c] for c, _, _ in verifies if c in heads},
+                             ports=listen_ports(), children=child_pids()):
+        found[(row["repo"], row["kind"], row["card"])] = row
+    for st in steps:
         rows = [k for k in found if (k[0], k[2]) == (st["repo"], st["card"])]
         if any(found[k]["type"] == "agent" for k in rows):
             continue  # the agent's own row says what happens
@@ -827,22 +957,26 @@ def running_agents():
         found[(st["repo"], st["step"], st["card"])] = {
             "repo": st["repo"], "kind": st["step"], "card": st["card"], "type": "script", "name": WORK_SCRIPT,
             "seconds": max(0, int(time.time()) - st["since"])}
-    verifies = verify_runs()
-    if verifies:
-        heads = {}
-        for path in glob.glob(os.path.join(REPOS, "*/.worktrees/*-*")):
-            m = re.search(r"/([\w.-]+)/\.worktrees/(build|review)-(\d+)$", path)
-            head = subprocess.run(["git", "-C", path, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-            if m and head:
-                heads[head] = (m.group(1), m.group(2), int(m.group(3)))
-        for commit, feature, secs in sorted(verifies, key=lambda v: v[2]):
-            key = heads.get(commit)
-            if not key:
-                continue
-            row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script", "name": WORK_SCRIPT})
-            # The newest verify for the card wins; the sort puts it last.
-            row.update(kind="verify", feature=feature, seconds=secs)
+    for commit, feature, secs in sorted(verifies, key=lambda v: v[2]):
+        key = heads.get(commit)
+        if not key:
+            continue
+        row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script", "name": WORK_SCRIPT})
+        # The newest verify for the card wins; the sort puts it last.
+        row.update(kind="verify", feature=feature, seconds=secs)
     return [found[k] for k in sorted(found)] + tool_sessions(out, skip={pid for pid, _ in droid_pids}) + droid
+
+
+def verify_heads():
+    """HEAD commit of every card worktree -> (repo, build|review, card): what a verify run's own commit is matched
+    against, so the row shows the card's verify."""
+    heads = {}
+    for path in glob.glob(os.path.join(REPOS, "*/.worktrees/*-*")):
+        m = re.search(r"/([\w.-]+)/\.worktrees/(build|review)-(\d+)$", path)
+        head = subprocess.run(["git", "-C", path, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        if m and head:
+            heads[head] = (m.group(1), m.group(2), int(m.group(3)))
+    return heads
 
 
 def work_steps():

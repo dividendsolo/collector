@@ -184,6 +184,23 @@ describe("labRun", () => {
     expect(runName({ name: "builder", repo: "collector", kind: "build" })).toBe("builder");
     expect(runName({ name: null, repo: "collector", kind: "build" })).toBe("unknown");
   });
+  /** James, 2026-10-25 (card #32): a `bun start` left in a card's worktree showed as the foreman working that card.
+   * Its row is the process itself — the program and the port it listens on — never the work script's name. */
+  it("names a leftover process after its program and its port, never the work script", () => {
+    const leftover: WorkRun = {
+      type: "leftover",
+      name: "bun start",
+      kind: "leftover",
+      repo: "collector",
+      card: 25,
+      machine: "ezio",
+      seconds: 12420,
+      port: 4123,
+    };
+    expect(runName(leftover)).toBe("bun start :4123");
+    expect(runName({ name: "next-server", repo: "collector", kind: "leftover" })).toBe("next-server");
+    expect(runName(leftover)).not.toContain("foreman");
+  });
 });
 
 describe("a session row", () => {
