@@ -1250,6 +1250,20 @@
   .pill.ok {
     color: var(--text);
   }
+  /* A scheduled card whose blocker is being worked on right now is on deck: the "after" line and the ref that is
+     moving take the accent, the refs that are not stay muted, and one pill names it (collector#28). */
+  .sub.on-deck,
+  .pill.deck {
+    color: var(--blue);
+  }
+  .sub.on-deck a.plain.moving {
+    color: var(--blue);
+    font-weight: 500;
+  }
+  .pill.deck {
+    background: var(--blue-bg);
+    border-color: var(--blue-line);
+  }
 
   .seg {
     display: inline-flex;

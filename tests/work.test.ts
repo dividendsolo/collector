@@ -22,6 +22,14 @@ const run = (repo: string, n: number, seconds: number): WorkRun => ({
   repo,
   seconds,
 });
+/** A card's `Waiting on:` line: parseHold's refs, `#9` in the card's own repo and `web#7` in another. */
+const hold = (refs: string[]): WorkCard["hold"] => ({
+  after: refs.map((ref) => {
+    const [repo, number] = ref.startsWith("#") ? ["app", ref.slice(1)] : (ref.split("#") as [string, string]);
+    return { ref, url: `https://github.com/acme/${repo}/issues/${number}` };
+  }),
+  from: null,
+});
 
 describe("currentWork", () => {
   it("puts every open card not waiting on James on exactly one row", () => {
@@ -64,6 +72,63 @@ describe("currentWork", () => {
     const closed = [card("app", 5, "code-review", { closed_at: 1000 })];
     expect(currentWork([], closed, [], WAITING, 1000 + 3599).map((r) => r.state)).toEqual(["closed"]);
     expect(currentWork([], closed, [], WAITING, 1000 + 3601)).toEqual([]);
+  });
+  it("puts a scheduled card whose blocker is being worked on first in the group, flagged on deck", () => {
+    const cards = [
+      card("app", 2, "scheduled", { priority: "P0" }),
+      card("app", 1, "scheduled", { hold: hold(["#9"]) }),
+      card("app", 9, "agent-in-progress"),
+    ];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.map((r) => r.card?.number)).toEqual([9, 1, 2]);
+    expect(rows[1].onDeck).toEqual(["#9"]);
+    expect(rows[2].onDeck).toBeUndefined();
+  });
+  it("leaves a scheduled card off deck when its blocker is not being worked on", () => {
+    const cards = [
+      card("app", 2, "scheduled", { priority: "P0" }),
+      card("app", 1, "scheduled", { hold: hold(["#9"]) }),
+      card("app", 9, "ready-for-agent"),
+    ];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.filter((r) => r.state === "scheduled").map((r) => r.card?.number)).toEqual([2, 1]);
+    expect(rows.every((r) => r.onDeck === undefined)).toBe(true);
+  });
+  it("counts a live run, a review lane, a session, and another repo's card as a moving blocker", () => {
+    const cards = [
+      card("app", 1, "scheduled", { hold: hold(["#91"]) }),
+      card("app", 2, "scheduled", { hold: hold(["#92"]) }),
+      card("app", 3, "scheduled", { hold: hold(["#93"]) }),
+      card("app", 4, "scheduled", { hold: hold(["web#94"]) }),
+      card("app", 5, "scheduled", { hold: hold(["#95"]) }),
+      card("app", 6, "scheduled", { hold: hold(["#96"]) }),
+      card("app", 91, "code-review"),
+      card("app", 92, "scheduled"),
+      card("app", 93, "scheduled", { labels: ["local"] }),
+      card("web", 94, "merging"),
+      card("app", 96, "scheduled"),
+    ];
+    const closed = [card("app", 95, "code-review", { closed_at: 1000 })];
+    const rows = currentWork(cards, closed, [run("app", 92, 60)], WAITING, 1000);
+    const onDeck = rows
+      .filter((r) => r.onDeck)
+      .sort((a, b) => (a.card?.number ?? 0) - (b.card?.number ?? 0))
+      .map((r) => [r.card?.number, r.onDeck]);
+    expect(onDeck).toEqual([
+      [1, ["#91"]],
+      [2, ["#92"]],
+      [3, ["#93"]],
+      [4, ["web#94"]],
+    ]);
+    expect(rows.filter((r) => [5, 6].includes(r.card?.number ?? 0)).every((r) => !r.onDeck)).toBe(true);
+  });
+  it("marks only the ref being worked on when a card waits on several", () => {
+    const cards = [
+      card("app", 1, "scheduled", { hold: hold(["#9", "web#7"]) }),
+      card("app", 9, "scheduled"),
+      card("web", 7, "agent-in-progress"),
+    ];
+    expect(currentWork(cards, [], [], WAITING, 0).find((r) => r.card?.number === 1)?.onDeck).toEqual(["web#7"]);
   });
 });
 
