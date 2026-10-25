@@ -8,7 +8,7 @@
  * The stamp is what `scripts/rebuild-if-stale.ts` reads to know whether the page serves the commit `main` is at.
  * Stamping is bookkeeping: a folder with no git (a source tarball) says so and still builds.
  */
-import { runGit, short, writeStamp } from "../lib/rebuild";
+import { runGit, SERVED, short, writeStamp } from "../lib/rebuild";
 
 const dir = process.cwd();
 const head = runGit(dir, "rev-parse", "HEAD");
@@ -17,5 +17,7 @@ if (!head.ok) {
   process.exit(0);
 }
 
-const stamp = writeStamp(dir, head.out);
-console.log(`[build-stamp] ${dir}: built from ${short(stamp.commit)} at ${stamp.built_at}`);
+// Beside the build this run made: `.next`, or the rebuild job's staging folder when it set `COLLECTOR_DIST_DIR`.
+const build = process.env.COLLECTOR_DIST_DIR || SERVED;
+const stamp = writeStamp(dir, head.out, new Date(), build);
+console.log(`[build-stamp] ${dir}/${build}: built from ${short(stamp.commit)} at ${stamp.built_at}`);

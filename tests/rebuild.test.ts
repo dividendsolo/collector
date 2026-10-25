@@ -2,8 +2,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { readStamp, rebuildPlan, writeStamp } from "@/lib/rebuild";
+import { describe, expect, it, vi } from "vitest";
+import { readStamp, rebuildPlan, STAGING, swapIn, writeStamp } from "@/lib/rebuild";
 
 /** The live Collector's own rebuild (card #29): the "is the build behind main" check on its own, then the real
  * script in a throwaway checkout with a real `origin` on disk, so the pull, the build and the stamp a run here takes
@@ -27,9 +27,18 @@ const commit = (dir: string, body: string) => {
   git(dir, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-m", body);
 };
 
+/** A stand-in for `next build` that does to its folder what `next build` does: empties the distDir it was given
+ * (`COLLECTOR_DIST_DIR`, as `next.config.ts` reads it, else `.next`) before anything else, then writes a BUILD_ID and
+ * a chunk — or, when `fail` is set, exits 3 after the wipe, as a type error on main does. */
+const fakeNextBuild = (id: string, fail = false, midway = "") =>
+  `d=\${COLLECTOR_DIST_DIR:-.next}; rm -rf "$d"; ${midway} mkdir -p "$d/static"; ${
+    fail ? "exit 3" : `echo ${id} > "$d/BUILD_ID"; echo chunk > "$d/static/app.js"`
+  }`;
+
 /** The world the job runs in: a bare `origin` with two commits on main, `live` (the checkout the job is pointed at)
- * and `work` (where a newer commit on main is made). `live` holds the package.json the live Collector's checkout
- * holds: `bun run build`, whose postbuild records the commit the build was made from. */
+ * and `work` (where a newer commit on main is made). `live` holds a package.json shaped like the live Collector's:
+ * `bun run build` (a stand-in for `next build`, which wipes its folder first), whose postbuild records the commit
+ * the build was made from. `live` starts out serving an old build: a BUILD_ID and a chunk in `.next`. */
 function world() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "collector-rebuild-"));
   const origin = path.join(root, "origin.git");
@@ -45,8 +54,10 @@ function world() {
   git(root, "clone", origin, "work");
   write(
     path.join(live, "package.json"),
-    `${JSON.stringify({ name: "live", scripts: { build: "echo built > built.txt", postbuild: `bun ${STAMP_SCRIPT}` } }, null, 2)}\n`,
+    `${JSON.stringify({ name: "live", scripts: { build: fakeNextBuild("new"), postbuild: `bun ${STAMP_SCRIPT}` } }, null, 2)}\n`,
   );
+  write(path.join(live, ".next", "BUILD_ID"), "old\n");
+  write(path.join(live, ".next", "static", "app.js"), "old chunk\n");
 
   /** The commit one of the world's checkouts is at. */
   const head = (dir: string) => git(dir, "rev-parse", "HEAD").trim();
@@ -68,11 +79,14 @@ function world() {
     return { code: r.status, out: `${r.stdout}${r.stderr}` };
   };
   const file = (name: string) => path.join(live, name);
-  const built = () => fs.existsSync(file("built.txt"));
+  /** The BUILD_ID the page serves, null when `.next` has none. */
+  const served = () =>
+    fs.existsSync(file(".next/BUILD_ID")) ? fs.readFileSync(file(".next/BUILD_ID"), "utf8").trim() : null;
+  const built = () => served() === "new";
   const restarted = () => fs.existsSync(file("restarted.txt"));
   const stamp = () => readStamp(live)?.commit ?? null;
 
-  return { root, origin, live, work, head, merge, run, file, built, restarted, stamp };
+  return { root, origin, live, work, head, merge, run, file, served, built, restarted, stamp };
 }
 
 describe("rebuildPlan", () => {
@@ -120,6 +134,41 @@ describe("build stamp", () => {
   });
 });
 
+describe("next.config.ts", () => {
+  it("builds into COLLECTOR_DIST_DIR when the rebuild job sets it, and into .next otherwise", async () => {
+    const before = process.env.COLLECTOR_DIST_DIR;
+    try {
+      delete process.env.COLLECTOR_DIST_DIR;
+      vi.resetModules();
+      expect((await import("@/next.config")).default.distDir).toBe(".next");
+      process.env.COLLECTOR_DIST_DIR = STAGING;
+      vi.resetModules();
+      expect((await import("@/next.config")).default.distDir).toBe(STAGING);
+    } finally {
+      if (before === undefined) delete process.env.COLLECTOR_DIST_DIR;
+      else process.env.COLLECTOR_DIST_DIR = before;
+      vi.resetModules();
+    }
+  });
+});
+
+describe("swapIn", () => {
+  it("puts the staged build where the page serves it and deletes the old one", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-swap-"));
+    write(path.join(dir, ".next", "BUILD_ID"), "old\n");
+    write(path.join(dir, STAGING, "BUILD_ID"), "new\n");
+    swapIn(dir);
+    expect(fs.readFileSync(path.join(dir, ".next", "BUILD_ID"), "utf8")).toBe("new\n");
+    expect(fs.readdirSync(dir).sort()).toEqual([".next"]);
+  });
+  it("works when nothing was served yet", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-swap-"));
+    write(path.join(dir, STAGING, "BUILD_ID"), "new\n");
+    swapIn(dir);
+    expect(fs.readFileSync(path.join(dir, ".next", "BUILD_ID"), "utf8")).toBe("new\n");
+  });
+});
+
 describe("the rebuild job", () => {
   it("pulls the checkout to main, builds, records the commit it built, and restarts the page", () => {
     const w = world();
@@ -132,23 +181,51 @@ describe("the rebuild job", () => {
     expect(r.code).toBe(0);
     expect(w.head(w.live)).toBe(newer);
     expect(w.built()).toBe(true);
+    expect(fs.readFileSync(w.file(".next/static/app.js"), "utf8").trim()).toBe("chunk");
     expect(w.stamp()).toBe(newer);
     expect(w.restarted()).toBe(true);
+    // The build was made beside `.next` and moved in: nothing of the staging folder or the old build is left.
+    expect(fs.existsSync(w.file(STAGING))).toBe(false);
+    expect(fs.existsSync(w.file(".next-previous"))).toBe(false);
   });
 
-  it("keeps the old build serving when the build fails, and says so", () => {
+  it("keeps the old build serving when the build fails after wiping its folder, as next build does, and says so", () => {
     const w = world();
     const old = w.head(w.live);
     writeStamp(w.live, old);
-    // The same pull as a healthy run, then a build that fails — as a broken main does.
-    write(w.file("package.json"), `${JSON.stringify({ name: "live", scripts: { build: "exit 3" } }, null, 2)}\n`);
+    // The same pull as a healthy run, then a build that empties its distDir and fails — as a broken main does.
+    write(
+      w.file("package.json"),
+      `${JSON.stringify({ name: "live", scripts: { build: fakeNextBuild("new", true) } }, null, 2)}\n`,
+    );
     w.merge("second");
 
     const r = w.run();
     expect(r.code).toBe(1);
     expect(r.out).toContain("build failed");
+    // The served build is exactly as it was: its BUILD_ID, its chunk and its stamp.
+    expect(w.served()).toBe("old");
+    expect(fs.readFileSync(w.file(".next/static/app.js"), "utf8").trim()).toBe("old chunk");
     expect(w.stamp()).toBe(old);
     expect(w.restarted()).toBe(false);
+    expect(fs.existsSync(w.file(STAGING))).toBe(false);
+  });
+
+  it("never builds in the served folder, so the page keeps its build for the whole length of a build", () => {
+    const w = world();
+    writeStamp(w.live, w.head(w.live));
+    // A build that reads back what the page is serving midway, after it has emptied its own folder.
+    const seen = w.file("seen-during-build.txt");
+    const build = fakeNextBuild("new", false, `cat .next/BUILD_ID > ${seen} 2>/dev/null;`);
+    write(
+      w.file("package.json"),
+      `${JSON.stringify({ name: "live", scripts: { build, postbuild: `bun ${STAMP_SCRIPT}` } }, null, 2)}\n`,
+    );
+    w.merge("second");
+
+    expect(w.run().code).toBe(0);
+    expect(fs.readFileSync(seen, "utf8").trim()).toBe("old");
+    expect(w.served()).toBe("new");
   });
 
   it("does nothing at all when the build is the one main serves", () => {

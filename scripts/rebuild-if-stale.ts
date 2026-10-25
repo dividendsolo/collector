@@ -8,15 +8,17 @@
  *     bun scripts/rebuild-if-stale.ts --check        # say what it would do, touch nothing
  *
  * The launchd job `com.james.collector-rebuild` runs this every five minutes (`launchd/`). It is quiet when the
- * page is current and says one line for each step it takes: it pulls when the checkout is behind, builds, and
- * restarts the serving job, which is what makes an open page reload itself. A failed build or a failed pull is
- * logged and leaves the old build serving — never a half-built page. `--check` is the read-only form: no fetch, no
+ * page is current and says one line for each step it takes: it pulls when the checkout is behind, builds into
+ * `.next-rebuild` beside the served `.next`, moves that build into `.next` once it succeeded, and restarts the
+ * serving job, which is what makes an open page reload itself. A failed build or a failed pull is logged and leaves
+ * the served `.next` as it was — never a half-built page. `--check` is the read-only form: no fetch, no
  * pull, no build, no restart.
  */
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lastLine, readStamp, rebuildPlan, runGit, short, writeStamp } from "../lib/rebuild";
+import { lastLine, readStamp, rebuildPlan, runGit, SERVED, STAGING, short, swapIn, writeStamp } from "../lib/rebuild";
 
 const say = (line: string) => console.log(`[rebuild] ${line}`);
 const warn = (line: string) => console.error(`[rebuild] ${line}`);
@@ -65,7 +67,9 @@ if (branch !== "main") {
 }
 say(`${check ? "would rebuild" : "rebuilding"}: ${plan.why}; origin/main is at ${short(main.out)}`);
 if (check) {
-  say(`would ${plan.pull ? "pull, " : ""}build in ${dir}, then restart: ${restart}`);
+  say(
+    `would ${plan.pull ? "pull, " : ""}build into ${path.join(dir, STAGING)}, move it into ${SERVED}, then restart: ${restart}`,
+  );
   process.exit(0);
 }
 
@@ -80,8 +84,17 @@ if (plan.pull) {
   say(`pulled to ${short(main.out)}`);
 }
 
+// Build beside the served `.next`, never in it: `next build` empties its own folder before it compiles, so a build in
+// place would leave the page with no build for as long as the build takes, and with none at all when it fails.
+// `next.config.ts` reads COLLECTOR_DIST_DIR; `postbuild` stamps the same folder.
+const staging = path.join(dir, STAGING);
+fs.rmSync(staging, { recursive: true, force: true });
 const since = Date.now();
-const built = spawnSync(process.execPath, ["run", "build"], { cwd: dir, encoding: "utf8" });
+const built = spawnSync(process.execPath, ["run", "build"], {
+  cwd: dir,
+  encoding: "utf8",
+  env: { ...process.env, COLLECTOR_DIST_DIR: STAGING },
+});
 const secs = Math.round((Date.now() - since) / 1000);
 if (built.status !== 0) {
   const said = `${built.stdout || ""}${built.stderr || ""}`
@@ -89,17 +102,25 @@ if (built.status !== 0) {
     .filter((l) => l.trim())
     .slice(-3)
     .join(" | ");
+  fs.rmSync(staging, { recursive: true, force: true });
   warn(`build failed after ${secs} s: ${said}: the page keeps serving its old build`);
   process.exit(1);
 }
 
 const now = runGit(dir, "rev-parse", "HEAD").out || head.out;
 say(`built ${short(now)} in ${secs} s`);
-if (readStamp(dir)?.commit !== now) {
+if (readStamp(dir, STAGING)?.commit !== now) {
   // `bun run build` records its own commit (postbuild). A build that did not would be rebuilt every five minutes.
-  writeStamp(dir, now);
+  writeStamp(dir, now, new Date(), STAGING);
   warn(`the build did not record its own commit: stamped ${short(now)} here, so it is not built twice`);
 }
+try {
+  swapIn(dir);
+} catch (e) {
+  warn(`built ${short(now)}, but could not move it into ${SERVED} (${(e as Error).message}): not restarting`);
+  process.exit(1);
+}
+say(`moved the build into ${SERVED}`);
 
 const page = spawnSync("/bin/sh", ["-c", restart], { cwd: dir, encoding: "utf8" });
 if (page.status !== 0) {

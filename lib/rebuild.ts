@@ -40,16 +40,25 @@ export interface BuildStamp {
   built_at: string;
 }
 
-/** Where a build records its commit: with the build itself, so a build that wiped `.next` took its stamp with it and
- * the next run knows the page serves something older than main. */
-export const stampPath = (dir: string) => path.join(dir, ".next", "collector-build.json");
+/** The folder the page serves its build from: what `next start` reads, and what the rebuild job swaps a finished
+ * build into. */
+export const SERVED = ".next";
+
+/** Where the rebuild job builds (`COLLECTOR_DIST_DIR`, read by `next.config.ts`): beside the served build, never in it,
+ * because `next build` empties its own folder before it compiles. */
+export const STAGING = ".next-rebuild";
+
+/** Where a build records its commit: with the build itself (`build` is the build's folder, `.next` unless the build
+ * was pointed elsewhere), so a build that wiped its folder took its stamp with it and the next run knows the page
+ * serves something older than main. */
+export const stampPath = (dir: string, build = SERVED) => path.join(dir, build, "collector-build.json");
 
 /** The stamp of the build in `dir`: null when nothing recorded one (a build from before this job existed, a wiped
  * `.next`, a build that failed), never an error — a missing stamp means "older than main", which is the safe read. */
-export function readStamp(dir: string): BuildStamp | null {
+export function readStamp(dir: string, build = SERVED): BuildStamp | null {
   let raw: string;
   try {
-    raw = fs.readFileSync(stampPath(dir), "utf8");
+    raw = fs.readFileSync(stampPath(dir, build), "utf8");
   } catch {
     return null;
   }
@@ -64,11 +73,27 @@ export function readStamp(dir: string): BuildStamp | null {
 
 /** Record the commit a build was made from. Called only after a build succeeded, so the stamp never names a commit
  * the page is not serving. */
-export function writeStamp(dir: string, commit: string, at = new Date()): BuildStamp {
+export function writeStamp(dir: string, commit: string, at = new Date(), build = SERVED): BuildStamp {
   const stamp: BuildStamp = { commit, built_at: at.toISOString() };
-  fs.mkdirSync(path.dirname(stampPath(dir)), { recursive: true });
-  fs.writeFileSync(stampPath(dir), `${JSON.stringify(stamp, null, 2)}\n`);
+  fs.mkdirSync(path.dirname(stampPath(dir, build)), { recursive: true });
+  fs.writeFileSync(stampPath(dir, build), `${JSON.stringify(stamp, null, 2)}\n`);
   return stamp;
+}
+
+/**
+ * Put a finished build where the page serves it: the served folder moves aside, the staged one takes its name, and
+ * the old one is deleted. Two renames in one folder, so the page is without a build for the time between them, not
+ * for the length of a build. Called only after the staged build succeeded; a build that failed never gets here, and
+ * the served build is never touched.
+ */
+export function swapIn(dir: string, staged = STAGING, served = SERVED): void {
+  const from = path.join(dir, staged);
+  const to = path.join(dir, served);
+  const old = path.join(dir, `${served}-previous`);
+  fs.rmSync(old, { recursive: true, force: true });
+  if (fs.existsSync(to)) fs.renameSync(to, old);
+  fs.renameSync(from, to);
+  fs.rmSync(old, { recursive: true, force: true });
 }
 
 /** The three commits the check reads: what the page's build was made from, the checkout's HEAD, and `origin/main`. */
