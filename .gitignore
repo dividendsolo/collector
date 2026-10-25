@@ -5,6 +5,8 @@ __pycache__/
 .env
 .worktrees/
 .next/
+.next-rebuild/
+.next-previous/
 node_modules/
 next-env.d.ts
 *.tsbuildinfo

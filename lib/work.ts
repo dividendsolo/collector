@@ -1,4 +1,4 @@
-import { prio } from "./format";
+import { duration, prio } from "./format";
 
 /** One live agent or script run, as the machines report it. */
 export interface WorkRun {
@@ -33,6 +33,25 @@ export const labRun = (r: { repo?: string | null; kind?: string | null }) =>
 /** The name a run's row shows: the droid is "Lab droid", every other run the name it reported, or "unknown". */
 export const runName = (r: { name?: string | null; repo?: string | null; kind?: string | null }) =>
   labRun(r) ? "Lab droid" : r.name || "unknown";
+
+/** A Claude Code or Codex session: a live run that waits on the person at the keyboard, not a card's build. */
+export const isSession = (r: { kind?: string | null }) => r.kind === "session";
+
+/** What a session row's Machine cell says (James, 2026-10-25, card #29: "I said local for those, not the machine
+ * name"). Current work already says it for a card worked by hand. */
+export const SESSION_MACHINE = "local";
+
+/** What a session row's Running for cell says: it waits on the person, so its length says nothing about it and a
+ * real duration there read as a stuck run (James, 2026-10-25, card #29). */
+export const SESSION_TIME = "interactive";
+
+/** The Machine cell of a run: `local` for a session, the machine the run is on for everything else. */
+export const runMachine = (r: { kind?: string | null; machine?: string | null }) =>
+  isSession(r) ? SESSION_MACHINE : r.machine || "";
+
+/** The Running for cell of a run: `interactive` for a session, its own length for everything else. */
+export const runTime = (r: { kind?: string | null; seconds: number }) =>
+  isSession(r) ? SESSION_TIME : duration(r.seconds);
 
 export interface WorkCard {
   repo: string;

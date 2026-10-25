@@ -57,7 +57,7 @@ describe("tool_rows", () => {
     ).toEqual([
       {
         type: "agent",
-        name: "claude",
+        name: "Claude Code",
         kind: "session",
         repo: "collector",
         card: 21,
@@ -84,7 +84,7 @@ describe("tool_rows", () => {
     ).toEqual([
       {
         type: "agent",
-        name: "codex",
+        name: "Codex",
         kind: "session",
         repo: "situation",
         card: null,
@@ -101,7 +101,7 @@ describe("tool_rows", () => {
         facts: { 7: { cwd: "/home/me/code/collector/lib", branch: "agent/21", root: "/home/me/code/collector" } },
         models: [],
       }),
-    ).toEqual([{ type: "agent", name: "claude", kind: "session", repo: "collector", card: 21, seconds: 600 }]);
+    ).toEqual([{ type: "agent", name: "Claude Code", kind: "session", repo: "collector", card: 21, seconds: 600 }]);
   });
   it("shows a session outside any repo as no repo, not as an error", () => {
     expect(
@@ -111,7 +111,7 @@ describe("tool_rows", () => {
         facts: { 55: { cwd: "/home/me", branch: null, root: null } },
         models: [],
       }),
-    ).toEqual([{ type: "agent", name: "claude", kind: "session", repo: null, card: null, seconds: 5 }]);
+    ).toEqual([{ type: "agent", name: "Claude Code", kind: "session", repo: null, card: null, seconds: 5 }]);
   });
   it("leaves every other process alone", () => {
     expect(
@@ -195,7 +195,7 @@ describe("tool_sessions", () => {
   it("skips the pids another reader already shows, so the droid's run is one row and not two", () => {
     const line = proc(987654, "07:30", "claude -p 'day 1 of 14'");
     expect(drive<Run[]>({ fn: "sessions", ps: ps(line) })).toEqual([
-      { repo: null, kind: "session", card: null, seconds: 450, type: "agent", name: "claude" },
+      { repo: null, kind: "session", card: null, seconds: 450, type: "agent", name: "Claude Code" },
     ]);
     expect(drive<Run[]>({ fn: "sessions", ps: ps(line), skip: ["987654"] })).toEqual([]);
   });

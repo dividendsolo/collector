@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.example.collector-rebuild</string>
+  <!-- Every StartInterval seconds: when the build the page serves is behind main, pull, build, and kickstart the
+       job above. Set both paths to your Collector checkout; the answer to a build that is current is no output. -->
+  <key>StartInterval</key><integer>300</integer>
+  <key>RunAtLoad</key><true/>
+  <key>WorkingDirectory</key><string>/path/to/collector</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/path/to/.bun/bin/bun</string>
+    <string>/path/to/collector/scripts/rebuild-if-stale.ts</string>
+    <string>--label</string>
+    <string>com.example.collector</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StandardOutPath</key><string>/tmp/collector.log</string>
+  <key>StandardErrorPath</key><string>/tmp/collector.log</string>
+</dict>
+</plist>

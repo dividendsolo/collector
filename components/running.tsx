@@ -1,8 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { doing, duration } from "@/lib/format";
-import { currentWork, holdText, LAB, labRun, runName, type WorkRow, type WorkRun } from "@/lib/work";
+import { doing } from "@/lib/format";
+import {
+  currentWork,
+  holdText,
+  LAB,
+  labRun,
+  runMachine,
+  runName,
+  runTime,
+  type WorkRow,
+  type WorkRun,
+} from "@/lib/work";
 import { useLive } from "./data";
 import { Dash, Icon, PanelHead, Pill, SkelRows } from "./ui";
 
@@ -81,7 +91,7 @@ export function RunningNow() {
                         </>
                       ) : null}
                     </td>
-                    <td>{r.machine}</td>
+                    <td>{runMachine(r)}</td>
                     <td className="mono">
                       {r.card == null ? (
                         <Dash />
@@ -132,12 +142,13 @@ const LANE_PILL: Record<string, string> = {
 };
 
 /** The age cell of a live run: amber after 30 minutes of a build, red after an hour. A build only: a review, a
- * verify and the lab droid's runs (up to two hours by design) never turn amber or red. */
+ * verify and the lab droid's runs (up to two hours by design) never turn amber or red. A Claude Code or Codex
+ * session waits on the person, so it reads `interactive` instead of a length that looks like a stuck run (#29). */
 const RunTime = ({ r }: { r: Run }) => (
   <td
     className={`num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}`}
   >
-    {duration(r.seconds)}
+    {runTime(r)}
   </td>
 );
 
@@ -251,7 +262,7 @@ export function CurrentWork() {
                         <Dash />
                       )}
                     </td>
-                    <td>{r ? r.machine : row.local ? "local" : <Dash />}</td>
+                    <td>{r ? runMachine(r) : row.local ? "local" : <Dash />}</td>
                     <td className="mono">
                       {num == null ? (
                         <Dash />

@@ -566,6 +566,12 @@ def tool_of(command):
     return None
 
 
+# The tool's own name, which is what the row shows (card #29): James knows "Claude Code" and "Codex" — "claude" is
+# the name of a binary, not of a profile he has. The keys stay the tools' own (`claude`, `codex`) for the session
+# files read under them.
+TOOL_NAMES = {"claude": "Claude Code", "codex": "Codex"}
+
+
 def lab_droid(out):
     """The lab droid's run in `ps -axo user=,pid=,etime=,command=` output: ([(pid, seconds)], [row]). The droid
     (agent-stack#111) runs as its own Linux user, in its own home rather than a card worktree, so its user is what
@@ -704,11 +710,12 @@ def tool_model(tool, cwd, home=HOME):
 
 
 def tool_rows(out, facts, models=None, skip=()):
-    """One row per running Claude Code or Codex session: the tool, the repo and card its folder is a card worktree
-    for, and how long it has run. `facts` maps a pid to (folder, branch, checkout top level) and `models` maps
-    (tool, folder) to what the tool's session files record. One session per folder: Codex's npm shim and the binary
-    under it are two processes of one run, so the longest-lived process is the one that shows. `skip` holds the pids
-    of processes another reader already shows — the lab droid's run, which has its own row."""
+    """One row per running Claude Code or Codex session, named as the tool names itself ("Claude Code", "Codex"): the
+    repo and card its folder is a card worktree for, and how long it has run. `facts` maps a pid to (folder, branch,
+    checkout top level) and `models` maps (tool, folder) to what the tool's session files record. One session per
+    folder: Codex's npm shim and the binary under it are two processes of one run, so the longest-lived process is the
+    one that shows. `skip` holds the pids of processes another reader already shows — the lab droid's run, which has
+    its own row."""
     models = models or {}
     found = {}
     for pid, etime, command in process_lines(out):
@@ -723,7 +730,7 @@ def tool_rows(out, facts, models=None, skip=()):
             continue
         repo, card = session_place(cwd, branch, root)
         found[key] = {"repo": repo, "kind": "session", "card": card, "seconds": seconds(etime),
-                      "type": "agent", "name": tool, **models.get((tool, cwd), {})}
+                      "type": "agent", "name": TOOL_NAMES[tool], **models.get((tool, cwd), {})}
     return [found[k] for k in sorted(found)]
 
 

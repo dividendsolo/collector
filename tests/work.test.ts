@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { type Diff, keepClosed, parseHold, type Row } from "@/lib/server/board";
-import { currentWork, holdText, LAB, labRun, runName, type WorkCard, type WorkRun } from "@/lib/work";
+import {
+  currentWork,
+  holdText,
+  isSession,
+  LAB,
+  labRun,
+  runMachine,
+  runName,
+  runTime,
+  SESSION_MACHINE,
+  SESSION_TIME,
+  type WorkCard,
+  type WorkRun,
+} from "@/lib/work";
 
 const WAITING = ["needs-triage", "needs-info", "ready-for-human", "needs-manual-qa"];
 const card = (repo: string, number: number, lane: string, extra: Partial<WorkCard> = {}): WorkCard => ({
@@ -168,8 +181,35 @@ describe("labRun", () => {
     });
   });
   it("leaves every other run its own name, and an unnamed one unknown", () => {
-    expect(runName({ name: "claude", repo: "collector", kind: "session" })).toBe("claude");
+    expect(runName({ name: "builder", repo: "collector", kind: "build" })).toBe("builder");
     expect(runName({ name: null, repo: "collector", kind: "build" })).toBe("unknown");
+  });
+});
+
+describe("a session row", () => {
+  /** James, 2026-10-25 (card #29): "I said local for those, not the machine name ... I don't need a running for
+   * either on those ... you could just say continuous or interactive ... that's really misleading." */
+  const session: WorkRun = {
+    type: "agent",
+    name: "Claude Code",
+    kind: "session",
+    machine: "altair",
+    card: null,
+    repo: null,
+    seconds: 5400,
+  };
+
+  it("reads Machine local, never the machine the session runs on", () => {
+    expect(isSession(session)).toBe(true);
+    expect(SESSION_MACHINE).toBe("local");
+    expect(runMachine(session)).toBe("local");
+    expect(runMachine(run("app", 1, 60))).toBe("m1");
+  });
+  it("reads Running for interactive, not a length that looks like a stuck run", () => {
+    expect(SESSION_TIME).toBe("interactive");
+    expect(runTime(session)).toBe("interactive");
+    expect(runTime(run("app", 1, 5400))).toBe("1 h 30 min");
+    expect(runTime({ kind: "build", seconds: 60 })).toBe("1 min");
   });
 });
 
