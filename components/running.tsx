@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { doing } from "@/lib/format";
+import { runDoing } from "@/lib/format";
 import {
   currentWork,
   holdText,
@@ -83,7 +83,7 @@ export function RunningNow() {
                       <ModelCell model={r.model} provider={r.provider} />
                     </td>
                     <td>
-                      {doing(r.kind)}
+                      {runDoing(r)}
                       {r.feature ? (
                         <>
                           {" "}
@@ -250,7 +250,7 @@ export function CurrentWork() {
                     <td>
                       {r ? (
                         <>
-                          {doing(r.kind)}
+                          {runDoing(r)}
                           {r.feature ? (
                             <>
                               {" "}

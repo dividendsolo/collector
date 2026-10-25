@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print, as JSON, what collect.py's Claude Code and Codex helpers say about one case on stdin.
+"""Print, as JSON, what collect.py's worktree, Claude Code and Codex helpers say about one case on stdin.
 
 `tests/tools.test.ts` drives this: a case holds a fixture `ps` list and fixture folders, so the parsing the reader
 does on a machine is tested without a running session. By hand:
@@ -51,6 +51,14 @@ def main():
     fn = case["fn"]
     if fn == "rows":
         out = collect.tool_rows(case["ps"], facts_of(case), models_of(case))
+    elif fn == "worktrees":
+        out = collect.worktree_rows(
+            case["ps"],
+            steps=case.get("steps", []),
+            verifying={tuple(k) for k in case.get("verifying", [])},
+            ports=case.get("ports", {}),
+            children=case.get("children", {}),
+        )
     elif fn == "sessions":
         out = collect.tool_sessions(case["ps"], skip=set(case.get("skip", [])))
     elif fn == "droid":

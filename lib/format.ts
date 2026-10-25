@@ -18,14 +18,36 @@ const DOING: Record<string, string> = {
   review: "reviewing",
   verify: "verifying",
   regate: "verifying",
+  // A process left in a card's worktree: it is nobody's work, so its row says what it is (collector#32).
+  leftover: "left behind",
 };
 export const doing = (kind: string) => DOING[kind] || kind;
+
+/** The work script's own step words, as its own row reads them. Its step files say `building` while the card is out
+ * with a builder and `reviewing` while a reviewer has it, and those two words belong to the agent's own row: on the
+ * script's row they read as the script building the card, which is what James saw (2026-10-25, collector#32:
+ * "Foreman should never show building. Foreman's never building, it's doing something other than that"). Its own
+ * steps — preparing, verifying, opening the PR, saving work, merging — already say what the script does. */
+const WORK_DOING: Record<string, string> = {
+  building: "with the builder",
+  reviewing: "with the reviewer",
+};
+
+/** What a run's row says it is doing: an agent's own gerund, the work script's step in the script's own words, or
+ * that a process nothing is working for is left behind. */
+export const runDoing = (r: { type?: string | null; kind?: string | null }): string =>
+  (r.type === "script" ? WORK_DOING[r.kind || ""] : undefined) || doing(r.kind || "");
 
 /** One run in a compact cell: the card it works on and what it is doing ("#21 building"). A run with no card —
  * a Claude Code or Codex session in a plain checkout — shows the tool's own name instead ("claude session"),
  * and never "#null" (card #21). */
-export const runLabel = (r: { card?: number | null; kind?: string | null; name?: string | null }) => {
-  const task = doing(r.kind || "");
+export const runLabel = (r: {
+  card?: number | null;
+  kind?: string | null;
+  name?: string | null;
+  type?: string | null;
+}) => {
+  const task = runDoing(r);
   const tail = task ? ` ${task}` : "";
   return r.card == null ? `${r.name || "unknown"}${tail}` : `#${r.card}${tail}`;
 };

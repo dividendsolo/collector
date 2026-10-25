@@ -1166,6 +1166,14 @@
     background: var(--violet-bg);
     border-color: var(--violet-line);
   }
+  /* A process left in a card's worktree: nothing is working the card, so it gets its own dashed badge in the colour
+     that asks for a look, instead of passing as the work script's own work (collector#32). */
+  .pill.leftover {
+    color: var(--amber);
+    background: var(--amber-bg);
+    border-color: var(--amber-line);
+    border-style: dashed;
+  }
   .dot {
     width: 6px;
     height: 6px;

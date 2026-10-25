@@ -130,6 +130,119 @@ describe("tool_rows", () => {
   });
 });
 
+describe("worktree_rows", () => {
+  /** One row collect.py prints for a process in a card worktree. A leftover carries the port it listens on when the
+   * machine (`ss` on Linux, `lsof` on a Mac) shows one. */
+  interface WorktreeRow {
+    repo: string;
+    kind: string;
+    card: number;
+    type: string;
+    name: string;
+    seconds: number;
+    port?: number;
+  }
+  const worktree = "/home/me/code/collector/.worktrees/build-25";
+  // What a builder's test server looks like in `ps`: the shell it was started from holds the worktree in its own
+  // command line, which is how this process was ever read as a card's work at all.
+  const bunStart = proc(
+    9001,
+    "01:20:30",
+    `/bin/bash -lc cd ${worktree} && COLLECTOR_CONFIG=/tmp/collector-fixture.json COLLECTOR_PORT=4123 /home/me/.bun/bin/bun start`,
+  );
+
+  it("shows a process left in a card worktree as a leftover, named after the program it runs", () => {
+    // James, 2026-10-25 (card #32): a leftover `bun start` in a build worktree read as `foreman.py | building` for
+    // three hours. Nothing is working that card: no agent, no step file, no verify run.
+    expect(drive<WorktreeRow[]>({ fn: "worktrees", ps: ps(bunStart), ports: { 9001: [4123] } })).toEqual([
+      { repo: "collector", kind: "leftover", card: 25, type: "leftover", name: "bun start", seconds: 4830, port: 4123 },
+    ]);
+  });
+  it("never names a leftover after the work script, and names the program under an interpreter", () => {
+    const rows = drive<WorktreeRow[]>({
+      fn: "worktrees",
+      ps: ps(
+        proc(9002, "10:00", `/usr/bin/node ${worktree}/node_modules/next/dist/server/next-server`),
+        proc(9005, "09:59", "/home/me/code/collector/.worktrees/build-26/next-server"),
+      ),
+    });
+    expect(rows.map((r) => [r.name, r.type, r.card])).toEqual([
+      ["node next-server", "leftover", 25],
+      ["next-server", "leftover", 26],
+    ]);
+    expect(rows.map((r) => r.type)).not.toContain("script");
+  });
+  it("names the row after the oldest process of the worktree, with the port the child under it listens on", () => {
+    // The shape a builder's test server leaves behind on a live machine: `script -a -q -e -c 'cd <worktree> && bun
+    // start'` keeps the worktree in its own command line, and the server it started holds the socket without the path
+    // in its own (Next renames that process `next-server (v16.4.2)`).
+    const rows = drive<WorktreeRow[]>({
+      fn: "worktrees",
+      ps: ps(bunStart, proc(9003, "01:20:29", "next-server (v16.4.2)")),
+      ports: { 9003: [4123] },
+      children: { 9001: ["9003"] },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: "bun start", seconds: 4830, port: 4123 });
+  });
+  it("reads the program out of the wrapper a builder's shell leaves behind", () => {
+    const rows = drive<WorktreeRow[]>({
+      fn: "worktrees",
+      ps: ps(
+        proc(9006, "03:54:44", `script -a -q -e -c cd ${worktree} && COLLECTOR_PORT=4123 /home/me/.bun/bin/bun start`),
+      ),
+    });
+    expect(rows[0]).toMatchObject({ name: "bun start", repo: "collector", card: 25, seconds: 14084 });
+  });
+  it("shows no port for a leftover the machine shows no listener for", () => {
+    const rows = drive<WorktreeRow[]>({ fn: "worktrees", ps: ps(bunStart) });
+    expect(rows[0]).not.toHaveProperty("port");
+  });
+  it("leaves the worktree the work script says it is on now to the script's own step row", () => {
+    expect(
+      drive<WorktreeRow[]>({
+        fn: "worktrees",
+        ps: ps(bunStart),
+        steps: [{ repo: "collector", card: 25, step: "verifying", since: 1792955413, pid: 68439 }],
+      }),
+    ).toEqual([]);
+  });
+  it("leaves the worktree a verify run is on to the verify row", () => {
+    expect(
+      drive<WorktreeRow[]>({
+        fn: "worktrees",
+        ps: ps(bunStart),
+        verifying: [["collector", "build", 25]],
+      }),
+    ).toEqual([]);
+  });
+  it("is the agent's own row while a Hermes agent works in the worktree", () => {
+    expect(
+      drive<WorktreeRow[]>({
+        fn: "worktrees",
+        ps: ps(
+          proc(
+            9004,
+            "00:12",
+            `script -a -q -e -c /home/me/.local/bin/hermes -p collector-builder chat -Q --yolo -q 'work only in ${worktree}'`,
+          ),
+        ),
+      }),
+    ).toEqual([{ repo: "collector", kind: "build", card: 25, type: "agent", name: "collector-builder", seconds: 12 }]);
+  });
+  it("leaves a process outside any card worktree alone", () => {
+    expect(
+      drive<WorktreeRow[]>({
+        fn: "worktrees",
+        ps: ps(
+          proc(9, "10:00", "/usr/bin/python3 /home/me/code/agent-stack/foreman/foreman.py"),
+          proc(8, "00:10", "/home/me/.bun/bin/bun start"),
+        ),
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe("lab_droid", () => {
   /** A `ps -axo user=,pid=,etime=,command=` list: one user column in front of the plain list. */
   const withUser = (...lines: string[]) => lines.join("\n");

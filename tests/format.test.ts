@@ -6,6 +6,7 @@ import {
   historyless,
   lastResult,
   moneyParts,
+  runDoing,
   runLabel,
   schedule,
   shortRole,
@@ -106,6 +107,37 @@ describe("runLabel", () => {
     const fact = (agents: WorkRun[]) => (agents.length ? agents.map(runLabel).join(", ") : "—");
     expect(fact([onCard, inCheckout])).toBe("#21 building, Claude Code session");
     expect(fact([])).toBe("—");
+  });
+});
+
+describe("runDoing", () => {
+  /** James, 2026-10-25 (card #32): "Foreman should never show building. Foreman's never building, it's doing
+   * something other than that." Its step files say `building` while the card is out with a builder, so the work
+   * script's own row says where the card is instead; `building` and `reviewing` stay the agent's own words. */
+  const workStep = (kind: string): WorkRun =>
+    run({ type: "script", name: "foreman.py", kind, card: 32, repo: "collector" });
+
+  it("never says building or reviewing for the work script's own step", () => {
+    expect(runDoing(workStep("building"))).toBe("with the builder");
+    expect(runDoing(workStep("reviewing"))).toBe("with the reviewer");
+    expect(runDoing(workStep("building"))).not.toBe("building");
+    expect(runDoing(workStep("reviewing"))).not.toBe("reviewing");
+  });
+  it("shows the work script's own steps, its verify, and everything else as the step names it", () => {
+    expect(runDoing(workStep("preparing"))).toBe("preparing");
+    expect(runDoing(workStep("verifying"))).toBe("verifying");
+    expect(runDoing(workStep("verify"))).toBe("verifying");
+    expect(runDoing(workStep("opening the PR"))).toBe("opening the PR");
+    expect(runDoing(workStep("saving work"))).toBe("saving work");
+    expect(runDoing(workStep("merging"))).toBe("merging");
+  });
+  it("keeps building and reviewing for the agent's own row", () => {
+    expect(runDoing(run({ type: "agent", kind: "build" }))).toBe("building");
+    expect(runDoing(run({ type: "agent", kind: "review" }))).toBe("reviewing");
+    expect(runDoing(run({ type: "agent", kind: "session" }))).toBe("session");
+  });
+  it("says a process left in a card worktree is left behind", () => {
+    expect(runDoing({ type: "leftover", kind: "leftover" })).toBe("left behind");
   });
 });
 

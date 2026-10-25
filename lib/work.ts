@@ -2,6 +2,7 @@ import { duration, prio } from "./format";
 
 /** One live agent or script run, as the machines report it. */
 export interface WorkRun {
+  /** `agent`, `script`, or `leftover`: a process left in a card's worktree that nothing is working for. */
   type: string;
   name?: string;
   model?: string;
@@ -14,6 +15,8 @@ export interface WorkRun {
   /** The repo the run's folder is in. A session outside any repo has none, and the page says "no repo". */
   repo?: string | null;
   seconds: number;
+  /** The TCP port a leftover process listens on, when the machine shows one (`ss` on Linux, `lsof` on a Mac). */
+  port?: number | null;
 }
 
 /** The lab droid's own run (agent-stack#111): a headless Claude Code process under its own `lab` user on ezio,
@@ -30,9 +33,15 @@ export const LAB = {
 export const labRun = (r: { repo?: string | null; kind?: string | null }) =>
   r.repo === LAB.marker && r.kind === LAB.marker;
 
-/** The name a run's row shows: the droid is "Lab droid", every other run the name it reported, or "unknown". */
-export const runName = (r: { name?: string | null; repo?: string | null; kind?: string | null }) =>
-  labRun(r) ? "Lab droid" : r.name || "unknown";
+/** The name a run's row shows: the droid is "Lab droid", a process left in a card's worktree is the program it runs
+ * with the port it listens on ("bun start :4123") — never the work script's name, which it is not (collector#32) —
+ * every other run the name it reported, or "unknown". */
+export const runName = (r: {
+  name?: string | null;
+  repo?: string | null;
+  kind?: string | null;
+  port?: number | null;
+}) => (labRun(r) ? "Lab droid" : `${r.name || "unknown"}${r.port ? ` :${r.port}` : ""}`);
 
 /** A Claude Code or Codex session: a live run that waits on the person at the keyboard, not a card's build. */
 export const isSession = (r: { kind?: string | null }) => r.kind === "session";
