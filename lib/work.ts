@@ -81,9 +81,11 @@ const moving = (r: WorkRow) => r.group < 2;
  * it; anything else is already `repo#12`. */
 const holdKey = (ref: string, repo: string) => (ref.startsWith("#") ? `${repo}${ref}` : ref);
 
-/** The refs of a scheduled card's `Waiting on:` line that the page is working on right now. Empty: not on deck. */
-const deckOf = (card: WorkCard, working: Set<string>) =>
-  card.lane === "scheduled" && card.hold?.after.length
+/** The refs of a scheduled row's `Waiting on:` line that the page is working on right now. Empty: not on deck.
+ * Only a row in the scheduled group (4) can be on deck: a scheduled card with a live run or the `local` label is
+ * live work (group 0) and keeps the live order. */
+const deckOf = ({ group, card }: WorkRow, working: Set<string>) =>
+  group === 4 && card?.hold?.after.length
     ? card.hold.after.filter((a) => working.has(holdKey(a.ref, card.repo))).map((a) => a.ref)
     : [];
 
@@ -121,7 +123,7 @@ export function currentWork(
   const working = new Set(rows.filter(moving).map((r) => (r.card ? `${r.card.repo}#${r.card.number}` : "")));
   const deck = (r: WorkRow) => (r.onDeck ? 1 : 0);
   for (const row of rows) {
-    const after = row.card ? deckOf(row.card, working) : [];
+    const after = deckOf(row, working);
     if (after.length) row.onDeck = after;
   }
   return rows.sort(

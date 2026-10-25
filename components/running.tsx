@@ -177,9 +177,12 @@ function StateCell({ row }: { row: WorkRow }) {
         <span className="sub"> {holdText(hold)}</span>
       ) : null}
       {deck.length ? (
-        <Pill cls="deck" dot={false}>
-          on deck
-        </Pill>
+        <>
+          {" "}
+          <Pill cls="deck" dot={false}>
+            on deck
+          </Pill>
+        </>
       ) : null}
     </td>
   );

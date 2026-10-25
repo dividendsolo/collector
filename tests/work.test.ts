@@ -122,6 +122,17 @@ describe("currentWork", () => {
     ]);
     expect(rows.filter((r) => [5, 6].includes(r.card?.number ?? 0)).every((r) => !r.onDeck)).toBe(true);
   });
+  it("leaves a scheduled card with a live run or a session in the live order, off deck", () => {
+    const cards = [
+      card("app", 1, "scheduled", { hold: hold(["#9"]) }),
+      card("app", 2, "scheduled", { hold: hold(["#9"]), labels: ["local"] }),
+      card("app", 3, "scheduled", { hold: hold(["#9"]) }),
+      card("app", 9, "agent-in-progress"),
+    ];
+    const rows = currentWork(cards, [], [run("app", 1, 60), run("app", 9, 600)], WAITING, 0);
+    expect(rows.map((r) => r.card?.number)).toEqual([9, 1, 2, 3]);
+    expect(rows.filter((r) => r.onDeck).map((r) => r.card?.number)).toEqual([3]);
+  });
   it("marks only the ref being worked on when a card waits on several", () => {
     const cards = [
       card("app", 1, "scheduled", { hold: hold(["#9", "web#7"]) }),
