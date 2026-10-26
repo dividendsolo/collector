@@ -738,10 +738,11 @@ def tool_model(tool, cwd, home=HOME):
 def tool_rows(out, facts, models=None, skip=()):
     """One row per running Claude Code or Codex session, named as the tool names itself ("Claude Code", "Codex"): the
     repo and card its folder is a card worktree for, and how long it has run. `facts` maps a pid to (folder, branch,
-    checkout top level) and `models` maps (tool, folder) to what the tool's session files record. One session per
+    checkout top level) and `models` maps (tool, folder) to what the tool's session files record. One Codex session per
     folder: Codex's npm shim and the binary under it are two processes of one run, so the longest-lived process is the
-    one that shows. `skip` holds the pids of processes another reader already shows — the lab droid's run, which has
-    its own row."""
+    one that shows. Every Claude Code process left once its helpers are gone is a session of its own, so two in one
+    folder are two rows (collector#34: 3 sessions in the home folder showed as 1). `skip` holds the pids of processes
+    another reader already shows — the lab droid's run, which has its own row."""
     models = models or {}
     found = {}
     for pid, etime, command in process_lines(out):
@@ -751,7 +752,7 @@ def tool_rows(out, facts, models=None, skip=()):
         if not tool:
             continue
         cwd, branch, root = facts.get(pid, (None, None, None))
-        key = (tool, cwd or f"pid {pid}")
+        key = (tool, cwd or f"pid {pid}", pid if tool == "claude" else "")
         if key in found and found[key]["seconds"] >= seconds(etime):
             continue
         repo, card = session_place(cwd, branch, root)

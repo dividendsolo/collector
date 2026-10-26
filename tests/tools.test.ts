@@ -176,6 +176,30 @@ describe("tool_rows", () => {
       expect.objectContaining({ name: "Claude Code", repo: "situation", seconds: 50 }),
     ]);
   });
+  it("shows every Claude Code session in one folder as its own row", () => {
+    // James's Mac, 2026-10-26 (card #34): the 3 sessions all ran in the home folder, so keying a row by its folder —
+    // which is how a Codex shim and its binary become one run — drew the 3 of them as 1. A claude process has no shim
+    // under it once its helpers are gone, so each one is a session of its own.
+    const home = { cwd: "/Users/me", branch: null, root: null };
+    const rows = drive<Run[]>({
+      fn: "rows",
+      ps: ps(
+        proc(98789, "1-10:01:43", "claude"),
+        proc(
+          3294,
+          "03:57:18",
+          "/opt/homebrew/Caskroom/claude-code/2.1.310/claude --session-id 6350761a --agent claude",
+        ),
+        proc(3295, "03:57:18", "/opt/homebrew/Caskroom/claude-code/2.1.310/claude --session-id b2d240e2 --resume x"),
+        proc(3296, "03:57:18", "claude --bg-pty-host /tmp/claude/p.sock 190 46 -- /opt/homebrew/bin/claude"),
+      ),
+      facts: { 98789: home, 3294: home, 3295: home, 3296: home },
+      models: [["claude", "/Users/me", { model: "claude-opus-5-5" }]],
+    });
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.seconds).sort((a, b) => a - b)).toEqual([14238, 14238, 122503]);
+    expect(rows.every((r) => r.name === "Claude Code" && r.repo === null && r.model === "claude-opus-5-5")).toBe(true);
+  });
 });
 
 describe("worktree_rows", () => {
