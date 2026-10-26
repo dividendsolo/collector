@@ -128,6 +128,54 @@ describe("tool_rows", () => {
       }),
     ).toEqual([]);
   });
+  it("shows no row for Claude Code's own helper processes", () => {
+    // James's Mac, 2026-10-26 (card #34): the panel showed about 12 Claude Code rows while 3 sessions ran. The rest
+    // were helpers — the background daemon, the terminal hosts behind a background session, and their idle standbys —
+    // every one of them a `claude` process, so every one of them a row. The command lines are the ones claude
+    // 2.1.303 spawns: the daemon and a standby under the argv0 the binary sets for itself ("claude daemon",
+    // "claude bg-spare"), the pty host in both the forms it takes, one of them with the daemon's own worker flag.
+    const rows = drive<Run[]>({
+      fn: "rows",
+      ps: ps(
+        proc(
+          3001,
+          "3-04:00:00",
+          "/Users/me/.local/bin/claude daemon run --json-path /tmp/claude/d.json --origin service",
+        ),
+        proc(3002, "3-04:00:00", "claude daemon run --json-path /tmp/claude/d.json"),
+        proc(
+          3003,
+          "00:31",
+          "claude bg-pty-host --bg-pty-host /tmp/claude/p1.sock 200 50 -- /Users/me/.local/bin/claude",
+        ),
+        proc(
+          3004,
+          "00:31",
+          "/Users/me/.local/bin/claude --bg-pty-host /tmp/claude/p2.sock 200 50 -- /Users/me/.local/bin/claude",
+        ),
+        proc(3005, "00:12", "claude bg-spare --bg-spare /tmp/claude/s1.sock"),
+        proc(3006, "00:12", "/Users/me/.local/bin/claude --bg-spare /tmp/claude/s2.sock"),
+        proc(3007, "00:11", "claude bg-spare"),
+        proc(3008, "00:10", "/Users/me/.local/bin/claude daemon run --daemon-worker"),
+        // The 3 sessions, one of them a prompt that happens to say the word the daemon is named after.
+        proc(3101, "01:00", "/Users/me/.local/bin/claude"),
+        proc(3102, "00:50", "/Users/me/.local/bin/claude --session-id 9e2b7c"),
+        proc(3103, "00:40", "/Users/me/.local/bin/claude -p restart the daemon"),
+      ),
+      facts: {
+        3101: { cwd: "/Users/me/code/collector", branch: "main", root: "/Users/me/code/collector" },
+        3102: { cwd: "/Users/me/code/situation", branch: "main", root: "/Users/me/code/situation" },
+        3103: { cwd: "/Users/me", branch: null, root: null },
+      },
+      models: [],
+    });
+    expect(rows).toHaveLength(3);
+    expect(rows).toEqual([
+      expect.objectContaining({ name: "Claude Code", repo: null, seconds: 40 }),
+      expect.objectContaining({ name: "Claude Code", repo: "collector", seconds: 60 }),
+      expect.objectContaining({ name: "Claude Code", repo: "situation", seconds: 50 }),
+    ]);
+  });
 });
 
 describe("worktree_rows", () => {

@@ -555,12 +555,35 @@ def process_lines(out):
             yield parts[0], parts[1], parts[2]
 
 
+# Claude Code's own helper processes, which are no session at all (collector#34): the background daemon, the terminal
+# host behind a background session, and the idle standbys the daemon keeps warm. Claude Code spawns each of them with
+# the helper's own argv0, so its marker reads without a dash in the process's own name — `claude daemon run ...`,
+# `claude bg-pty-host ...`, `claude bg-spare ...`, the argv0 strings claude 2.1.303 sets. The flags are the same
+# markers where the program is named by its real path instead.
+CLAUDE_HELPERS = ("daemon", "bg-pty-host", "bg-spare")
+CLAUDE_HELPER_FLAGS = ("--bg-pty-host", "--bg-spare", "--daemon-worker")
+
+
+def claude_helper(args):
+    """True when the arguments after the program name are one of Claude Code's own helpers rather than a session
+    (collector#34). A helper's marker is a flag or a subcommand, so it sits in the first arguments, before the `--`
+    that opens the session it hosts and before any prompt: a session whose prompt says the word
+    (`claude -p restart the daemon`) stays a session, and so does `claude --session-id ...`."""
+    words = [arg.split("=", 1)[0] for arg in (args or "").split()[:3]]
+    if not words:
+        return False
+    return words[0] in CLAUDE_HELPERS or any(word in CLAUDE_HELPER_FLAGS for word in words)
+
+
 def tool_of(command):
     """The coding tool one process runs: 'claude', 'codex', or None. An npm shim shows as `node .../codex.js`, so the
     program and its first argument are both read; a name that only holds the word (`claudette`, `codex-notes`) is not
-    the tool."""
-    for token in (command or "").split(None, 2)[:2]:
+    the tool. Claude Code's own helpers carry its name too and are not sessions, so they come back None (collector#34)."""
+    tokens = (command or "").split(None, 2)
+    for i, token in enumerate(tokens[:2]):
         name = re.sub(r"\.(?:js|cjs|mjs|exe)$", "", os.path.basename(token))
+        if name == "claude" and claude_helper(" ".join(tokens[i + 1:]) if len(tokens) > i + 1 else ""):
+            return None
         if name in ("claude", "codex"):
             return name
         # codex's own binary, named after its Rust target: codex-x86_64-unknown-linux-musl, codex-aarch64-apple-darwin
