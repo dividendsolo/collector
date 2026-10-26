@@ -182,6 +182,27 @@ describe("parse_timers", () => {
     expect(rows.every((j: any) => j.scheduler === "systemd" && j.id === j.unit)).toBe(true);
   });
 
+  it("trusts systemd's own verdict: a non-zero exit the unit lists in SuccessExitStatus is ok", () => {
+    // fwupd-refresh exits 2 for "no new metadata" and its unit says SuccessExitStatus=2 (Result=success).
+    const show = `Id=fwupd-refresh.service
+Result=success
+ExecMainExitTimestamp=Mon 2026-10-26 12:04:21 UTC
+ExecMainStatus=2
+`;
+    const listed = `NEXT LEFT LAST PASSED UNIT ACTIVATES
+Mon 2026-10-26 13:55:22 UTC 31min Mon 2026-10-26 12:04:20 UTC 1h ago fwupd-refresh.timer fwupd-refresh.service
+`;
+    const timers = `Id=fwupd-refresh.timer
+ActiveState=active
+TimersCalendar={ OnCalendar=*-*-* 6,18:00:00 ; next_elapse=Mon 2026-10-26 13:55:22 UTC }
+NextElapseUSecRealtime=Mon 2026-10-26 13:55:22 UTC
+LastTriggerUSec=Mon 2026-10-26 12:04:20 UTC
+`;
+    const [row] = call("parse_timers", listed, timers, show);
+    expect(row.last_status).toBe("ok");
+    expect(status(row)).toBe("OK");
+  });
+
   it("shows a failed service as failed, and one that never ran as no result at all", () => {
     expect(rows.map((j: any) => j.last_status)).toEqual(["ok", "exit 1", "ok", null]);
     expect(rows.map((j: any) => status(j))).toEqual(["OK", "Failed", "OK", "Paused"]);

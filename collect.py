@@ -457,9 +457,12 @@ def timer_time(text, tz):
 
 def service_status(status, result):
     """A systemd service's last exit as the page's last status: "ok" when it worked, and otherwise why not
-    ("exit 1", "timeout"), so a run that failed shows as failed."""
+    ("exit 1", "timeout"), so a run that failed shows as failed. systemd's Result is the verdict: a unit can list
+    a non-zero exit as success (fwupd-refresh exits 2 for "nothing new", SuccessExitStatus=2)."""
     if not status:
         return None
+    if result == "success":
+        return "ok"
     if status != "0":
         return f"exit {status}"
     return "ok" if result in ("", "success") else result
