@@ -1,13 +1,13 @@
-import fs from "node:fs";
-import path from "node:path";
-import { ROOT } from "@/lib/server/paths";
+import { servedSide } from "@/lib/update";
 
 export const dynamic = "force-dynamic";
-/** The build the server runs. The page reloads itself when this moves (after `bun run build` and a restart). */
+/**
+ * The build this server process runs, read once at boot (`instrumentation.ts`). The page reloads itself when this
+ * moves, which after the Update click (card #41) is when the new build is in service — not the moment the swap lands
+ * on disk under the running process.
+ */
 export function GET() {
-  let id = "dev";
-  try {
-    id = fs.readFileSync(path.join(ROOT, ".next", "BUILD_ID"), "utf8").trim();
-  } catch {}
-  return new Response(id, { headers: { "Content-Type": "text/plain", "Cache-Control": "no-store" } });
+  return new Response(servedSide().id ?? "dev", {
+    headers: { "Content-Type": "text/plain", "Cache-Control": "no-store" },
+  });
 }

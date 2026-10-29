@@ -11,6 +11,8 @@ import {
   runMachine,
   runName,
   runTime,
+  type Staleness,
+  staleness,
   type WorkRow,
   type WorkRun,
 } from "@/lib/work";
@@ -155,6 +157,9 @@ const RunTime = ({ r }: { r: Run }) => (
 );
 
 function StateCell({ row }: { row: WorkRow }) {
+  const { state } = useLive();
+  const stale: Staleness = staleness(state);
+  const shown = cardState(row, stale);
   const hold = row.card?.lane === "scheduled" ? row.card.hold : null;
   const deck = row.onDeck ?? [];
   return (
@@ -164,14 +169,21 @@ function StateCell({ row }: { row: WorkRow }) {
           <Icon name={row.run.type === "agent" ? "bot" : "term"} />
           {row.run.type}
         </span>
-      ) : cardState(row) === "session" ? (
+      ) : shown === "session" ? (
         <span className="pill agent">
           <Icon name="bot" />
           agent
         </span>
       ) : (
-        <Pill cls={cardState(row) === "no run" ? "warning" : LANE_PILL[row.state] || ""} dot={false}>
-          {cardState(row)}
+        <Pill
+          cls={
+            shown === "no run" || shown?.includes("stale") || shown?.endsWith("unread")
+              ? "warning"
+              : LANE_PILL[row.state] || ""
+          }
+          dot={false}
+        >
+          {shown}
         </Pill>
       )}
       {hold?.after.length ? (
