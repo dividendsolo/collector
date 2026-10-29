@@ -17,26 +17,28 @@ http://127.0.0.1:4000. The job's stdout and stderr are both `~/Library/Logs/coll
 Remote machines are read the same way in the request: the server sends `collect.py` over SSH
 (`ssh <host> python3 -`), standard library only, read only, nothing installed there.
 
-## A change shows only after a build and a restart
+## A change reaches port 4000 only through the Update button
+
+`bun start` serves the `.next` build in `/Users/james/code/collector`, never the source: editing a file changes
+nothing on port 4000 until a new build is swapped in and the job restarts. The one way to do that is the page's
+**Update** button, or the same step from a shell:
 
 ```bash
-cd /Users/james/code/collector
-bun run build
-launchctl kickstart -k gui/$(id -u)/com.james.collector
+cd /Users/james/code/collector && bun scripts/apply-update.ts
 ```
 
-`bun start` serves the `.next` build in that checkout, never the source: editing a file changes nothing on port
-4000 until the build runs again and the job restarts. Two things follow from that:
+Both apply the build the rebuild job staged from `main` (next section); with none staged they change nothing.
 
-- The build has to run in the folder the plist serves, `/Users/james/code/collector`. A build in a worktree writes
-  that worktree's `.next` and changes nothing on port 4000.
+**An agent never kickstarts, stops or kills `com.james.collector`**, and never runs `bun run build` in that
+checkout. The by-hand pair this file used to give (`bun run build`, then `launchctl kickstart -k`) is what sat
+behind most of the restarts of 2026-10-29: altair's launchd log shows a shell running `git` twice and then
+`launchctl kickstart`, from a session working in this checkout (card #41). An agent builds and serves in its own
+worktree, on its own port (`COLLECTOR_PORT=4001 bun dev`), and leaves port 4000 alone; its change reaches port 4000
+after the merge, through the button.
+
+- A build in a worktree writes that worktree's `.next` and changes nothing on port 4000.
 - An open page needs no manual refresh. Every page polls `/api/version` (the build id the server process booted on)
   every two seconds and reloads itself when it moves, which is what a restart on a new build makes it do.
-
-That pair by hand is what takes the page down for a moment, and it is what altair's launchd log shows behind the
-restarts of 2026-10-29: a shell running `git` twice and then `launchctl kickstart`, from a session working in this
-checkout (card #41). Nothing after a merge needs it any more: the rebuild job builds and stages, and the page's
-Update button applies it. An agent builds in its own worktree and leaves port 4000 alone.
 
 ## The live Collector rebuilds itself after a merge (card #29)
 
@@ -85,7 +87,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.james.collector-rebu
 ```
 
 `RunAtLoad` means bootstrapping runs it at once, so the first build it finds stale — the one serving today, which
-has no stamp — is rebuilt and the page restarted straight away.
+has no stamp — is built and staged straight away, and the page offers it as the Update button.
 
 ## A push offers the update; the click applies it (card #41)
 
@@ -111,6 +113,32 @@ of the section before. James's decision: a push must not restart the server by i
   apart from the routes.)
 
 The page stays up until the click; one click is a second of downtime, chosen.
+
+While a build waits for the click, the checkout has already been pulled to it, and `collect.py` runs from that
+source on every read: the served page can draw rows a newer `collect.py` sends (the #29 mismatch) for as long as
+nobody clicks. The cure is the click.
+
+## How a start and a stop show in the log (card #41)
+
+`collector.log` stamps both, from `lib/server/lifecycle.ts`:
+
+- `[server] start <time> pid <pid> parent <pid> build <id> (<commit>)` at every start;
+- `[server] SIGTERM <time> pid <pid> parent <pid>; ending N open event streams ...` at every SIGTERM, followed by
+  one `[server]   ` line per process started in the 15 seconds before it, credentials masked. macOS records no
+  sender for a plain `kill`, so those lines are the nearest thing to one; a `launchctl kickstart` also shows in
+  launchd's own log (`log show --predicate 'eventMessage CONTAINS "kickstart"'`).
+
+The SIGTERM handler also ends every open `/api/events` stream. Without that, `next start` closes its port on a
+SIGTERM and then waits for the open connections, and a page's event stream never finishes: on 2026-10-29 the live
+server sat for ten minutes with its port shut, every new request refused, the open page frozen on its last machine
+snapshot, until a reload closed the stream and it exited (`exit(143)`, 16:33:03). A `kickstart -k` cut the same wait
+short: launchd logs `Service did not exit 5 seconds after SIGTERM. Sending SIGKILL.`, which is the five seconds
+between every kickstart and its restart, and why a restart with a page open left nothing in the log and one without
+left `code 143`.
+
+The page says when its run data is old instead of guessing: a claim with no run reads `stale 3 min` when the page's
+snapshot is past 45 seconds, or `ezio stale 4 min` when that machine's last read failed (the server keeps the last
+good read, marked stale, rather than an empty machine).
 
 To work on the code without touching the live one, use `bun dev` for hot reload on another port, since the live
 Collector holds 4000:
