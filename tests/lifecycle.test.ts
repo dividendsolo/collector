@@ -19,6 +19,7 @@ const PS = `  PID  PPID     ELAPSED COMMAND
 73111 73110       00:03 sleep 1
 73120 85632       00:00 ps -Ao pid,ppid,etime,command
 73119 73001       00:12 git status
+73121 85632       00:02 gh api rate_limit
 73000 1         00:16 /bin/bash old
 `;
 
@@ -31,7 +32,7 @@ describe("the server's own start and SIGTERM lines (card #41, item 3)", () => {
     expect(etimeSeconds("junk")).toBeNull();
   });
 
-  it("names the processes that started in the last seconds, never the server or the ps it ran", () => {
+  it("names the processes that started in the last seconds, never the server or what it ran itself", () => {
     const lines = recentProcesses(PS, { self: 85632, within: 15 });
     expect(lines).toEqual([
       "73110 (parent 73100, 4 s): /bin/bash -c kill 85632",

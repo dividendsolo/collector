@@ -63,7 +63,7 @@ export const redact = (command: string) =>
     .replace(/\b(?:sk|pk|rk|ghp|gho|ghs|github_pat|xox[a-z])[-_][\w-]{8,}/g, "***");
 
 /** The processes in `ps -Ao pid,ppid,etime,command` output that started in the last `within` seconds, one line
- * each, never `self` and never the ps that printed the table. */
+ * each, never `self` nor its own children (the ps that printed the table, its `gh` and `ssh` reads). */
 export function recentProcesses(ps: string, { self, within = RECENT_SECONDS }: { self: number; within?: number }) {
   const out: string[] = [];
   for (const line of ps.split("\n").slice(1)) {
@@ -71,7 +71,7 @@ export function recentProcesses(ps: string, { self, within = RECENT_SECONDS }: {
     if (!m) continue;
     const [, pid, ppid, etime, command] = m;
     const age = etimeSeconds(etime);
-    if (age === null || age > within || Number(pid) === self || /^ps\s/.test(command)) continue;
+    if (age === null || age > within || Number(pid) === self || Number(ppid) === self) continue;
     out.push(`${pid} (parent ${ppid}, ${age} s): ${redact(command).slice(0, 160)}`);
   }
   return out;
@@ -98,14 +98,21 @@ function processTable(): string {
   }
 }
 
-/** At boot: write the start line, and log and end the streams on SIGTERM. Ours runs first (`prependListener`):
- * Next's own SIGTERM handler closes the port and exits once the last connection is gone. Once per process. */
+/** How long a SIGTERM waits for Next's own shutdown before the process exits by itself. */
+export const EXIT_GRACE_MS = 2000;
+
+/** At boot: write the start line, and on SIGTERM log, end the streams and exit. Ours runs first
+ * (`prependListener`): Next's own SIGTERM handler closes the port and exits once the last connection is gone, but an
+ * open page in a foreground tab asks `/api/version` every two seconds over a kept-alive connection, so that never
+ * happens (a headless page kept a SIGTERMed server answering for over a minute, 2026-10-29). The exit after
+ * EXIT_GRACE_MS is the deadline; 143 is the code a SIGTERM leaves. Once per process. */
 export function watchLifecycle(build: Side, log: (line: string) => void = console.log) {
   once("lifecycle", () => {
     log(startLine(new Date(), process.pid, process.ppid, build));
     process.prependListener("SIGTERM", () => {
       const recent = recentProcesses(processTable(), { self: process.pid });
       log(termLine(new Date(), process.pid, process.ppid, closeStreams(), recent));
+      setTimeout(() => process.exit(143), EXIT_GRACE_MS).unref();
     });
     return true;
   });
