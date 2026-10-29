@@ -1,4 +1,5 @@
 import { subscribe } from "@/lib/server/board";
+import { openStream } from "@/lib/server/lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -18,17 +19,21 @@ export function GET(req: Request) {
       const off = subscribe((v) => send(`event: board\ndata: ${JSON.stringify(v)}\n\n`));
       const ping = setInterval(() => send(": ping\n\n"), 15_000);
       send("retry: 3000\n\n");
-      stop = () => {
-        off();
-        clearInterval(ping);
-        stop = () => {};
-      };
-      req.signal.addEventListener("abort", () => {
+      const end = () => {
         stop();
         try {
           ctrl.close();
         } catch {}
-      });
+      };
+      // A SIGTERM ends this stream too, or `next start` waits on it with its port already shut (card #41).
+      const unlist = openStream(end);
+      stop = () => {
+        off();
+        clearInterval(ping);
+        unlist();
+        stop = () => {};
+      };
+      req.signal.addEventListener("abort", end);
     },
     cancel() {
       stop();

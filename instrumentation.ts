@@ -8,7 +8,11 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { readSide, rememberServed } = await import("./lib/update");
-  rememberServed(readSide(process.cwd()));
+  const build = readSide(process.cwd());
+  rememberServed(build);
+  // A stamped start line, and a SIGTERM that logs itself and ends the open event streams (card #41).
+  const { watchLifecycle } = await import("./lib/server/lifecycle");
+  watchLifecycle(build);
   const { warm } = await import("./lib/server/warm");
   warm();
 }

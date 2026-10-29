@@ -92,11 +92,29 @@ export interface Snapshot {
   github: GithubLimit;
 }
 
+/** How often the server reads every machine. A machine read is stale once it is older than this. */
+export const READ_SECONDS = 10;
+
+/**
+ * This read's machines, each stamped with `read_at` (the time of its last good read). A machine whose read failed
+ * keeps its last good read, with `stale: true` and the error, instead of coming back empty: an empty machine has no
+ * runs, so every card it was building read `no run` (card #41) while the page said nothing about a failed read.
+ * A machine with no good read yet comes back as it is, empty with its error.
+ */
+export function mergeMachines(prev: any[] | undefined, next: any[], at: number): any[] {
+  return next.map((m) => {
+    if (!m.error) return { ...m, read_at: at, stale: false };
+    const last = prev?.find((p) => p.name === m.name && p.read_at);
+    return last ? { ...last, error: m.error, stale: true } : { ...m, read_at: null, stale: true };
+  });
+}
+
 /** Every machine plus the GitHub API limit, read every 10 seconds. A stale snapshot is served while a new one is read. */
-export const snapshot = swr<Snapshot>("snapshot", 10_000, async () => {
+export const snapshot = swr<Snapshot>("snapshot", READ_SECONDS * 1000, async (): Promise<Snapshot> => {
   const cfg = config();
   const targets = cfg.machines?.length ? cfg.machines : [{ name: "this machine" }];
   const [limit, ...results] = await Promise.all([githubLimit(), ...targets.map((t) => collect(t, cfg))]);
-  const machines = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, error: results[i][1] }));
-  return { at: Math.floor(Date.now() / 1000), machines, github: limit };
+  const read = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, error: results[i][1] }));
+  const at = Math.floor(Date.now() / 1000);
+  return { at, machines: mergeMachines(snapshot.peek()?.machines, read, at), github: limit };
 });
