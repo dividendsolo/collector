@@ -581,6 +581,22 @@
     font-size: 12px;
     line-height: 16px;
   }
+  /* The top bar's right side: the Update button (card #41, shown only while a newer build waits) and the live dot. */
+  .topbar .tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .update {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .update .said {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 16px;
+  }
   .live .pulse {
     align-self: center;
   }

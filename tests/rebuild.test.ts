@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { readStamp, rebuildPlan, STAGING, swapIn, writeStamp } from "@/lib/rebuild";
+import { readStamp, rebuildPlan, SERVED, STAGING, swapIn, writeStamp } from "@/lib/rebuild";
+import { clickAction, updateState } from "@/lib/update";
 
 /** The live Collector's own rebuild (card #29): the "is the build behind main" check on its own, then the real
  * script in a throwaway checkout with a real `origin` on disk, so the pull, the build and the stamp a run here takes
@@ -68,25 +69,25 @@ function world() {
     git(work, "push", "origin", "main");
     return git(work, "rev-parse", "HEAD").trim();
   };
-  /** The job, as the launchd job runs it: `bun scripts/rebuild-if-stale.ts --dir <checkout>`. The restart is an
-   * echo here — the one step that needs the machine's own launchd job — so the whole run can be read back. */
+  /** The job, as the launchd job runs it: `bun scripts/rebuild-if-stale.ts --dir <checkout>`. It builds and stages,
+   * and stops there: the swap and the restart are the page's Update click (`tests/update.test.ts`), so nothing here
+   * brings the page down. */
   const run = (...flags: string[]) => {
-    const r = spawnSync("bun", [JOB, "--dir", live, "--restart", "echo restarted > restarted.txt", ...flags], {
-      cwd: live,
-      encoding: "utf8",
-      env: gitEnv(),
-    });
+    const r = spawnSync("bun", [JOB, "--dir", live, ...flags], { cwd: live, encoding: "utf8", env: gitEnv() });
     return { code: r.status, out: `${r.stdout}${r.stderr}` };
   };
   const file = (name: string) => path.join(live, name);
-  /** The BUILD_ID the page serves, null when `.next` has none. */
-  const served = () =>
-    fs.existsSync(file(".next/BUILD_ID")) ? fs.readFileSync(file(".next/BUILD_ID"), "utf8").trim() : null;
-  const built = () => served() === "new";
-  const restarted = () => fs.existsSync(file("restarted.txt"));
+  /** The BUILD_ID a build folder holds, null when it holds no build. */
+  const buildId = (folder: string) =>
+    fs.existsSync(file(`${folder}/BUILD_ID`)) ? fs.readFileSync(file(`${folder}/BUILD_ID`), "utf8").trim() : null;
+  /** The BUILD_ID the page serves, and the one the job staged beside it for the Update click. */
+  const served = () => buildId(SERVED);
+  const staged = () => buildId(STAGING);
+  const built = () => staged() === "new";
   const stamp = () => readStamp(live)?.commit ?? null;
+  const stagedStamp = () => readStamp(live, STAGING)?.commit ?? null;
 
-  return { root, origin, live, work, head, merge, run, file, served, built, restarted, stamp };
+  return { root, origin, live, work, head, merge, run, file, served, staged, built, stamp, stagedStamp };
 }
 
 describe("rebuildPlan", () => {
@@ -179,9 +180,10 @@ describe("swapIn", () => {
 });
 
 describe("the rebuild job", () => {
-  it("pulls the checkout to main, builds, records the commit it built, and restarts the page", () => {
+  it("pulls the checkout to main, builds, and leaves the build staged for the Update click", () => {
     const w = world();
-    writeStamp(w.live, w.head(w.live));
+    const old = w.head(w.live);
+    writeStamp(w.live, old);
     const newer = w.merge("second");
     expect(w.head(w.live)).not.toBe(newer); // the checkout is behind main: the job's pull is what moves it
 
@@ -190,12 +192,15 @@ describe("the rebuild job", () => {
     expect(r.code).toBe(0);
     expect(w.head(w.live)).toBe(newer);
     expect(w.built()).toBe(true);
-    expect(fs.readFileSync(w.file(".next/static/app.js"), "utf8").trim()).toBe("chunk");
-    expect(w.stamp()).toBe(newer);
-    expect(w.restarted()).toBe(true);
-    // The build was made beside `.next` and moved in: nothing of the staging folder or the old build is left.
-    expect(fs.existsSync(w.file(STAGING))).toBe(false);
+    expect(w.stagedStamp()).toBe(newer);
+    expect(fs.readFileSync(w.file(`${STAGING}/static/app.js`), "utf8").trim()).toBe("chunk");
+    // Nothing swapped, nothing restarted: the page serves exactly what it served, and the button offers the new
+    // build until someone clicks it.
+    expect(w.served()).toBe("old");
+    expect(fs.readFileSync(w.file(`${SERVED}/static/app.js`), "utf8").trim()).toBe("old chunk");
+    expect(w.stamp()).toBe(old);
     expect(fs.existsSync(w.file(".next-previous"))).toBe(false);
+    expect(clickAction(updateState(w.live))).toEqual({ ok: true, commit: newer });
   });
 
   it("keeps the old build serving when the build fails after wiping its folder, as next build does, and says so", () => {
@@ -216,7 +221,7 @@ describe("the rebuild job", () => {
     expect(w.served()).toBe("old");
     expect(fs.readFileSync(w.file(".next/static/app.js"), "utf8").trim()).toBe("old chunk");
     expect(w.stamp()).toBe(old);
-    expect(w.restarted()).toBe(false);
+    expect(w.staged()).toBeNull();
     expect(fs.existsSync(w.file(STAGING))).toBe(false);
   });
 
@@ -234,7 +239,9 @@ describe("the rebuild job", () => {
 
     expect(w.run().code).toBe(0);
     expect(fs.readFileSync(seen, "utf8").trim()).toBe("old");
-    expect(w.served()).toBe("new");
+    // The page still serves the old build when the run ends: the new one waits in the staging folder for the click.
+    expect(w.served()).toBe("old");
+    expect(w.staged()).toBe("new");
   });
 
   it("does nothing at all when the build is the one main serves", () => {
@@ -244,7 +251,46 @@ describe("the rebuild job", () => {
     const r = w.run();
     expect(r.code).toBe(0);
     expect(w.built()).toBe(false);
-    expect(w.restarted()).toBe(false);
+    expect(w.staged()).toBeNull();
+  });
+
+  it("is quiet, and does not build again, while a build of main waits staged for the click", () => {
+    const w = world();
+    const old = w.head(w.live);
+    writeStamp(w.live, old);
+    const newer = w.merge("second");
+    expect(w.run().code).toBe(0); // the first run pulls to main, builds, and stages it
+    expect(w.stagedStamp()).toBe(newer);
+
+    // Five minutes later, with main where it was: the button already offers the new build, so nothing is rebuilt.
+    const again = w.run();
+    expect(again.code).toBe(0);
+    expect(again.out).not.toContain("rebuilding");
+    expect(w.served()).toBe("old");
+    expect(w.staged()).toBe("new");
+    expect(w.stagedStamp()).toBe(newer);
+    expect(w.stamp()).toBe(old);
+
+    expect(w.run("--check").out).toContain("waits for the page's Update click");
+  });
+
+  it("removes a staged build of another commit when the page already serves main", () => {
+    const w = world();
+    const first = w.head(w.live);
+    const newer = w.merge("second");
+    // The page restarted by hand onto main, and a build of the commit before it is still staged: the button must not
+    // offer that one.
+    writeStamp(w.live, newer);
+    write(w.file(`${STAGING}/BUILD_ID`), "older\n");
+    writeStamp(w.live, first, new Date(), STAGING);
+
+    const r = w.run();
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("removed a staged build");
+    expect(fs.existsSync(w.file(STAGING))).toBe(false);
+    expect(w.served()).toBe("old");
+    expect(w.stamp()).toBe(newer);
+    expect(updateState(w.live).ready).toBe(false);
   });
 
   it("--check reports what a run would do, from the last fetch, and touches nothing", () => {

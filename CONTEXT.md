@@ -30,11 +30,13 @@ launchctl kickstart -k gui/$(id -u)/com.james.collector
 
 - The build has to run in the folder the plist serves, `/Users/james/code/collector`. A build in a worktree writes
   that worktree's `.next` and changes nothing on port 4000.
-- An open page needs no manual refresh. Every page polls `/api/version` (the `.next` build id) every two seconds
-  and reloads itself when it moves, which is what a build plus a restart makes it do.
+- An open page needs no manual refresh. Every page polls `/api/version` (the build id the server process booted on)
+  every two seconds and reloads itself when it moves, which is what a restart on a new build makes it do.
 
-That pair is what the job below runs after a merge. By hand it is James's: an agent builds in its own worktree and
-leaves port 4000 alone.
+That pair by hand is what takes the page down for a moment, and it is what altair's launchd log shows behind the
+restarts of 2026-10-29: a shell running `git` twice and then `launchctl kickstart`, from a session working in this
+checkout (card #41). Nothing after a merge needs it any more: the rebuild job builds and stages, and the page's
+Update button applies it. An agent builds in its own worktree and leaves port 4000 alone.
 
 ## The live Collector rebuilds itself after a merge (card #29)
 
@@ -56,14 +58,16 @@ in the checkout every five minutes, and that script:
   `COLLECTOR_DIST_DIR=.next-rebuild`, so the build goes into `.next-rebuild` beside the served `.next`
   (`next.config.ts` reads that variable as its `distDir`; `postbuild` stamps the same folder). `next build` empties
   its own folder before it compiles, so a build in `.next` itself would leave the page with no build for as long as
-  the build ran, and with none at all when it failed. Only once the build succeeded does the script move `.next`
-  aside, rename `.next-rebuild` to `.next`, delete the old one, and run
-  `launchctl kickstart -k gui/$(id -u)/com.james.collector` — the restart that makes every open page reload onto the
-  new build. `tsconfig.json` already lists `.next-rebuild/types`, so the build leaves no tracked file changed for the
-  next pull to trip on;
+  the build ran, and with none at all when it failed. **The job stops there** (card #41): the finished build stays in
+  `.next-rebuild`, the served `.next` is never touched, and nothing restarts. The page offers the build as its Update
+  button instead. `tsconfig.json` already lists `.next-rebuild/types`, so the build leaves no tracked file changed
+  for the next pull to trip on;
+- reads what the page would serve after a click — the staged build when one waits, else the served one — so a build
+  already waiting for the click is not built again every five minutes, and a staged build of some other commit (a
+  page restarted by hand onto main) is deleted rather than offered;
 - is silent when the build is current, and writes one `[rebuild]` line per step it takes otherwise, both streams to
   `~/Library/Logs/collector.log` beside the server's own;
-- refuses a checkout that is not on `main`, and logs and stops on a failed fetch, pull, build, swap or restart. A
+- refuses a checkout that is not on `main`, and logs and stops on a failed fetch, pull or build. A
   failed build deletes `.next-rebuild` and never touches `.next`: its BUILD_ID, its chunks and its stamp stay as they
   were, and the page keeps serving them. It always names what it did in the log, so a main that will not
   build shows up as one `build failed` line every five minutes, not as a silent old page.
@@ -83,6 +87,31 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.james.collector-rebu
 `RunAtLoad` means bootstrapping runs it at once, so the first build it finds stale — the one serving today, which
 has no stamp — is rebuilt and the page restarted straight away.
 
+## A push offers the update; the click applies it (card #41)
+
+On 2026-10-29 the page went down 46 times in a day, and altair's launchd log shows a `launchctl kickstart` five
+seconds before every one of them: seven from the rebuild job above, the rest from a session running the by-hand pair
+of the section before. James's decision: a push must not restart the server by itself.
+
+- `GET /api/update` answers what the button needs: the build this server process runs (its id, and the commit its
+  stamp records), the finished build staged in `.next-rebuild`, and whether to offer the click. Two small file reads.
+- The button is in the top bar (`components/update.tsx`), shown only while a build waits, and it is small: `Update`.
+  It polls `GET /api/update` every 30 seconds, so a push shows up within one rebuild interval.
+- `POST /api/update` hands the work to `scripts/apply-update.ts` **detached**, so the click's answer reaches the page
+  before the restart takes the server away. The script swaps the staged build into `.next` (`swapIn`) and then runs
+  `launchctl kickstart -k gui/$(id -u)/com.james.collector`, which is what makes every open page reload onto the new
+  build. With nothing staged it says so and changes nothing, so a second click is harmless.
+- The script needs Bun, which the route resolves with `bunPath()` rather than `process.execPath`: the plist runs
+  `bun run start`, whose `next start` is a bin with a node shebang, so the server process itself is **node** (found by
+  a real click, not by reading the code).
+- `/api/version` reports the build this process **booted on**, recorded in `instrumentation.ts`, not the folder's.
+  The swap leaves the new build on disk while the old one still runs, and a page that reloaded in that window would
+  ask for chunks the server is not serving yet. It moves when the server really comes back, which is when the page
+  should reload. (The record lives on `globalThis` — `lib/server/store.ts` — because Next bundles `instrumentation.ts`
+  apart from the routes.)
+
+The page stays up until the click; one click is a second of downtime, chosen.
+
 To work on the code without touching the live one, use `bun dev` for hot reload on another port, since the live
 Collector holds 4000:
 
@@ -97,6 +126,7 @@ COLLECTOR_PORT=4001 bun dev
 | `/api/state` | The page's main read: machines and their jobs, the GitHub limit, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
+| `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,
 `/api/card`, `/api/repos`, `/api/work`, `/api/work-stats`, `/api/version`); the board's server-sent events are
