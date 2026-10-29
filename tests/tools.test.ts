@@ -30,6 +30,8 @@ interface Run {
   card: number | null;
   seconds: number;
   model?: string;
+  /** The session runs inside tmux (card #37): the page's Running for cell reads `tmux` instead of `interactive`. */
+  tmux?: boolean;
 }
 
 /** A throwaway home holding the session files a tool writes locally. */
@@ -199,6 +201,46 @@ describe("tool_rows", () => {
     expect(rows).toHaveLength(3);
     expect(rows.map((r) => r.seconds).sort((a, b) => a - b)).toEqual([14238, 14238, 122503]);
     expect(rows.every((r) => r.name === "Claude Code" && r.repo === null && r.model === "claude-opus-5-5")).toBe(true);
+  });
+  it("marks a session that runs inside tmux, the pane's shell and the server among its ancestors", () => {
+    // James, 2026-10-29 (card #37): his tmux `Work` window read `interactive` like every other session, and the
+    // page said nothing about which one it was. Inside tmux the pane's shell is the server's child and the session
+    // sits under that, so the walk runs the parent pids of the same `ps` read up to the process whose program is tmux.
+    const cwd = "/home/me/code/collector/.worktrees/build-21";
+    expect(
+      drive<Run[]>({
+        fn: "rows",
+        ps: ps(
+          proc(1000, "2-03:00:00", "tmux new-session -A -s Work"),
+          proc(2000, "01:12", "/bin/bash -l"),
+          proc(2001, "01:12", "/home/me/.local/bin/claude"),
+        ),
+        facts: { 2001: { cwd, branch: "agent/21", root: cwd } },
+        models: [],
+        parents: { 2001: "2000", 2000: "1000", 1000: "1" },
+      }),
+    ).toEqual([
+      { type: "agent", name: "Claude Code", kind: "session", repo: "collector", card: 21, seconds: 72, tmux: true },
+    ]);
+  });
+  it("leaves a session in a plain terminal unmarked, and one under a program only named after tmux", () => {
+    const rows = drive<Run[]>({
+      fn: "rows",
+      ps: ps(
+        proc(3000, "1-00:00:00", "/usr/sbin/sshd: me@pts/0"),
+        proc(3001, "00:20", "/home/me/.local/bin/claude"),
+        proc(3100, "00:30", "/home/me/bin/tmux-notes --watch"),
+        proc(3101, "00:30", "claude"),
+      ),
+      facts: {
+        3001: { cwd: "/Users/me", branch: null, root: null },
+        3101: { cwd: "/Users/me", branch: null, root: null },
+      },
+      models: [],
+      parents: { 3001: "3000", 3000: "1", 3101: "3100", 3100: "1" },
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.tmux === undefined)).toBe(true);
   });
 });
 
@@ -383,6 +425,17 @@ describe("tool_sessions", () => {
       { repo: null, kind: "session", card: null, seconds: 450, type: "agent", name: "Claude Code" },
     ]);
     expect(drive<Run[]>({ fn: "sessions", ps: ps(line), skip: ["987654"] })).toEqual([]);
+  });
+  it("carries the tmux marker through, so the reader the page reads says it too", () => {
+    expect(
+      drive<Run[]>({
+        fn: "sessions",
+        ps: ps(proc(1000, "2-03:00:00", "tmux new-session -A -s Work"), proc(987654, "07:30", "claude")),
+        parents: { 987654: "1000", 1000: "1" },
+      }),
+    ).toEqual([
+      { repo: null, kind: "session", card: null, seconds: 450, type: "agent", name: "Claude Code", tmux: true },
+    ]);
   });
 });
 

@@ -144,7 +144,8 @@ const LANE_PILL: Record<string, string> = {
 
 /** The age cell of a live run: amber after 30 minutes of a build, red after an hour. A build only: a review, a
  * verify and the lab droid's runs (up to two hours by design) never turn amber or red. A Claude Code or Codex
- * session waits on the person, so it reads `interactive` instead of a length that looks like a stuck run (#29). */
+ * session waits on the person, so it reads `interactive` — `tmux` when it runs inside tmux (#37) — instead of a
+ * length that looks like a stuck run (#29). */
 const RunTime = ({ r }: { r: Run }) => (
   <td
     className={`num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}`}

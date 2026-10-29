@@ -735,15 +735,42 @@ def tool_model(tool, cwd, home=HOME):
     return claude_model(cwd, home) if tool == "claude" else codex_model(cwd, home)
 
 
-def tool_rows(out, facts, models=None, skip=()):
+# The program tmux runs as a server or as the client that started one. Inside tmux the pane's shell is the server's
+# child and the session sits under that, so a session is in tmux when this name is anywhere above it (collector#37).
+# tmux starts its server with the argv0 of the client that first needed one (`tmux new-session -A -s Work`), and names
+# itself `tmux: server` in its own title on some versions, so the name is the first token's basename read as either.
+def is_tmux(command):
+    """True when one `ps` line is tmux itself, server or client. A pid the read holds no line for is not tmux."""
+    name = os.path.basename(command.split(None, 1)[0]) if (command or "").strip() else ""
+    return name == "tmux" or name.startswith("tmux:")
+
+
+def in_tmux(pid, parents, commands, depth=8):
+    """True when a process runs inside tmux: one of its ancestors is tmux. `parents` maps a pid to the pid it runs
+    under and `commands` a pid to its own command line, both from the same `ps` read of the machine. A parent the read
+    does not hold, or a chain longer than `depth`, is not tmux, and the row keeps reading what it read before
+    (collector#37)."""
+    seen, current = {pid}, parents.get(pid)
+    while current and current not in seen and depth:
+        if is_tmux(commands.get(current)):
+            return True
+        seen.add(current)
+        current, depth = parents.get(current), depth - 1
+    return False
+
+
+def tool_rows(out, facts, models=None, skip=(), parents=None):
     """One row per running Claude Code or Codex session, named as the tool names itself ("Claude Code", "Codex"): the
     repo and card its folder is a card worktree for, and how long it has run. `facts` maps a pid to (folder, branch,
     checkout top level) and `models` maps (tool, folder) to what the tool's session files record. One Codex session per
     folder: Codex's npm shim and the binary under it are two processes of one run, so the longest-lived process is the
     one that shows. Every Claude Code process left once its helpers are gone is a session of its own, so two in one
     folder are two rows (collector#34: 3 sessions in the home folder showed as 1). `skip` holds the pids of processes
-    another reader already shows — the lab droid's run, which has its own row."""
-    models = models or {}
+    another reader already shows — the lab droid's run, which has its own row. A session under tmux carries
+    `"tmux": True` (collector#37), from `parents`, the pid -> parent map of the same `ps` read; the page's Running for
+    cell reads `tmux` for it instead of `interactive`."""
+    models, parents = models or {}, parents or {}
+    commands = {pid: command for pid, _, command in process_lines(out)}
     found = {}
     for pid, etime, command in process_lines(out):
         if pid in skip:
@@ -756,14 +783,18 @@ def tool_rows(out, facts, models=None, skip=()):
         if key in found and found[key]["seconds"] >= seconds(etime):
             continue
         repo, card = session_place(cwd, branch, root)
-        found[key] = {"repo": repo, "kind": "session", "card": card, "seconds": seconds(etime),
-                      "type": "agent", "name": TOOL_NAMES[tool], **models.get((tool, cwd), {})}
+        row = {"repo": repo, "kind": "session", "card": card, "seconds": seconds(etime),
+               "type": "agent", "name": TOOL_NAMES[tool], **models.get((tool, cwd), {})}
+        if in_tmux(pid, parents, commands):
+            row["tmux"] = True
+        found[key] = row
     return [found[k] for k in sorted(found)]
 
 
-def tool_sessions(out, skip=()):
-    """Every running Claude Code or Codex session on this machine, with the model its own session files record.
-    `skip` holds the pids of processes another reader already shows — the lab droid's run, which has its own row."""
+def tool_sessions(out, skip=(), parents=None):
+    """Every running Claude Code or Codex session on this machine, with the model its own session files record and
+    whether it runs inside tmux (collector#37). `skip` holds the pids of processes another reader already shows — the
+    lab droid's run, which has its own row."""
     facts, models = {}, {}
     for pid, _, command in process_lines(out):
         if pid in skip:
@@ -776,7 +807,7 @@ def tool_sessions(out, skip=()):
         facts[pid] = (cwd, branch, root)
         if cwd and (tool, cwd) not in models:
             models[(tool, cwd)] = tool_model(tool, cwd)
-    return tool_rows(out, facts, models, skip)
+    return tool_rows(out, facts, models, skip, parents)
 
 
 def verify_runs():
@@ -890,15 +921,30 @@ def listen_ports():
     return ports
 
 
-def child_pids():
+def child_pids(links=None):
     """pid -> the pids started under it, from `ps -axo pid=,ppid=`. A leftover often holds no socket itself: the
     server it started listens (a shell runs `bun start`, and the server under that holds the port)."""
     children = {}
+    for pid, ppid in parent_links() if links is None else links:
+        children.setdefault(ppid, []).append(pid)
+    return children
+
+
+def parent_links():
+    """(pid, ppid) for each line of `ps -axo pid=,ppid=`: one read of the machine's parentage, which both the children
+    map (a leftover's server) and the walk up to tmux (collector#37) are built from. A process that is its own parent
+    says nothing: read as a parent it would only make a loop."""
+    links = []
     for line in (read_command(["ps", "-axo", "pid=,ppid="]) or "").splitlines():
         fields = line.split()
         if len(fields) == 2 and fields[0] != fields[1]:
-            children.setdefault(fields[1], []).append(fields[0])
-    return children
+            links.append((fields[0], fields[1]))
+    return links
+
+
+def parent_pids(links=None):
+    """pid -> the pid it runs under, the same `ps -axo pid=,ppid=` read the other way."""
+    return dict(parent_links() if links is None else links)
 
 
 def descendants(pids, children, depth=3):
@@ -968,12 +1014,13 @@ def running_agents():
     out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
     # The droid is not this user's worktree, so it is read on its own with its user in front.
     droid_out = subprocess.run(["ps", "-axo", "user=,pid=,etime=,command="], capture_output=True, text=True).stdout
+    links = parent_links()
     droid_pids, droid = lab_droid(droid_out)
     steps, verifies = work_steps(), verify_runs()
     heads = verify_heads() if verifies else {}
     found = {}
     for row in worktree_rows(out, steps=steps, verifying={heads[c] for c, _, _ in verifies if c in heads},
-                             ports=listen_ports(), children=child_pids()):
+                             ports=listen_ports(), children=child_pids(links)):
         found[(row["repo"], row["kind"], row["card"])] = row
     for st in steps:
         rows = [k for k in found if (k[0], k[2]) == (st["repo"], st["card"])]
@@ -991,7 +1038,8 @@ def running_agents():
         row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script", "name": WORK_SCRIPT})
         # The newest verify for the card wins; the sort puts it last.
         row.update(kind="verify", feature=feature, seconds=secs)
-    return [found[k] for k in sorted(found)] + tool_sessions(out, skip={pid for pid, _ in droid_pids}) + droid
+    return ([found[k] for k in sorted(found)] + tool_sessions(out, skip={pid for pid, _ in droid_pids},
+                                                             parents=parent_pids(links)) + droid)
 
 
 def verify_heads():
