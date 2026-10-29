@@ -2,14 +2,14 @@
 
 Research for stage 1 (Idea) of the stage ladder: the audience Collector is built for is solo developers and small
 teams who run many coding agents, cron jobs and background workers, often across more than one machine. This file
-names where those people gather, ten of them who have written about the exact problem, and one question James could
-ask each. It is the `find-community` pass for Collector, written down so collector#12 (the paid cloud companion) has
+names where those people gather, ten of them who have written about the exact problem, and one message James could
+send each. It is the `find-community` pass for Collector, written down so collector#12 (the paid cloud companion) has
 something to test against.
 
 The problem being checked, in the words of the people below: an agent or a scheduled job stops doing its work
 without raising anything, and there is no single view of what ran, what is running, and what quietly stopped.
 
-Nothing here has been sent. No DMs, no comments, no emails. Every question below is a draft for James to approve,
+Nothing here has been sent. No DMs, no comments, no emails. Every message below is a draft for James to approve,
 rewrite or drop.
 
 ## The places, five of them
@@ -75,6 +75,10 @@ describe what it cost them.
 
 Public handles, each with the post that shows the problem. The quotes are from the post or thread the link opens.
 
+Each person also has one draft message: one line, under 300 characters, ready to send as it stands. The `marketing`
+skill, section 7, says the first outreach message is one line. The link to the person's own post stays above it, so
+the message can be checked against what they actually wrote.
+
 ### 1. u/lakshminp, r/ClaudeAI
 
 [I audited my always-on AI agent. 6 of 10 cron jobs had silently stopped running and I didn't notice for a
@@ -84,8 +88,9 @@ Runs an always-on daemon: ten scheduled jobs, up 54 days. The audit counted actu
 found three working, three dead and four limping. "morning-brief, scheduled daily at 6am. Last actual run: March
 18. Full month of silence. I did not miss it."
 
-Draft question: When you audited the log directory, the dead jobs had been dead for a month and you had not
-missed them. What would a dead job have to do for an alert to be worth it to you?
+Draft message (one line, 235 characters):
+
+Your audit found 6 of 10 cron jobs had been dead for a month, and you never missed them. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 2. u/Significant_Aide_313, r/Proxmox
 
@@ -97,8 +102,9 @@ machines, with no shared view. "Found out last week my backup job had been silen
 post asks for sits between a folder of shell scripts and an enterprise scheduler: one central place to see what
 ran and what failed, with retries.
 
-Draft question: When the backup had been failing for three weeks, where would you have wanted to see it: one page
-per machine, or one list of jobs across all three?
+Draft message (one line, 255 characters):
+
+Your homelab became 12 unrelated cron jobs across 3 machines, and a backup had been failing for three weeks. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 3. u/Irudon, r/ClaudeAI
 
@@ -110,8 +116,9 @@ different way: "one I tail, one posts to a Discord channel, one I just check on 
 wants: "one glanceable view of current state, last heartbeat, current step, done/failed, rather than scrolling a
 log to reconstruct what's happening."
 
-Draft question: If one page showed the last heartbeat of every run, which of the three would you drop first, and
-which would you keep anyway?
+Draft message (one line, 263 characters):
+
+Three runs each reporting a different way, and you wanted one glanceable view: last heartbeat, step, done or failed. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 4. u/Few-Ad-1358, r/AI_Agents
 
@@ -122,8 +129,9 @@ Opens from the other side: running agents in parallel is solved, the control and
 what is still unresolved after worktrees, branches and routing rules includes "recovering context cleanly after
 interruption" and "understanding what changed and why across runs".
 
-Draft question: How do you currently find out that one of your parallel agents stopped working, and how long does
-it usually take?
+Draft message (one line, 252 characters):
+
+You said running agents in parallel is solved; the control and review layer after an interruption is not. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 5. u/danhof1, r/ClaudeCode
 
@@ -134,8 +142,9 @@ On liveness checks that lie. The thread settles on the file-mtime heartbeat: "Th
 proxy that lies, the file mtime is tied to the loop actually running." An agent with a healthy port and a stale
 heartbeat is a zombie that an uptime check will happily call up.
 
-Draft question: You wired in the heartbeat file and the mtime check. Since then, has anything still managed to look
-alive while doing nothing?
+Draft message (one line, 259 characters):
+
+You found the HTTP check is a liveness proxy that lies, and the file mtime is tied to the loop actually running. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 6. u/robotrossart, r/Applesilicon
 
@@ -146,8 +155,9 @@ Four coding agents on staggered ten-minute cycles as native launchd services, wi
 dashboard and a Telegram bot: shared memory, persistent state, and scheduling handed to launchd rather than cron.
 The multi-agent, single-host version of the setup, self-hosted and running around the clock.
 
-Draft question: You built the dispatcher and the dashboard for the fleet. What does it still not tell you that you
-wish it did?
+Draft message (one line, 268 characters):
+
+You run four agents around the clock on one Mac Mini, with a dispatcher and a dashboard you built to keep an eye on them. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 7. u/bagrat_hakobyan, r/selfhosted
 
@@ -158,7 +168,9 @@ Asks the question directly of people running VPSs and home servers, and separate
 failures aren't caused by the server going down, but by background jobs silently stopping. The server itself is
 healthy, but the automation isn't." 102 comments, mostly tool names.
 
-Draft question: Of the 102 replies, did any give you a setup you actually kept, or is it still a someday job?
+Draft message (one line, 232 characters):
+
+Your point was that the server stays healthy while the background jobs silently stop. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 8. u/masani3llo, r/n8n
 
@@ -170,7 +182,9 @@ you find out, and "what did it actually cost you when it happened? Just the time
 53 comments. A follow-up in the thread is the sharp one: a workflow that reports success and quietly produces
 nothing, which a green-tick execution list will never show.
 
-Draft question: You asked what a silent stop cost other people. What did yours cost you?
+Draft message (one line, 247 characters):
+
+You asked what a silently stopped workflow cost people, and whether the success tick means anything. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 9. BlackPearl02, Hacker News
 
@@ -182,8 +196,9 @@ The purest statement of the problem found in this pass, and the reason exit code
 fraction of records. The logs say everything's fine, but the results are wrong." A reply in the thread says that
 even with chronic, correct exit codes and notifications, a job can succeed and do nothing.
 
-Draft question: You built rules that check a job's output rather than its exit code. Which was harder: writing the
-rules, or noticing the cases where a job passed them and still did nothing?
+Draft message (one line, 265 characters):
+
+Exit code 0, empty files: the cron runs, the sync completes, the logs say everything's fine and the results are wrong. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ### 10. @ericosiu, X
 
@@ -196,8 +211,9 @@ hallucinated an entire build process and reported success with total confidence.
 output." The second item is the scheduled version of the same thing: "Crons Silently Die For Days ... No error. No
 alert. No indication anything was wrong."
 
-Draft question: You said the fix is an immune system, not better prompts. Which of your checks has caught the most
-real failures, and which one turned out to be noise?
+Draft message (one line, 254 characters):
+
+You said the fix is an immune system, not better prompts, after an agent reported success with zero output. I built Collector, a free page that shows every agent and job across machines: https://github.com/dividendsolo/collector. Does it catch your case?
 
 ## How this was checked
 
@@ -214,6 +230,9 @@ Every link above was opened, not just searched for.
   this file are the canonical `reddit.com` ones, which is what James's browser opens. This is the one check that
   could not be done against the origin site from here; it is worth re-opening two or three of them by hand before
   the first message goes out.
+
+Each draft message is one line, under 300 characters; it names Collector and links the repo, and the count printed
+beside it is checked in `tests/community-messages.test.ts`.
 
 Counts and dates in this file are as they appeared on the day it was written (2026-10-23).
 
