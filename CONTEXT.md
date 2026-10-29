@@ -128,7 +128,9 @@ nobody clicks. The cure is the click.
   sender for a plain `kill`, so those lines are the nearest thing to one; a `launchctl kickstart` also shows in
   launchd's own log (`log show --predicate 'eventMessage CONTAINS "kickstart"'`).
 
-The SIGTERM handler also ends every open `/api/events` stream. Without that, `next start` closes its port on a
+The SIGTERM handler also ends every open `/api/events` stream and exits (code 143) two seconds later at the
+latest, since a foreground page polling `/api/version` over a kept-alive connection would hold Next's own shutdown
+open as well. Without that, `next start` closes its port on a
 SIGTERM and then waits for the open connections, and a page's event stream never finishes: on 2026-10-29 the live
 server sat for ten minutes with its port shut, every new request refused, the open page frozen on its last machine
 snapshot, until a reload closed the stream and it exited (`exit(143)`, 16:33:03). A `kickstart -k` cut the same wait
