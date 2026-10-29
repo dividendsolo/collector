@@ -32,6 +32,13 @@ export const lastLine = (text: string) =>
 /** A commit as the log and the page name it. */
 export const short = (commit: string) => commit.slice(0, 7);
 
+/** A `--name value` flag out of a script's arguments: the value when it is there and is not another flag. */
+export function option(argv: string[], name: string): string | undefined {
+  const i = argv.indexOf(`--${name}`);
+  const next = argv[i + 1];
+  return i >= 0 && next && !next.startsWith("--") ? next : undefined;
+}
+
 /** What a build recorded about itself, in `.next/collector-build.json` beside the build. */
 export interface BuildStamp {
   /** The checkout's HEAD when the build ran. */

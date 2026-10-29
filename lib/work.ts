@@ -15,6 +15,8 @@ export interface WorkRun {
   /** The repo the run's folder is in. A session outside any repo has none, and the page says "no repo". */
   repo?: string | null;
   seconds: number;
+  /** A session whose process runs inside tmux (`collect.py`, collector#37): its Running for cell reads `tmux`. */
+  tmux?: boolean | null;
   /** The TCP port a leftover process listens on, when the machine shows one (`ss` on Linux, `lsof` on a Mac). */
   port?: number | null;
 }
@@ -54,13 +56,18 @@ export const SESSION_MACHINE = "local";
  * real duration there read as a stuck run (James, 2026-10-25, card #29). */
 export const SESSION_TIME = "interactive";
 
+/** What it says instead when the session runs inside tmux (James, 2026-10-29, card #37): the row tells where the
+ * session runs, which `interactive` alone did not — his tmux `Work` window read the same as any other session. */
+export const SESSION_TMUX = "tmux";
+
 /** The Machine cell of a run: `local` for a session, the machine the run is on for everything else. */
 export const runMachine = (r: { kind?: string | null; machine?: string | null }) =>
   isSession(r) ? SESSION_MACHINE : r.machine || "";
 
-/** The Running for cell of a run: `interactive` for a session, its own length for everything else. */
-export const runTime = (r: { kind?: string | null; seconds: number }) =>
-  isSession(r) ? SESSION_TIME : duration(r.seconds);
+/** The Running for cell of a run: `interactive` for a session — `tmux` when it runs inside tmux — its own length
+ * for everything else. */
+export const runTime = (r: { kind?: string | null; seconds: number; tmux?: boolean | null }) =>
+  isSession(r) ? (r.tmux ? SESSION_TMUX : SESSION_TIME) : duration(r.seconds);
 
 export interface WorkCard {
   repo: string;
@@ -96,6 +103,73 @@ const REVIEW = new Set([
   "ready-to-merge",
   "merging",
 ]);
+
+/** The lanes that say a machine or a session holds the card. Their name is never the State cell: a live run shows
+ * its own badge, a `local` card shows the session's, and a claim with neither shows `no run` (agent-stack#187 read
+ * agent-in-progress for 4 days with nothing behind it; James, 2026-10-29: "if it truly is, then the agent badge
+ * would show"). */
+const CLAIM_LANES = new Set(["agent-in-progress", "verify-in-progress"]);
+
+/** Seconds after which the page's machine snapshot is stale: the server reads every 10 s and the page asks every
+ * 15 s, so a snapshot past 45 s means reads are failing, not slow. */
+export const STALE_SECONDS = 45;
+
+/** How old the run data behind the page is. `page`: the snapshot's age when it is past STALE_SECONDS (the server
+ * stopped answering), else null. `machines`: each machine whose last read failed, by the age of its last good read
+ * (null: never read). `names`: every machine, to tell a card's host label from its other labels. */
+export interface Staleness {
+  page: number | null;
+  machines: Record<string, number | null>;
+  names: string[];
+}
+
+interface SnapMachine {
+  name: string;
+  stale?: boolean;
+  read_at?: number | null;
+}
+
+/** The staleness of `/api/state`'s answer at `now` (seconds). */
+export function staleness(state: { at?: number; machines?: SnapMachine[] } | null, now = Date.now() / 1000) {
+  const age = state?.at ? now - state.at : null;
+  const machines: Record<string, number | null> = {};
+  for (const m of state?.machines || []) if (m.stale) machines[m.name] = m.read_at ? now - m.read_at : null;
+  return {
+    page: age !== null && age > STALE_SECONDS ? age : null,
+    machines,
+    names: (state?.machines || []).map((m) => m.name),
+  } satisfies Staleness;
+}
+
+const ago = (s: number) => (s < 60 ? `${Math.round(s)} s` : duration(s));
+
+/** Why a claim with no run joined may be wrong: the stale data it was matched against, or null when the data is
+ * fresh and `no run` is the truth. A card's host label (`ezio`, `altair`) names the machine to ask about; a card
+ * with none is matched against every machine, so any stale one counts. */
+function staleText(card: WorkCard | null, stale?: Staleness): string | null {
+  if (!stale) return null;
+  if (stale.page !== null) return `stale ${ago(stale.page)}`;
+  const host = card?.labels?.find((l) => stale.names.includes(l));
+  const name = host ?? Object.keys(stale.machines)[0];
+  if (!name || !(name in stale.machines)) return null;
+  const age = stale.machines[name];
+  return age === null ? `${name} unread` : `${name} stale ${ago(age)}`;
+}
+
+/** What a card row's State cell shows when no run joined it: `session` (an interactive session holds it), `no run`
+ * (a claim lane with nothing running), the stale data a claim was matched against instead of `no run` (card #41:
+ * builds running on ezio read `no run` while the page held a snapshot minutes old), or the lane itself. */
+export const cardState = (
+  row: Pick<WorkRow, "state" | "local" | "run"> & { card?: WorkCard | null },
+  stale?: Staleness,
+) =>
+  row.run
+    ? null
+    : row.local
+      ? "session"
+      : CLAIM_LANES.has(row.state)
+        ? (staleText(row.card ?? null, stale) ?? "no run")
+        : row.state;
 
 /** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent, scheduled. */
 const groupOf = (lane: string) =>

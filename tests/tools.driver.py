@@ -50,7 +50,7 @@ def main():
     case = json.load(sys.stdin)
     fn = case["fn"]
     if fn == "rows":
-        out = collect.tool_rows(case["ps"], facts_of(case), models_of(case))
+        out = collect.tool_rows(case["ps"], facts_of(case), models_of(case), parents=case.get("parents", {}))
     elif fn == "worktrees":
         out = collect.worktree_rows(
             case["ps"],
@@ -60,7 +60,7 @@ def main():
             children=case.get("children", {}),
         )
     elif fn == "sessions":
-        out = collect.tool_sessions(case["ps"], skip=set(case.get("skip", [])))
+        out = collect.tool_sessions(case["ps"], skip=set(case.get("skip", [])), parents=case.get("parents", {}))
     elif fn == "droid":
         pids, rows = collect.lab_droid(case["ps"])
         out = {"pids": [[pid, secs] for pid, secs in pids], "rows": rows}

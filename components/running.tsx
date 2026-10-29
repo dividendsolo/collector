@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { runDoing } from "@/lib/format";
 import {
+  cardState,
   currentWork,
   holdText,
   LAB,
@@ -10,6 +11,8 @@ import {
   runMachine,
   runName,
   runTime,
+  type Staleness,
+  staleness,
   type WorkRow,
   type WorkRun,
 } from "@/lib/work";
@@ -143,7 +146,8 @@ const LANE_PILL: Record<string, string> = {
 
 /** The age cell of a live run: amber after 30 minutes of a build, red after an hour. A build only: a review, a
  * verify and the lab droid's runs (up to two hours by design) never turn amber or red. A Claude Code or Codex
- * session waits on the person, so it reads `interactive` instead of a length that looks like a stuck run (#29). */
+ * session waits on the person, so it reads `interactive` — `tmux` when it runs inside tmux (#37) — instead of a
+ * length that looks like a stuck run (#29). */
 const RunTime = ({ r }: { r: Run }) => (
   <td
     className={`num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}`}
@@ -153,6 +157,9 @@ const RunTime = ({ r }: { r: Run }) => (
 );
 
 function StateCell({ row }: { row: WorkRow }) {
+  const { state } = useLive();
+  const stale: Staleness = staleness(state);
+  const shown = cardState(row, stale);
   const hold = row.card?.lane === "scheduled" ? row.card.hold : null;
   const deck = row.onDeck ?? [];
   return (
@@ -162,9 +169,21 @@ function StateCell({ row }: { row: WorkRow }) {
           <Icon name={row.run.type === "agent" ? "bot" : "term"} />
           {row.run.type}
         </span>
+      ) : shown === "session" ? (
+        <span className="pill agent">
+          <Icon name="bot" />
+          agent
+        </span>
       ) : (
-        <Pill cls={LANE_PILL[row.state] || ""} dot={false}>
-          {row.state}
+        <Pill
+          cls={
+            shown === "no run" || shown?.includes("stale") || shown?.endsWith("unread")
+              ? "warning"
+              : LANE_PILL[row.state] || ""
+          }
+          dot={false}
+        >
+          {shown}
         </Pill>
       )}
       {hold?.after.length ? (

@@ -3,7 +3,7 @@ import { clock, renewsText } from "@/lib/server/ai";
 import { perMonth, polarRevenue, stripeRevenue } from "@/lib/server/billing";
 import { daysLeft, parseRdap, parseWhois } from "@/lib/server/domains";
 import { parseEnv } from "@/lib/server/env";
-import { actionsBilled } from "@/lib/server/machines";
+import { actionsBilled, mergeMachines } from "@/lib/server/machines";
 import { hostingOf } from "@/lib/server/projects";
 import { hostFromHeaders } from "@/lib/server/services";
 import { gemsOf, near, stackChips } from "@/lib/server/stack";
@@ -384,5 +384,35 @@ describe("actionsBilled", () => {
     expect(actionsBilled({ usageItems: [{ product: "Copilot", netAmount: 12 }] })).toBe(0);
     expect(actionsBilled({ usageItems: [] })).toBe(0);
     expect(actionsBilled(undefined)).toBe(0);
+  });
+});
+
+describe("a machine whose read fails keeps its last good read, marked stale (card #41)", () => {
+  const ezio = { name: "ezio", running: [{ repo: "dividend-solo", card: 140 }], error: null };
+  it("stamps every good read with its time", () => {
+    expect(mergeMachines(undefined, [ezio], 100)).toEqual([{ ...ezio, read_at: 100, stale: false }]);
+  });
+  it("keeps the last good read, with the error and its own time, when a read fails", () => {
+    const prev = mergeMachines(undefined, [ezio, { name: "altair", running: [], error: null }], 100);
+    const next = mergeMachines(
+      prev,
+      [
+        { name: "ezio", error: "timed out after 20 s" },
+        { name: "altair", error: null },
+      ],
+      400,
+    );
+    expect(next[0]).toEqual({ ...ezio, error: "timed out after 20 s", read_at: 100, stale: true });
+    expect(next[1]).toEqual({ name: "altair", error: null, read_at: 400, stale: false });
+    // A second failure still carries the first good read, not the failed one.
+    expect(mergeMachines(next, [{ name: "ezio", error: "exit 255" }], 700)[0]).toMatchObject({
+      read_at: 100,
+      stale: true,
+    });
+  });
+  it("says a machine never read is stale, with no read time", () => {
+    expect(mergeMachines(undefined, [{ name: "ezio", error: "exit 255" }], 100)).toEqual([
+      { name: "ezio", error: "exit 255", read_at: null, stale: true },
+    ]);
   });
 });

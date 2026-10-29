@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type Diff, keepClosed, parseHold, type Row } from "@/lib/server/board";
 import {
+  cardState,
   currentWork,
   holdText,
   isSession,
@@ -11,6 +12,9 @@ import {
   runTime,
   SESSION_MACHINE,
   SESSION_TIME,
+  SESSION_TMUX,
+  STALE_SECONDS,
+  staleness,
   type WorkCard,
   type WorkRun,
 } from "@/lib/work";
@@ -80,6 +84,60 @@ describe("currentWork", () => {
       [2, true],
       [1, false],
     ]);
+  });
+  it("never shows a claim lane's name: a session card reads session, a claim with no run reads no run", () => {
+    // agent-stack#187: agent-in-progress for 4 days with no run behind it (James, 2026-10-29).
+    const cards = [
+      card("app", 1, "agent-in-progress", { labels: ["local"] }),
+      card("app", 2, "agent-in-progress"),
+      card("app", 3, "verify-in-progress"),
+      card("app", 4, "code-review"),
+    ];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.map((r) => [r.card?.number, cardState(r)])).toEqual([
+      [1, "session"],
+      [2, "no run"],
+      [3, "no run"],
+      [4, "code-review"],
+    ]);
+  });
+  it("shows stale run data instead of no run: a page snapshot past its interval, or a machine whose read failed", () => {
+    // Card #41: dividend-solo#140 and situation#814 read `no run` while both builds ran on ezio, because the page
+    // still held a snapshot from before the server stopped answering.
+    const now = 10_000;
+    const cards = [
+      card("app", 1, "agent-in-progress", { labels: ["ezio"] }),
+      card("app", 2, "agent-in-progress", { labels: ["altair"] }),
+      card("app", 3, "verify-in-progress"),
+      card("app", 4, "code-review", { labels: ["ezio"] }),
+    ];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    const fresh = staleness({ at: now - 5, machines: [{ name: "altair" }, { name: "ezio" }] }, now);
+    expect(rows.map((r) => cardState(r, fresh))).toEqual(["no run", "no run", "no run", "code-review"]);
+
+    const page = staleness({ at: now - 180, machines: [{ name: "altair" }, { name: "ezio" }] }, now);
+    expect(page.page).toBe(180);
+    expect(rows.map((r) => cardState(r, page))).toEqual(["stale 3 min", "stale 3 min", "stale 3 min", "code-review"]);
+
+    const ezio = staleness(
+      { at: now - 5, machines: [{ name: "altair" }, { name: "ezio", stale: true, read_at: now - 240 }] },
+      now,
+    );
+    expect(ezio.page).toBeNull();
+    expect(rows.map((r) => cardState(r, ezio))).toEqual([
+      "ezio stale 4 min",
+      "no run",
+      "ezio stale 4 min",
+      "code-review",
+    ]);
+
+    const never = staleness({ at: now - 5, machines: [{ name: "ezio", stale: true, read_at: null }] }, now);
+    expect(cardState(rows[0], never)).toBe("ezio unread");
+  });
+  it("calls the page stale only past its interval", () => {
+    expect(staleness({ at: 100 }, 100 + STALE_SECONDS).page).toBeNull();
+    expect(staleness({ at: 100 }, 101 + STALE_SECONDS).page).toBe(STALE_SECONDS + 1);
+    expect(staleness(null, 100).page).toBeNull();
   });
   it("shows a card closed in the last hour as closed, and drops it after the hour", () => {
     const closed = [card("app", 5, "code-review", { closed_at: 1000 })];
@@ -227,6 +285,18 @@ describe("a session row", () => {
     expect(runTime(session)).toBe("interactive");
     expect(runTime(run("app", 1, 5400))).toBe("1 h 30 min");
     expect(runTime({ kind: "build", seconds: 60 })).toBe("1 min");
+  });
+  it("reads tmux for a session that runs inside tmux (card #37)", () => {
+    // James, 2026-10-29: the peer-session list showed two rows reading `interactive`, one of them his tmux `Work`
+    // window — "if it's a Tmux session, can we put Tmux instead of interactive in the collector page?"
+    expect(SESSION_TMUX).toBe("tmux");
+    expect(runTime({ ...session, tmux: true })).toBe("tmux");
+    expect(runTime({ ...session, tmux: false })).toBe("interactive");
+    expect(runTime({ ...session, tmux: null })).toBe("interactive");
+  });
+  it("keeps its own length for a run that is not a session, tmux marker or not", () => {
+    expect(runTime({ kind: "build", seconds: 60, tmux: true })).toBe("1 min");
+    expect(runTime(run("app", 1, 60))).toBe("1 min");
   });
 });
 
