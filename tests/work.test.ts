@@ -12,6 +12,7 @@ import {
   runTime,
   SESSION_MACHINE,
   SESSION_TIME,
+  SESSION_TMUX,
   type WorkCard,
   type WorkRun,
 } from "@/lib/work";
@@ -244,6 +245,18 @@ describe("a session row", () => {
     expect(runTime(session)).toBe("interactive");
     expect(runTime(run("app", 1, 5400))).toBe("1 h 30 min");
     expect(runTime({ kind: "build", seconds: 60 })).toBe("1 min");
+  });
+  it("reads tmux for a session that runs inside tmux (card #37)", () => {
+    // James, 2026-10-29: the peer-session list showed two rows reading `interactive`, one of them his tmux `Work`
+    // window — "if it's a Tmux session, can we put Tmux instead of interactive in the collector page?"
+    expect(SESSION_TMUX).toBe("tmux");
+    expect(runTime({ ...session, tmux: true })).toBe("tmux");
+    expect(runTime({ ...session, tmux: false })).toBe("interactive");
+    expect(runTime({ ...session, tmux: null })).toBe("interactive");
+  });
+  it("keeps its own length for a run that is not a session, tmux marker or not", () => {
+    expect(runTime({ kind: "build", seconds: 60, tmux: true })).toBe("1 min");
+    expect(runTime(run("app", 1, 60))).toBe("1 min");
   });
 });
 

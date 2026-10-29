@@ -15,6 +15,8 @@ export interface WorkRun {
   /** The repo the run's folder is in. A session outside any repo has none, and the page says "no repo". */
   repo?: string | null;
   seconds: number;
+  /** A session whose process runs inside tmux (`collect.py`, collector#37): its Running for cell reads `tmux`. */
+  tmux?: boolean | null;
   /** The TCP port a leftover process listens on, when the machine shows one (`ss` on Linux, `lsof` on a Mac). */
   port?: number | null;
 }
@@ -54,13 +56,18 @@ export const SESSION_MACHINE = "local";
  * real duration there read as a stuck run (James, 2026-10-25, card #29). */
 export const SESSION_TIME = "interactive";
 
+/** What it says instead when the session runs inside tmux (James, 2026-10-29, card #37): the row tells where the
+ * session runs, which `interactive` alone did not — his tmux `Work` window read the same as any other session. */
+export const SESSION_TMUX = "tmux";
+
 /** The Machine cell of a run: `local` for a session, the machine the run is on for everything else. */
 export const runMachine = (r: { kind?: string | null; machine?: string | null }) =>
   isSession(r) ? SESSION_MACHINE : r.machine || "";
 
-/** The Running for cell of a run: `interactive` for a session, its own length for everything else. */
-export const runTime = (r: { kind?: string | null; seconds: number }) =>
-  isSession(r) ? SESSION_TIME : duration(r.seconds);
+/** The Running for cell of a run: `interactive` for a session — `tmux` when it runs inside tmux — its own length
+ * for everything else. */
+export const runTime = (r: { kind?: string | null; seconds: number; tmux?: boolean | null }) =>
+  isSession(r) ? (r.tmux ? SESSION_TMUX : SESSION_TIME) : duration(r.seconds);
 
 export interface WorkCard {
   repo: string;

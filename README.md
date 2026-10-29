@@ -136,8 +136,9 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
   (its card too, in a card worktree or on an `agent/<card>` branch), and the model the tool recorded in its session
   files under `~/.claude` or `~/.codex`. Only the model name is taken out of those files; their content is never kept.
   The row names the tool as itself — Claude Code, Codex, never the binary — its Machine reads `local`, since the
-  session runs where the page is served, and its Running for reads `interactive`: it waits on you, so a length there
-  would read as a stuck run (card #29).
+  session runs where the page is served, and its Running for reads `interactive` — `tmux` when the session runs inside
+  tmux, read from the tmux process among its ancestors (card #37): it waits on you, so a length there would read as a
+  stuck run (card #29).
 - **The lab droid:** a `claude` process owned by a user of its own (agent-stack#111). It works in its own home
   rather than a card worktree, so its user is what marks it: it shows as one row, in its own colour and under its
   own name, linking to that experiment's card, and the coding-agents reader leaves its process to that row.
