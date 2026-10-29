@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { swr } from "./cache";
 import { type Config, config, type Machine } from "./config";
+import { type JogUsage, jogUsage } from "./jog";
 import { COLLECT, HOME } from "./paths";
 import { run } from "./run";
 
@@ -90,13 +91,19 @@ export interface Snapshot {
   at: number;
   machines: any[];
   github: GithubLimit;
+  jog: JogUsage;
 }
 
-/** Every machine plus the GitHub API limit, read every 10 seconds. A stale snapshot is served while a new one is read. */
+/** Every machine plus the GitHub API limit and Jog's runner minutes, read every 10 seconds. A stale snapshot is
+ * served while a new one is read. */
 export const snapshot = swr<Snapshot>("snapshot", 10_000, async () => {
   const cfg = config();
   const targets = cfg.machines?.length ? cfg.machines : [{ name: "this machine" }];
-  const [limit, ...results] = await Promise.all([githubLimit(), ...targets.map((t) => collect(t, cfg))]);
+  const [limit, jog, ...results] = await Promise.all([
+    githubLimit(),
+    jogUsage(),
+    ...targets.map((t) => collect(t, cfg)),
+  ]);
   const machines = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, error: results[i][1] }));
-  return { at: Math.floor(Date.now() / 1000), machines, github: limit };
+  return { at: Math.floor(Date.now() / 1000), machines, github: limit, jog };
 });

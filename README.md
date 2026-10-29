@@ -9,7 +9,8 @@ The Dashboard answers these questions at a glance:
 
 1. **Needs attention:** which job failed, which script starts itself in a loop, which host cannot pass a repo's
    checks, which GitHub limit is nearly gone (the API limits, and GitHub Actions minutes at 90% of what the plan
-   includes; that row carries the dollars billed this month on its right).
+   includes; that row carries the dollars billed this month on its right). The APIs page shows the same bar for Jog's
+   runner minutes beside them.
 2. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long. Hover a card number to read what the card is for.
    A build turns amber after 30 minutes and red after an hour.
    A process left in a card's worktree — a test server nothing stopped — is its own row: `leftover`, the program it
@@ -116,6 +117,7 @@ failed build is logged (`[rebuild] build failed`) and the served `.next` is left
 | `X_BEARER_TOKEN` (`.env`) | Optional: the X API app's bearer token. The APIs page then shows the credit balance (`/2/usage/credits`) and posts read against the monthly cap (`/2/usage/tweets`); under $5 of credit goes to Needs attention. |
 | `billing` | Each project's payment providers: `{"owner/repo": [{"provider": "stripe", "key": "MYAPP_STRIPE_KEY"}]}`. `provider` is `stripe` or `polar`; `key` names a line in `.env` (gitignored) that holds a read-only key. |
 | `actions_minutes` | The Actions minutes a month your GitHub plan includes. Left out, the plan's own numbers are used; set it when the page reads your plan wrong. |
+| `JOG_TOKEN` and `JOG_ACCOUNT` (`.env`) | Optional: the [Jog](https://usejog.com) runners your GitHub Actions jobs moved to. `JOG_TOKEN` is a Jog personal access token (7, 30 or 90 days, access `advice`, made at usejog.com/account/-/tokens) and `JOG_ACCOUNT` is the login Jog runs your jobs for. The APIs page then shows this month's Jog runner minutes against the 5,000 free minutes a month the account includes, and the dollars Jog charged past them. A token reads Jog's advice and its runs, nothing else on Jog. |
 | `repos_dir` | The folder that holds your repos (default `~/code`). |
 
 The work script writes `=== tick <time> ===` to its log on each start. The Collector reads the starts in the
@@ -157,6 +159,12 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
   the base SHA) while a machine cannot pass that repo's checks on its base branch, so no card of that repo is
   built there. Each marker shows on its machine in Needs attention as `host broken: <repo> on <host>`, with that
   line. No marker, no row.
+- **Jog minutes:** Jog ([usejog.com](https://usejog.com)) runs the private repos' CI on its own machines. Its token
+  API (usejog.com/docs/api.md) answers an account's advice and its runs with a personal access token, and nothing
+  else: the dashboard's own free-minutes and credit figures sit behind its signed-in pages, which a token cannot
+  read. So the reader sums the runs Jog measured this month — each run's seconds at its size's weight, since the free
+  minutes burn 1x at 2 vCPU and 2x, 4x, 8x, 16x above it — and the micro-dollars Jog charged for them, and stops
+  paging once a page reaches back past the month's first. Read every 5 minutes.
 - **Caching:** each reader keeps its last answer and its own refresh rate (machines 10 s, AI and vendors 5 min,
   projects 5 min, DataFast and revenue 10 min, domains 12 h). A stale answer is served while a new one is read in the
   background; only the very first read after a start waits, and the server starts every reader when it boots.

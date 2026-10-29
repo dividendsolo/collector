@@ -8,8 +8,8 @@ import { lastVendors } from "./vendors";
 import { warnings } from "./warnings";
 import { lastX, xUsage } from "./x";
 
-/** The page's main read: machines, the GitHub limit, X usage, subscriptions, notes, and Needs attention. The
- * warnings are worked out on every ask from the newest result of each reader. */
+/** The page's main read: machines, the GitHub limit, Jog's runner minutes, X usage, subscriptions, notes, and Needs
+ * attention. The warnings are worked out on every ask from the newest result of each reader. */
 export async function state() {
   const [snap] = await Promise.all([snapshot.get(), xUsage()]);
   const cfg = config();
@@ -19,6 +19,7 @@ export async function state() {
     at: snap.at,
     machines,
     github: snap.github,
+    jog: snap.jog,
     x,
     subscriptions: cfg.subscriptions || [],
     agent_notes: cfg.agent_notes || {},
