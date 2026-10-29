@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type Diff, keepClosed, parseHold, type Row } from "@/lib/server/board";
 import {
+  cardState,
   currentWork,
   holdText,
   isSession,
@@ -79,6 +80,22 @@ describe("currentWork", () => {
     expect(rows.map((r) => [r.card?.number, r.local])).toEqual([
       [2, true],
       [1, false],
+    ]);
+  });
+  it("never shows a claim lane's name: a session card reads session, a claim with no run reads no run", () => {
+    // agent-stack#187: agent-in-progress for 4 days with no run behind it (James, 2026-10-29).
+    const cards = [
+      card("app", 1, "agent-in-progress", { labels: ["local"] }),
+      card("app", 2, "agent-in-progress"),
+      card("app", 3, "verify-in-progress"),
+      card("app", 4, "code-review"),
+    ];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.map((r) => [r.card?.number, cardState(r)])).toEqual([
+      [1, "session"],
+      [2, "no run"],
+      [3, "no run"],
+      [4, "code-review"],
     ]);
   });
   it("shows a card closed in the last hour as closed, and drops it after the hour", () => {

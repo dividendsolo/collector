@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { runDoing } from "@/lib/format";
 import {
+  cardState,
   currentWork,
   holdText,
   LAB,
@@ -162,9 +163,14 @@ function StateCell({ row }: { row: WorkRow }) {
           <Icon name={row.run.type === "agent" ? "bot" : "term"} />
           {row.run.type}
         </span>
+      ) : cardState(row) === "session" ? (
+        <span className="pill agent">
+          <Icon name="bot" />
+          agent
+        </span>
       ) : (
-        <Pill cls={LANE_PILL[row.state] || ""} dot={false}>
-          {row.state}
+        <Pill cls={cardState(row) === "no run" ? "warning" : LANE_PILL[row.state] || ""} dot={false}>
+          {cardState(row)}
         </Pill>
       )}
       {hold?.after.length ? (

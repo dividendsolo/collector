@@ -97,6 +97,17 @@ const REVIEW = new Set([
   "merging",
 ]);
 
+/** The lanes that say a machine or a session holds the card. Their name is never the State cell: a live run shows
+ * its own badge, a `local` card shows the session's, and a claim with neither shows `no run` (agent-stack#187 read
+ * agent-in-progress for 4 days with nothing behind it; James, 2026-10-29: "if it truly is, then the agent badge
+ * would show"). */
+const CLAIM_LANES = new Set(["agent-in-progress", "verify-in-progress"]);
+
+/** What a card row's State cell shows when no run joined it: `session` (an interactive session holds it), `no run`
+ * (a claim lane with nothing running) or the lane itself. */
+export const cardState = (row: Pick<WorkRow, "state" | "local" | "run">) =>
+  row.run ? null : row.local ? "session" : CLAIM_LANES.has(row.state) ? "no run" : row.state;
+
 /** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent, scheduled. */
 const groupOf = (lane: string) =>
   REVIEW.has(lane) ? 1 : lane === "ready-for-agent" ? 3 : lane === "scheduled" ? 4 : 1;
