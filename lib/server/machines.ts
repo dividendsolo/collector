@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { swr } from "./cache";
 import { type Config, config, type Machine } from "./config";
+import { type JogUsage, jogUsage } from "./jog";
 import { COLLECT, HOME } from "./paths";
 import { run } from "./run";
 
@@ -90,6 +91,7 @@ export interface Snapshot {
   at: number;
   machines: any[];
   github: GithubLimit;
+  jog: JogUsage;
 }
 
 /** How often the server reads every machine. A machine read is stale once it is older than this. */
@@ -109,12 +111,17 @@ export function mergeMachines(prev: any[] | undefined, next: any[], at: number):
   });
 }
 
-/** Every machine plus the GitHub API limit, read every 10 seconds. A stale snapshot is served while a new one is read. */
+/** Every machine plus the GitHub API limit and Jog's runner minutes, read every 10 seconds. A stale snapshot is
+ * served while a new one is read. */
 export const snapshot = swr<Snapshot>("snapshot", READ_SECONDS * 1000, async (): Promise<Snapshot> => {
   const cfg = config();
   const targets = cfg.machines?.length ? cfg.machines : [{ name: "this machine" }];
-  const [limit, ...results] = await Promise.all([githubLimit(), ...targets.map((t) => collect(t, cfg))]);
+  const [limit, jog, ...results] = await Promise.all([
+    githubLimit(),
+    jogUsage(),
+    ...targets.map((t) => collect(t, cfg)),
+  ]);
   const read = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, error: results[i][1] }));
   const at = Math.floor(Date.now() / 1000);
-  return { at, machines: mergeMachines(snapshot.peek()?.machines, read, at), github: limit };
+  return { at, machines: mergeMachines(snapshot.peek()?.machines, read, at), github: limit, jog };
 });

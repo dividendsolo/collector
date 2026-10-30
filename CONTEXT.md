@@ -153,7 +153,7 @@ COLLECTOR_PORT=4001 bun dev
 
 | Endpoint | What it answers |
 |---|---|
-| `/api/state` | The page's main read: machines and their jobs, the GitHub limit, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
+| `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
 | `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |

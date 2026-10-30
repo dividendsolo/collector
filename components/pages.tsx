@@ -178,7 +178,8 @@ export const useVendors = () => {
 function GithubLimit() {
   const { state } = useLive();
   const g = state?.github;
-  if (!g) return <div className="stats" />;
+  const jog = <JogMinutes j={state?.jog} />;
+  if (!g) return <div className="stats">{jog}</div>;
   if (g.error)
     return (
       <div className="stats">
@@ -186,6 +187,7 @@ function GithubLimit() {
           <Icon name="alert" />
           <span>{g.error}</span>
         </div>
+        {jog}
       </div>
     );
   return (
@@ -210,6 +212,7 @@ function GithubLimit() {
         );
       })}
       <ActionsMinutes a={g.actions} />
+      {jog}
     </div>
   );
 }
@@ -233,6 +236,36 @@ function ActionsMinutes({ a }: { a?: any }) {
         {a.used.toLocaleString()}{" "}
         <small>
           of {a.limit.toLocaleString()} included · resets {reset}
+        </small>
+      </span>
+      <div className={`bar ${pct >= 90 ? "low" : ""}`}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** Jog runner minutes this month (usejog.com) against the free minutes the accounts include. A failed read says why,
+ * like the Actions stat. No dollar figure: a token cannot read the account's credit balance, and the runs' own cost
+ * is Jog's list price for them, which the free minutes cover. */
+function JogMinutes({ j }: { j?: any }) {
+  if (!j) return null;
+  if (j.error)
+    return (
+      <div className="stat">
+        <span className="label">Jog minutes</span>
+        <span className="sub">Could not read: {j.error}</span>
+      </div>
+    );
+  const pct = Math.min(100, Math.round((j.used / j.limit) * 100));
+  const reset = new Date(j.reset * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+  return (
+    <div className="stat">
+      <span className="label">Jog minutes (this month)</span>
+      <span className="value">
+        {j.used.toLocaleString()}{" "}
+        <small>
+          of {j.limit.toLocaleString()} free · resets {reset}
         </small>
       </span>
       <div className={`bar ${pct >= 90 ? "low" : ""}`}>
