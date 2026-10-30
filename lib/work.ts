@@ -194,7 +194,8 @@ const deckOf = ({ group, card }: WorkRow, working: Set<string>) =>
 /** Every open card that is not waiting on James, the cards closed in the last hour, and every live run, one row
  * each. A run on a card joins that card's row. Live runs first (longest first), then by group, priority, oldest.
  * A scheduled card whose blocker is being worked on is on deck: `onDeck` names those refs and lifts the card to
- * the top of the scheduled group, ahead of the "Show all" cut. */
+ * the top of the scheduled group, ahead of the "Show all" cut. The rest of the scheduled group: the cards waiting
+ * on another card (`after`) first, then the dated ones (`from`) soonest first (James, 2026-10-30). */
 export function currentWork(
   cards: WorkCard[],
   closed: WorkCard[],
@@ -224,6 +225,8 @@ export function currentWork(
   });
   const working = new Set(rows.filter(moving).map((r) => (r.card ? `${r.card.repo}#${r.card.number}` : "")));
   const deck = (r: WorkRow) => (r.onDeck ? 1 : 0);
+  const waitKind = (r: WorkRow) => (r.group !== 4 ? 0 : r.card?.hold?.after.length ? 0 : r.card?.hold?.from ? 1 : 2);
+  const fromDay = (r: WorkRow) => (r.group === 4 ? (r.card?.hold?.from ?? "") : "");
   for (const row of rows) {
     const after = deckOf(row, working);
     if (after.length) row.onDeck = after;
@@ -232,6 +235,8 @@ export function currentWork(
     (a, b) =>
       a.group - b.group ||
       deck(b) - deck(a) ||
+      waitKind(a) - waitKind(b) ||
+      fromDay(a).localeCompare(fromDay(b)) ||
       (b.run?.seconds ?? 0) - (a.run?.seconds ?? 0) ||
       prio(a.card?.priority) - prio(b.card?.priority) ||
       (a.card?.created ?? "").localeCompare(b.card?.created ?? ""),

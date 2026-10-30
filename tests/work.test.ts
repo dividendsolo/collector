@@ -162,8 +162,21 @@ describe("currentWork", () => {
       card("app", 9, "ready-for-agent"),
     ];
     const rows = currentWork(cards, [], [], WAITING, 0);
-    expect(rows.filter((r) => r.state === "scheduled").map((r) => r.card?.number)).toEqual([2, 1]);
+    expect(rows.filter((r) => r.state === "scheduled").map((r) => r.card?.number)).toEqual([1, 2]);
     expect(rows.every((r) => r.onDeck === undefined)).toBe(true);
+  });
+  it("orders the scheduled group: waiting on a card first, then dated soonest first, then the rest", () => {
+    const from = (day: string): WorkCard["hold"] => ({ after: [], from: day });
+    const cards = [
+      card("app", 1, "scheduled", { priority: "P0" }),
+      card("app", 2, "scheduled", { hold: from("2026-11-20") }),
+      card("app", 3, "scheduled", { hold: from("2026-11-02") }),
+      card("app", 4, "scheduled", { hold: hold(["#9"]) }),
+      card("app", 5, "scheduled", { hold: from("2026-11-06"), priority: "P0" }),
+      card("app", 9, "ready-for-agent"),
+    ];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.filter((r) => r.state === "scheduled").map((r) => r.card?.number)).toEqual([4, 3, 5, 2, 1]);
   });
   it("counts a live run, a review lane, a session, and another repo's card as a moving blocker", () => {
     const cards = [
