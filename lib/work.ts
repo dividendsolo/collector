@@ -105,9 +105,8 @@ const REVIEW = new Set([
 ]);
 
 /** The lanes that say a machine or a session holds the card. Their name is never the State cell: a live run shows
- * its own badge, a `local` card shows the session's, and a claim with neither shows `no run` (agent-stack#187 read
- * agent-in-progress for 4 days with nothing behind it; James, 2026-10-29: "if it truly is, then the agent badge
- * would show"). */
+ * its own badge, a `local` card shows the session's, and a claim with neither shows its lane (the `no run` badge
+ * was removed on 2026-11-01; a claim with nothing behind it for hours is housekeeping's to send back, agent-stack#187). */
 const CLAIM_LANES = new Set(["agent-in-progress", "verify-in-progress"]);
 
 /** Seconds after which the page's machine snapshot is stale: the server reads every 10 s and the page asks every
@@ -144,7 +143,7 @@ export function staleness(state: { at?: number; machines?: SnapMachine[] } | nul
 const ago = (s: number) => (s < 60 ? `${Math.round(s)} s` : duration(s));
 
 /** Why a claim with no run joined may be wrong: the stale data it was matched against, or null when the data is
- * fresh and `no run` is the truth. A card's host label (`ezio`, `altair`) names the machine to ask about; a card
+ * fresh and the lane is the truth. A card's host label (`ezio`, `altair`) names the machine to ask about; a card
  * with none is matched against every machine, so any stale one counts. */
 function staleText(card: WorkCard | null, stale?: Staleness): string | null {
   if (!stale) return null;
@@ -156,9 +155,10 @@ function staleText(card: WorkCard | null, stale?: Staleness): string | null {
   return age === null ? `${name} unread` : `${name} stale ${ago(age)}`;
 }
 
-/** What a card row's State cell shows when no run joined it: `session` (an interactive session holds it), `no run`
- * (a claim lane with nothing running), the stale data a claim was matched against instead of `no run` (card #41:
- * builds running on ezio read `no run` while the page held a snapshot minutes old), or the lane itself. */
+/** What a card row's State cell shows when no run joined it: `session` (an interactive session holds it), the stale
+ * data a claim was matched against (card #41: builds running on ezio read as idle while the page held a snapshot
+ * minutes old), or the lane itself. No `no run` badge: a builder the foreman just claimed shows no run for its first
+ * minutes, so the badge read as a fault on healthy cards (James, 2026-11-01: "It doesn't make any sense"). */
 export const cardState = (
   row: Pick<WorkRow, "state" | "local" | "run"> & { card?: WorkCard | null },
   stale?: Staleness,
@@ -168,7 +168,7 @@ export const cardState = (
     : row.local
       ? "session"
       : CLAIM_LANES.has(row.state)
-        ? (staleText(row.card ?? null, stale) ?? "no run")
+        ? (staleText(row.card ?? null, stale) ?? row.state)
         : row.state;
 
 /** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent, scheduled. */
