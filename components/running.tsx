@@ -176,11 +176,7 @@ function StateCell({ row }: { row: WorkRow }) {
         </span>
       ) : (
         <Pill
-          cls={
-            shown === "no run" || shown?.includes("stale") || shown?.endsWith("unread")
-              ? "warning"
-              : LANE_PILL[row.state] || ""
-          }
+          cls={shown?.includes("stale") || shown?.endsWith("unread") ? "warning" : LANE_PILL[row.state] || ""}
           dot={false}
         >
           {shown}

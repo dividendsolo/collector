@@ -85,7 +85,7 @@ describe("currentWork", () => {
       [1, false],
     ]);
   });
-  it("never shows a claim lane's name: a session card reads session, a claim with no run reads no run", () => {
+  it("a session card reads session, a claim with no run reads its lane", () => {
     // agent-stack#187: agent-in-progress for 4 days with no run behind it (James, 2026-10-29).
     const cards = [
       card("app", 1, "agent-in-progress", { labels: ["local"] }),
@@ -96,12 +96,12 @@ describe("currentWork", () => {
     const rows = currentWork(cards, [], [], WAITING, 0);
     expect(rows.map((r) => [r.card?.number, cardState(r)])).toEqual([
       [1, "session"],
-      [2, "no run"],
-      [3, "no run"],
+      [2, "agent-in-progress"],
+      [3, "verify-in-progress"],
       [4, "code-review"],
     ]);
   });
-  it("shows stale run data instead of no run: a page snapshot past its interval, or a machine whose read failed", () => {
+  it("shows stale run data instead of the lane: a page snapshot past its interval, or a machine whose read failed", () => {
     // Card #41: dividend-solo#140 and situation#814 read `no run` while both builds ran on ezio, because the page
     // still held a snapshot from before the server stopped answering.
     const now = 10_000;
@@ -113,7 +113,12 @@ describe("currentWork", () => {
     ];
     const rows = currentWork(cards, [], [], WAITING, 0);
     const fresh = staleness({ at: now - 5, machines: [{ name: "altair" }, { name: "ezio" }] }, now);
-    expect(rows.map((r) => cardState(r, fresh))).toEqual(["no run", "no run", "no run", "code-review"]);
+    expect(rows.map((r) => cardState(r, fresh))).toEqual([
+      "agent-in-progress",
+      "agent-in-progress",
+      "verify-in-progress",
+      "code-review",
+    ]);
 
     const page = staleness({ at: now - 180, machines: [{ name: "altair" }, { name: "ezio" }] }, now);
     expect(page.page).toBe(180);
@@ -126,7 +131,7 @@ describe("currentWork", () => {
     expect(ezio.page).toBeNull();
     expect(rows.map((r) => cardState(r, ezio))).toEqual([
       "ezio stale 4 min",
-      "no run",
+      "agent-in-progress",
       "ezio stale 4 min",
       "code-review",
     ]);
