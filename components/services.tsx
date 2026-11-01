@@ -34,10 +34,10 @@ export function ServicesWatcher() {
   return null;
 }
 
-/** Down first, then slow, then online; fastest first inside each. */
+/** Down first, then slow, then online; slowest first inside each. */
 export const sortServices = (svc: Svc[]) => {
   const order: Record<string, number> = { down: 0, slow: 1, online: 2 };
-  return [...svc].sort((a, b) => order[a.status] - order[b.status] || a.ms - b.ms);
+  return [...svc].sort((a, b) => order[a.status] - order[b.status] || b.ms - a.ms);
 };
 
 export function ServiceRows({ list }: { list: Svc[] }) {
