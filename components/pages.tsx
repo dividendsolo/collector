@@ -175,6 +175,26 @@ export const useVendors = () => {
     : null;
 };
 
+/** An incident's age and where it is, from the vendor's own feed: "opened Sep 3, 2026 · last update Sep 3, 2026 ·
+ * no update in 59 days · me-central-1 · me-south-1". Only what the feed gave: no date, no claim (card #46). */
+function incidentWhen(i: any): string {
+  const day = (iso?: string) =>
+    iso && !Number.isNaN(Date.parse(iso))
+      ? new Date(iso).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
+      : null;
+  const parts: string[] = [];
+  const opened = day(i.opened);
+  if (opened) parts.push(`opened ${opened}`);
+  const updated = day(i.updated);
+  if (updated) parts.push(`last update ${updated}`);
+  if (i.stale) {
+    const days = Math.floor((Date.now() - Date.parse(i.updated || i.opened)) / 864e5);
+    parts.push(`no update in ${days} ${days === 1 ? "day" : "days"}`);
+  }
+  if (i.where?.length) parts.push(i.where.join(" · "));
+  return parts.join(" · ");
+}
+
 function GithubLimit() {
   const { state } = useLive();
   const g = state?.github;
@@ -355,14 +375,26 @@ export function ApisPage() {
                         {v.url.replace(/^https?:\/\//, "")}
                       </a>
                     </div>
-                    {v.incidents.map((i: any, k: number) => (
-                      <div className="sub" key={k}>
-                        <a href={i.url} target="_blank" rel="noopener">
-                          {i.name}
-                        </a>{" "}
-                        · {i.impact}
-                      </div>
-                    ))}
+                    {v.incidents.map((i: any, k: number) => {
+                      // An incident with no update in a week is stale: still listed, with its age and where it is,
+                      // but it is not what the vendor is doing today (card #46, the Atlas me-central-1 notice).
+                      const when = incidentWhen(i);
+                      return (
+                        <div key={k}>
+                          <div className="sub">
+                            <a href={i.url} target="_blank" rel="noopener">
+                              {i.name}
+                            </a>{" "}
+                            · {i.impact}
+                          </div>
+                          {when ? (
+                            <div className="sub">
+                              {i.stale ? <span className="pill warning">Stale</span> : null} {when}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="right">
                     {pill ? (
