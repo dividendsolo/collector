@@ -12,6 +12,7 @@ import { readFeed } from "@/lib/server/vendors";
 import { warnings } from "@/lib/server/warnings";
 
 describe("readFeed", () => {
+  const at = Date.parse("2026-11-01T12:00:00Z");
   it("reads Statuspage incidents and a bare status indicator", () => {
     expect(
       readFeed(
@@ -28,6 +29,80 @@ describe("readFeed", () => {
     expect(readFeed({ page: {}, incidents: [], status: { indicator: "minor", description: "Slow" } }, "u")).toEqual([
       { name: "Slow", impact: "minor", url: "u" },
     ]);
+  });
+  // Card #46: MongoDB Atlas sat at "major" all week on a 2026-09-03 incident it never updated, in regions we do
+  // not use. An incident with no update in 7 days is stale, carries its age and the regions it names, and sits
+  // below the fresh ones.
+  it("marks an incident with no update in 7 days stale, with its dates, its regions and its components", () => {
+    expect(
+      readFeed(
+        {
+          page: {},
+          incidents: [
+            {
+              name: "Impaired Cluster operations in AWS me-central-1 and AWS me-south-1",
+              impact: "major",
+              status: "monitoring",
+              shortlink: "https://status.mongodb.com/incidents/x",
+              created_at: "2026-09-03T16:44:43.835Z",
+              updated_at: "2026-09-03T16:47:21.743Z",
+              components: [{ name: "MongoDB Cloud" }],
+              incident_updates: [{ body: "We are continuing to <b>monitor</b>." }],
+            },
+            {
+              name: "Errors loading issues",
+              impact: "minor",
+              status: "investigating",
+              shortlink: "https://www.githubstatus.com/incidents/y",
+              created_at: "2026-10-31T20:00:00Z",
+              updated_at: "2026-11-01T09:00:00Z",
+              components: [{ name: "Issues" }],
+            },
+          ],
+        },
+        "u",
+        at,
+      ),
+    ).toEqual([
+      {
+        name: "Errors loading issues",
+        impact: "minor",
+        url: "https://www.githubstatus.com/incidents/y",
+        opened: "2026-10-31T20:00:00Z",
+        updated: "2026-11-01T09:00:00Z",
+        stale: false,
+        where: ["Issues"],
+      },
+      {
+        name: "Impaired Cluster operations in AWS me-central-1 and AWS me-south-1",
+        impact: "major",
+        url: "https://status.mongodb.com/incidents/x",
+        opened: "2026-09-03T16:44:43.835Z",
+        updated: "2026-09-03T16:47:21.743Z",
+        stale: true,
+        where: ["me-central-1", "me-south-1"],
+      },
+    ]);
+  });
+  it("is stale at exactly 7 days without an update, and fresh at 6", () => {
+    const feed = (updated: string) => ({
+      page: {},
+      incidents: [{ name: "n", impact: "minor", status: "investigating", updated_at: updated }],
+    });
+    expect(readFeed(feed("2026-10-26T11:59:00Z"), "u", at)?.[0].stale).toBe(false);
+    expect(readFeed(feed("2026-10-25T12:00:00Z"), "u", at)?.[0].stale).toBe(true);
+  });
+  it("names what the incident mentions: a cloud region from its own text, else its components", () => {
+    expect(
+      readFeed({ page: {}, incidents: [{ name: "Network issue in us-east-1", status: "monitoring" }] }, "u", at),
+    ).toEqual([{ name: "Network issue in us-east-1", impact: "none", url: "u", where: ["us-east-1"] }]);
+    expect(
+      readFeed(
+        { page: {}, incidents: [{ name: "Errors", status: "monitoring", components: [{ name: "API" }] }] },
+        "u",
+        at,
+      ),
+    ).toEqual([{ name: "Errors", impact: "none", url: "u", where: ["API"] }]);
   });
   it("reads Datadog, Better Stack, Stripe, X, and Google Cloud shapes", () => {
     expect(
@@ -67,6 +142,63 @@ describe("readFeed", () => {
       ),
     ).toEqual([{ name: "GCE", url: "u/i/1", impact: "major" }]);
     expect(readFeed({ something: 1 }, "u")).toBeNull();
+  });
+  it("reads the dates and the places a Datadog page and a Google Cloud incident name", () => {
+    expect(
+      readFeed(
+        {
+          pageType: "x",
+          components: [],
+          incidents: [
+            {
+              title: "Down",
+              componentsAffected: [{ status: "partial_outage", name: "Chat (/api/v1/chat/completions)" }],
+              publishedDate: "2026-10-31T09:00:00Z",
+              lastModifiedAt: "2026-11-01T09:00:00Z",
+            },
+          ],
+        },
+        "u",
+        at,
+      ),
+    ).toEqual([
+      {
+        name: "Down",
+        url: "u",
+        impact: "major",
+        opened: "2026-10-31T09:00:00Z",
+        updated: "2026-11-01T09:00:00Z",
+        stale: false,
+        where: ["Chat (/api/v1/chat/completions)"],
+      },
+    ]);
+    expect(
+      readFeed(
+        [
+          {
+            begin: "2026-10-30T09:00:00+00:00",
+            modified: "2026-11-01T08:00:00+00:00",
+            external_desc: "Degraded in us-central1",
+            severity: "high",
+            uri: "i/9",
+            currently_affected_locations: [{ title: "Iowa (us-central1)" }],
+            affected_products: [{ title: "Cloud Run" }],
+          },
+        ],
+        "u",
+        at,
+      ),
+    ).toEqual([
+      {
+        name: "Degraded in us-central1",
+        url: "u/i/9",
+        impact: "major",
+        opened: "2026-10-30T09:00:00+00:00",
+        updated: "2026-11-01T08:00:00+00:00",
+        stale: false,
+        where: ["Iowa (us-central1)"],
+      },
+    ]);
   });
 });
 
