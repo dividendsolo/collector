@@ -1014,9 +1014,9 @@ def running_agents():
     a running Claude Code or Codex session, with its own folder, card and model, the work script on the cards it says
     it is on now, the process left behind in a worktree nothing works on, and the lab droid on its own user. While a
     verify run is going on for the card's commit, the row shows that verify and its own time."""
-    out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
+    out = read_command(["ps", "-axo", "pid=,etime=,command="]) or ""
     # The droid is not this user's worktree, so it is read on its own with its user in front.
-    droid_out = subprocess.run(["ps", "-axo", "user=,pid=,etime=,command="], capture_output=True, text=True).stdout
+    droid_out = read_command(["ps", "-axo", "user=,pid=,etime=,command="]) or ""
     links = parent_links()
     droid_pids, droid = lab_droid(droid_out)
     steps, verifies = work_steps(), verify_runs()
@@ -1051,7 +1051,7 @@ def verify_heads():
     heads = {}
     for path in glob.glob(os.path.join(REPOS, "*/.worktrees/*-*")):
         m = re.search(r"/([\w.-]+)/\.worktrees/(build|review)-(\d+)$", path)
-        head = subprocess.run(["git", "-C", path, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        head = (read_command(["git", "-C", path, "rev-parse", "HEAD"]) or "").strip()
         if m and head:
             heads[head] = (m.group(1), m.group(2), int(m.group(3)))
     return heads
@@ -1420,7 +1420,7 @@ def watch_rows(now, entries=None, ps_out=None, jobs=None, self_pid=None):
         return [{"name": "watch", "signal": None, "state": "unknown",
                  "detail": "config.json's watch is not a list of entries"}]
     if ps_out is None:
-        ps_out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
+        ps_out = read_command(["ps", "-axo", "pid=,etime=,command="]) or ""
     self_pid = os.getpid() if self_pid is None else self_pid
     return [watch_row(e, now, ps_out=ps_out, jobs=jobs, self_pid=self_pid) if isinstance(e, dict)
             else {"name": "watch", "signal": None, "state": "unknown",
