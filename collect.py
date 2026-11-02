@@ -1177,6 +1177,63 @@ def tailnet_reasons(jobs, state):
     return jobs
 
 
+# The Hermes gateway: the launchd job the waiting crew (agent-stack#261) runs on. `hermes gateway run` under this
+# label supervises the Hermes cron jobs, so a gateway that is not running, or a cron ticker that has not moved in ten
+# minutes, is a crew that stopped silently. The ticker writes the epoch second of its last successful tick to this
+# file on every tick.
+HERMES_GATEWAY_LABEL = "ai.hermes.gateway"
+GATEWAY_TICKER = ".hermes/cron/ticker_last_success"
+GATEWAY_TICKER_STALE = 600
+
+
+def launchctl_pid(label):
+    """The PID launchd reports for a loaded job, "" when it is loaded but nothing runs, or None when launchd does not
+    know the label at all (`launchctl list <label>` exits 113: `Could not find service`). The command prints the
+    job's own dictionary, one `"PID" = 1064;` line among others."""
+    try:
+        done = subprocess.run(["launchctl", "list", label], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if done.returncode != 0:
+        return None
+    for line in done.stdout.splitlines():
+        key, _, value = line.partition("=")
+        if key.strip().strip('"') == "PID":
+            found = value.strip().strip(";").strip('"')
+            # A job launchd has loaded but not started reports no PID, and some versions report 0 or `-` for one:
+            # all three mean nothing runs.
+            return "" if found in ("", "0", "-") else found
+    return ""
+
+
+def ticker_age(now, path):
+    """How long ago the Hermes cron ticker last succeeded, from the epoch second the file holds (so the age needs no
+    file mtime), or None with no such file — a machine whose Hermes keeps no ticker — or a file that holds no
+    number. A ticker file that was never written is not a stale one, so it reads as no age either."""
+    try:
+        return max(0, int(now.timestamp() - float(open(path).read().strip())))
+    except (OSError, ValueError):
+        return None
+
+
+def hermes_gateway(now, home=HOME, pid=launchctl_pid):
+    """This machine's Hermes gateway: whether launchd runs `ai.hermes.gateway`, and how long ago its cron ticker last
+    succeeded. None on a machine with no such job — no plist, and launchd does not know the label — which is a machine
+    without Hermes, and the page draws no row for it. A job loaded with no PID is installed and not running, which is
+    the row that matters. `now` is the snapshot's time, as every reader here takes it."""
+    running = pid(HERMES_GATEWAY_LABEL)
+    plist = os.path.join(home, "Library/LaunchAgents", HERMES_GATEWAY_LABEL + ".plist")
+    if running is None and not os.path.exists(plist):
+        return None
+    return {
+        "installed": True,
+        "running": bool(running),
+        "pid": running or None,
+        "ticker_age_s": ticker_age(now, os.path.join(home, GATEWAY_TICKER)),
+        "ticker_stale_s": GATEWAY_TICKER_STALE,
+    }
+
+
 def main():
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
@@ -1187,6 +1244,7 @@ def main():
         "now": now.isoformat(),
         "jobs": tailnet_reasons(hermes_jobs(now) + launchd_jobs() + crontab_jobs(now) + systemd_jobs(now), tailnet),
         "tailscale": tailnet,
+        "hermes_gateway": hermes_gateway(now),
         "running": running_agents(),
         "host_broken": host_broken(),
         "profiles": hermes_profiles(),

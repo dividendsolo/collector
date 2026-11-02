@@ -1,7 +1,8 @@
 # Collector — context
 
 One local page showing every cron job and agent run across machines, live. Next.js (App Router) + TypeScript on
-Bun, no database, no auth. It reads only: the one thing it writes is the projects list in `config.json`.
+Bun, no database, no auth. It reads only, apart from the two buttons you click yourself — Start Tailscale and Start
+Hermes, each acting on the machine it runs on — and the projects list it writes to `config.json`.
 `AGENTS.md` holds the stack, the commands and the dangers; this file holds how the running one is built, restarted
 and served.
 
@@ -149,6 +150,26 @@ Collector holds 4000:
 COLLECTOR_PORT=4001 bun dev
 ```
 
+## The Hermes gateway row, with its Start button (card #48)
+
+The waiting crew (agent-stack#261) runs as a Hermes cron on the Hermes gateway's own ticker, so a gateway that stops
+stops the crew silently. Every machine's read carries `hermes_gateway`, from `collect.py`:
+
+- `launchctl list ai.hermes.gateway` for a PID — a job launchd knows with no PID is installed and not running;
+- `~/.hermes/cron/ticker_last_success`, the epoch second of the last successful tick, for the ticker's age;
+- `null` on a machine with no such job (no plist, and launchd does not know the label): a machine without Hermes, and
+  the page draws no row for it. A ticker file that was never written reads as no age, not as a stopped ticker.
+
+`lib/server/warnings.ts` turns that into "Hermes gateway is down on <machine>" (an error: nothing of the crew runs)
+or "Hermes cron ticker stopped <age> ago on <machine>" (a warning: the process is up, its work is not; ten minutes
+without a tick is `TICKER_STALE_S` in `lib/server/hermes.ts`, which `collect.py` writes onto the read so the two agree
+on one number). One row per machine, the gateway's when both are wrong.
+
+On the machine Collector runs on the row carries the Start Hermes button (`POST /api/hermes`), the way Start Tailscale
+does: `launchctl kickstart -k gui/<uid>/ai.hermes.gateway` — launchd's throttle would otherwise wait out its interval
+before the next try — then the state after, ok only once launchd reports a PID, on which the page hides the rows at
+once. A machine read over ssh gets no button: the click would act here, never there.
+
 ## The data endpoints
 
 | Endpoint | What it answers |
@@ -160,7 +181,8 @@ COLLECTOR_PORT=4001 bun dev
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,
 `/api/card`, `/api/repos`, `/api/work`, `/api/work-stats`, `/api/version`); the board's server-sent events are
-`/api/events`.
+`/api/events`. The one-click fixes are `POST /api/tailscale` (Start Tailscale) and `POST /api/hermes` (Start Hermes),
+each answering with the state after the click.
 The board poll costs 1 GraphQL point per read, about 360 an hour while a page is open, and the page sizes in
 `lib/server/board.ts` are what keep the query under 100 connection requests. Keep it at 1.
 
