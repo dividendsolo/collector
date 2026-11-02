@@ -1,16 +1,10 @@
 # collector
 
+Feature facts (keys, pages, how features work, verify steps) live in CONTEXT.md; keep them current there. This file holds only stack, commands and dangers.
+
 One local page of every cron job and agent run across machines. Next.js (App Router) + TypeScript strict on Bun,
 Tailwind v4 (no preflight: `app/globals.css` holds the page's own rules and tokens) with shadcn/ui tokens, Biome,
 Vitest. No database, no auth, no deploy: local only. `collect.py` stays standard-library Python, sent over ssh.
-
-## Layout
-
-- `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.
-  Server state lives on `globalThis` (`store.ts`), so every route shares one cache and one board poller.
-- `app/api/*/route.ts`: one JSON route per reader; `app/api/events` is the board's server-sent events.
-- `components/`: the page (one client app with a hash router, as before).
-- `instrumentation.ts`: starts the board poll and warms the readers at boot.
 
 ## Commands
 

@@ -3,8 +3,8 @@
 One local page showing every cron job and agent run across machines, live. Next.js (App Router) + TypeScript on
 Bun, no database, no auth. It reads only, apart from the two buttons you click yourself — Start Tailscale and Start
 Hermes, each acting on the machine it runs on — and the projects list it writes to `config.json`.
-`AGENTS.md` holds the stack, the commands and the dangers; this file holds how the running one is built, restarted
-and served.
+`AGENTS.md` holds the stack, the commands and the dangers; this file holds the code's layout, how the running one is
+built, restarted and served, and how its features work.
 
 ## How it runs
 
@@ -169,6 +169,14 @@ On the machine Collector runs on the row carries the Start Hermes button (`POST 
 does: `launchctl kickstart -k gui/<uid>/ai.hermes.gateway` — launchd's throttle would otherwise wait out its interval
 before the next try — then the state after, ok only once launchd reports a PID, on which the page hides the rows at
 once. A machine read over ssh gets no button: the click would act here, never there.
+
+## Layout
+
+- `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.
+  Server state lives on `globalThis` (`store.ts`), so every route shares one cache and one board poller.
+- `app/api/*/route.ts`: one JSON route per reader; `app/api/events` is the board's server-sent events.
+- `components/`: the page (one client app with a hash router, as before).
+- `instrumentation.ts`: starts the board poll and warms the readers at boot.
 
 ## The data endpoints
 
