@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -46,6 +47,36 @@ describe("install.sh", () => {
   it("uses the port the app reads, and starts the app the app's own way", () => {
     expect(INSTALL).toContain("COLLECTOR_PORT");
     expect(INSTALL).toContain("bun start");
+  });
+  it("installs the folder it is run from, even as `sh install.sh` with no path in `$0`", () => {
+    // A folder that looks like a Collector checkout, on a machine with nothing on PATH: the run stops at the bun
+    // check, which is past the decision this test is about — that the script read the checkout, not cloned one.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-install-"));
+    fs.writeFileSync(path.join(dir, "install.sh"), INSTALL);
+    for (const file of ["package.json", "collect.py"]) fs.writeFileSync(path.join(dir, file), "{}");
+    const bin = path.join(dir, "bin");
+    fs.mkdirSync(bin);
+    const python = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    fs.symlinkSync(python, path.join(bin, "python3"));
+    const out = spawnSync("/bin/sh", ["install.sh", "--no-install-bun"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { PATH: bin, HOME: dir, NODE_ENV: "test" },
+    });
+    expect(out.stdout).toContain(`Collector is here: ${dir}`);
+    expect(out.stderr).toContain("bun is not installed");
+    // Piped in from a folder with nothing in it, the same script takes the clone branch: the git check that only
+    // that branch has is what fails.
+    const piped = spawnSync("/bin/sh", ["-s", "--", "--dir", path.join(dir, "a-repo")], {
+      input: INSTALL,
+      cwd: fs.mkdtempSync(path.join(os.tmpdir(), "collector-install-")),
+      encoding: "utf8",
+      env: { PATH: bin, HOME: dir, NODE_ENV: "test", COLLECTOR_REPO_URL: "https://example.invalid/collector.git" },
+    });
+    expect(piped.stdout).not.toContain("Collector is here");
+    expect(piped.stderr).toContain("git is needed to download Collector");
   });
 });
 

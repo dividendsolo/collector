@@ -79,11 +79,18 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# A Collector checkout is a folder with the app, the reader script and this installer in it. When this file came in
-# on a pipe (`curl | sh`), $0 is not a path, so there is no folder to look in and the repo is cloned instead.
+# A Collector checkout is a folder with the app, the reader script and this installer in it. `./install.sh` and
+# `sh /path/to/install.sh` both say where the file is. Piped in (`curl | sh`, `sh -s`) `$0` is just the shell's name
+# and there is no folder to look in, so the repo is cloned instead — and `sh install.sh` names no folder either, so
+# that one looks in the folder it was run from.
 here=""
 case "$0" in
   */*) here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) ;;
+  *)
+    if [ -f "./$0" ]; then
+      here=$(pwd)
+    fi
+    ;;
 esac
 is_checkout() { [ -f "$1/package.json" ] && [ -f "$1/collect.py" ] && [ -f "$1/install.sh" ]; }
 
