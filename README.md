@@ -22,8 +22,9 @@ curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install
 
 It clones Collector into `~/collector`, installs [Bun](https://bun.sh) when you do not have it, installs the app's
 packages, builds it and starts it on http://127.0.0.1:4000. Another folder or port: `COLLECTOR_DIR` and
-`COLLECTOR_PORT`, or `install.sh --help`. It writes nothing outside that folder (`node_modules` and `.next`), no
-settings file and no `.env`, and nothing at all on the machines it reads.
+`COLLECTOR_PORT`, or `install.sh --help`. When it installs Bun, Bun goes into `~/.bun` and its installer adds itself
+to your `PATH` in your shell's startup file. Apart from that it writes nothing outside the Collector folder (only
+`node_modules` and `.next` inside it): no settings file, no `.env`, and nothing at all on the machines it reads.
 
 In a checkout you already have, the same script is in the folder:
 

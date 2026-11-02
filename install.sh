@@ -5,9 +5,10 @@
 #   From anywhere:  curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install.sh | sh
 #
 # What it does: gets the repo (it is already there when you run it in a checkout, and cloned when you pipe it in),
-# checks the tools Collector needs, installs its packages, builds it, and starts the server on a free port. It
-# writes nothing but `node_modules` and `.next` inside the Collector folder: no config.json, no .env, and nothing
-# outside the folder. Collector runs with no settings at all.
+# checks the tools Collector needs, installs its packages, builds it, and starts the server on a free port. When it
+# installs Bun, Bun goes into ~/.bun and its installer adds itself to PATH in your shell's startup file. Apart from
+# that it writes nothing but `node_modules` and `.next` inside the Collector folder: no config.json, no .env, and
+# nothing else outside the folder. Collector runs with no settings at all.
 #
 # Environment (every one optional):
 #   COLLECTOR_DIR       where to put the repo when this runs outside a checkout (default $HOME/collector)

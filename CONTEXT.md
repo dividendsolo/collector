@@ -24,7 +24,8 @@ note, not a failure: the page starts and every machine row stays empty until it 
 `--help` are the other options.
 
 Two rules shape the script. It writes `node_modules` and `.next` inside that folder and nothing else — no
-`config.json`, no `.env`, nothing on any remote machine — and it holds no path, host name, user name or job label of
+`config.json`, no `.env`, nothing on any remote machine — apart from Bun when it installs it: Bun goes into `~/.bun`
+and its installer adds itself to `PATH` in the shell's startup file (the README says so). And it holds no path, host name, user name or job label of
 ours. Its usage text is `printf` lines rather than a heredoc, because `sh` reads a piped script from stdin and the
 heredoc's body would have to come from the same stream. `tests/install.test.ts` holds both rules, runs `sh -n` over
 it, and pipes it in as `sh -s -- --help` the way `curl | sh` does.
