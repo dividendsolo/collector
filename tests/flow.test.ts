@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   edgeDimmed,
+  FLOW_BOUNDS,
   FLOW_EDGES,
+  FLOW_LABEL_PX,
+  FLOW_NODE_H,
+  FLOW_NODE_W,
   FLOW_PULSE_SECONDS,
   FLOW_PULSES,
   FLOW_ROW,
@@ -10,10 +14,12 @@ import {
   isMainEdge,
   MAIN_EDGES,
   MAIN_PATH,
+  narrowViewport,
   neighbours,
   nodeDimmed,
   pulseBegins,
   tipAbove,
+  tipAlign,
 } from "@/lib/flow";
 
 /** The drawing this page replaces: every status its Graphviz source carried, with the colour it gave the box
@@ -230,5 +236,35 @@ describe("the light pulses", () => {
     expect(tipAbove(FLOW_ROW * 6)).toBe(false);
     expect(tipAbove(FLOW_ROW * 7)).toBe(true);
     expect(tipAbove(FLOW_ROW * 8)).toBe(true);
+  });
+});
+
+describe("the drawing on a phone (425 wide)", () => {
+  it("bounds every box, the start dot included", () => {
+    for (const s of FLOW_STATUSES) {
+      expect(s.x - FLOW_NODE_W / 2, s.id).toBeGreaterThanOrEqual(FLOW_BOUNDS.x);
+      expect(s.x + FLOW_NODE_W / 2, s.id).toBeLessThanOrEqual(FLOW_BOUNDS.x + FLOW_BOUNDS.width);
+      expect(s.y + FLOW_NODE_H, s.id).toBeLessThanOrEqual(FLOW_BOUNDS.y + FLOW_BOUNDS.height);
+    }
+    expect(FLOW_BOUNDS.y).toBeLessThanOrEqual(FLOW_START.y);
+  });
+
+  it("draws the labels at 9px or more on screen, never fitted down to the width", () => {
+    const v = narrowViewport();
+    expect(FLOW_LABEL_PX * v.zoom).toBeGreaterThanOrEqual(9);
+    // The canvas is as big as the drawing at that zoom, so the whole flow is in it and the page scrolls to it.
+    expect(v.x + FLOW_BOUNDS.x * v.zoom).toBeGreaterThanOrEqual(0);
+    expect(v.x + (FLOW_BOUNDS.x + FLOW_BOUNDS.width) * v.zoom).toBeLessThanOrEqual(v.width);
+    expect(v.y + FLOW_BOUNDS.y * v.zoom).toBeGreaterThanOrEqual(0);
+    expect(v.y + (FLOW_BOUNDS.y + FLOW_BOUNDS.height) * v.zoom).toBeLessThanOrEqual(v.height);
+    // and wider than the phone, which is what the sideways scroll is for.
+    expect(v.width).toBeGreaterThan(425);
+  });
+
+  it("opens a tooltip toward the middle of the drawing, so the edge boxes keep theirs inside the canvas", () => {
+    const xs = FLOW_STATUSES.map((s) => s.x);
+    expect(tipAlign(Math.min(...xs))).toBe("start");
+    expect(tipAlign(Math.max(...xs))).toBe("end");
+    expect(tipAlign(0)).toBe("center");
   });
 });

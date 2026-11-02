@@ -9,14 +9,26 @@ import {
   Handle,
   type Node,
   type NodeProps,
+  NodeToolbar,
   Position,
   ReactFlow,
   ReactFlowProvider,
 } from "@xyflow/react";
-import { type CSSProperties, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   edgeDimmed,
   FLOW_EDGES,
+  FLOW_NODE_H,
+  FLOW_NODE_W,
   FLOW_PULSE_SECONDS,
   FLOW_START,
   FLOW_STATUSES,
@@ -24,9 +36,11 @@ import {
   type FlowStatus,
   type FlowTone,
   isMainEdge,
+  narrowViewport,
   nodeDimmed,
   pulseBegins,
   tipAbove,
+  tipAlign,
 } from "@/lib/flow";
 import { isAgentStack, STATUS_GROUPS, STATUS_PILL, type StatusSets } from "@/lib/statuses";
 import { useLive } from "./data";
@@ -40,9 +54,8 @@ import { PanelHead, Pill, SkelItems } from "./ui";
  * its tooltip.
  */
 
-/** The box every status gets, which is what the drawing laid out and what the handles sit on. */
-const NODE_W = 168;
-const NODE_H = 54;
+const NODE_W = FLOW_NODE_W;
+const NODE_H = FLOW_NODE_H;
 
 /** The colour a status's paths and pulses wear: the status's own tone, in the page's tokens. */
 const TONE: Record<FlowTone, string> = {
@@ -65,7 +78,12 @@ type Highlight = { hover: string | null; setHover: (id: string | null) => void; 
 const FlowHighlight = createContext<Highlight>({ hover: null, setHover: () => {}, still: false });
 const useHighlight = () => useContext(FlowHighlight);
 
-/** One status box, with its tooltip. React Flow measures it, so it stays the size the drawing laid out. */
+/**
+ * One status box, with its tooltip. React Flow measures the box, so it stays the size the drawing laid out. The
+ * tooltip is a `NodeToolbar`: React Flow draws it outside the zoomed viewport, at the box's place on screen, so it
+ * reads at its own 11px at any zoom (on a phone the canvas zoom made it a 71px box of 3.6px text, collector#51
+ * review). It shows while the status is hovered, or tapped on a touch screen.
+ */
 function StatusBox({ data }: NodeProps<StatusNode>) {
   const { status } = data;
   const { hover } = useHighlight();
@@ -78,7 +96,16 @@ function StatusBox({ data }: NodeProps<StatusNode>) {
           <span key={`${line}-${i}`}>{line}</span>
         ))}
       </span>
-      <div className={`flow-tip ${tipAbove(status.y) ? "above" : "below"}`}>{status.tip}</div>
+      <NodeToolbar
+        isVisible={hover === status.id}
+        position={tipAbove(status.y) ? Position.Top : Position.Bottom}
+        align={tipAlign(status.x)}
+        offset={8}
+      >
+        <div className="flow-tip" data-tip={status.id}>
+          {status.tip}
+        </div>
+      </NodeToolbar>
       <Handle type="source" position={Position.Bottom} className="flow-handle" isConnectable={false} />
     </div>
   );
@@ -153,18 +180,24 @@ function PulsePath({
   );
 }
 
-/** `prefers-reduced-motion`: the pulses stop, the paths stay (James, 2026-11-02). */
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(false);
+function useMedia(query: string) {
+  const [matches, setMatches] = useState(false);
   useEffect(() => {
-    const mq = matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const on = () => setReduced(mq.matches);
+    const mq = matchMedia(query);
+    setMatches(mq.matches);
+    const on = () => setMatches(mq.matches);
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
-  }, []);
-  return reduced;
+  }, [query]);
+  return matches;
 }
+
+/** `prefers-reduced-motion`: the pulses stop, the paths stay (James, 2026-11-02). */
+const useReducedMotion = () => useMedia("(prefers-reduced-motion: reduce)");
+
+/** A phone-wide window, the same break as the page's own (`max-width: 700px` in `app/globals.css`). */
+const NARROW = "(max-width: 700px)";
+const NARROW_VIEW = narrowViewport();
 
 const nodeTypes = { status: StatusBox, start: StartBox };
 const edgeTypes = { pulse: PulsePath };
@@ -174,6 +207,13 @@ const edgeTypes = { pulse: PulsePath };
 function Drawing() {
   const [hover, setHover] = useState<string | null>(null);
   const still = useReducedMotion();
+  const narrow = useMedia(NARROW);
+  const scroller = useRef<HTMLDivElement>(null);
+  // A phone opens the drawing on its middle, where needs-triage sits, not on its left edge.
+  useEffect(() => {
+    const el = scroller.current;
+    if (narrow && el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+  }, [narrow]);
 
   // Built once, and never again on a hover: see `FlowHighlight`.
   const nodes = useMemo<Node[]>(
@@ -221,34 +261,66 @@ function Drawing() {
 
   const enter = useCallback((_: unknown, n: Node) => setHover(n.id), []);
   const leave = useCallback(() => setHover(null), []);
+  // A touch screen has no hover: a tap opens the status's tooltip (and its highlight), a tap on the ground closes
+  // it, and the tooltip is scrolled into the screen, since on a phone the drawing is wider than the screen.
+  const tap = useCallback((_: unknown, n: Node) => {
+    if (n.type !== "status") return;
+    setHover(n.id);
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`[data-tip="${CSS.escape(n.id)}"]`)
+        ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }),
+    );
+  }, []);
   const highlight = useMemo<Highlight>(() => ({ hover, setHover, still }), [hover, still]);
 
+  // On a phone the drawing is not fitted down to the screen's width (labels about 4px): it is drawn at a zoom
+  // that keeps them at 9px or more, on a canvas as big as the drawing at that zoom, and the canvas scrolls
+  // sideways inside its panel. The canvas's own drag and pinch are off there, so a finger scrolls the page and the
+  // drawing the way it scrolls anything else. A wide window is unchanged: fitted, pannable, zoomable.
+  const view = narrow
+    ? {
+        defaultViewport: { x: NARROW_VIEW.x, y: NARROW_VIEW.y, zoom: NARROW_VIEW.zoom },
+        minZoom: NARROW_VIEW.zoom,
+        maxZoom: NARROW_VIEW.zoom,
+        panOnDrag: false,
+        zoomOnScroll: false,
+        zoomOnPinch: false,
+        zoomOnDoubleClick: false,
+        preventScrolling: false,
+      }
+    : { fitView: true, fitViewOptions: { padding: 0.08 }, minZoom: 0.25, maxZoom: 1.4 };
+  const size: CSSProperties = narrow ? { width: NARROW_VIEW.width, height: NARROW_VIEW.height } : {};
+
   return (
-    <div className="flow-canvas" style={{ ["--flow-node-h" as string]: `${NODE_H}px` } as CSSProperties}>
-      <FlowHighlight.Provider value={highlight}>
-        <ReactFlowProvider>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.08 }}
-            minZoom={0.25}
-            maxZoom={1.4}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            nodesFocusable={false}
-            edgesFocusable={false}
-            elementsSelectable={false}
-            onNodeMouseEnter={enter}
-            onNodeMouseLeave={leave}
-            proOptions={{ hideAttribution: false }}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--line)" />
-          </ReactFlow>
-        </ReactFlowProvider>
-      </FlowHighlight.Provider>
+    <div ref={scroller} className={`flow-scroll${narrow ? " narrow" : ""}`}>
+      <div className="flow-canvas" style={{ ["--flow-node-h" as string]: `${NODE_H}px`, ...size } as CSSProperties}>
+        <FlowHighlight.Provider value={highlight}>
+          <ReactFlowProvider>
+            <ReactFlow
+              // A new window width is a new viewport: the drawing mounts again with the other one.
+              key={narrow ? "narrow" : "wide"}
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              {...view}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              nodesFocusable={false}
+              edgesFocusable={false}
+              elementsSelectable={false}
+              onNodeMouseEnter={enter}
+              onNodeMouseLeave={leave}
+              onNodeClick={tap}
+              onPaneClick={leave}
+              proOptions={{ hideAttribution: false }}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="var(--line)" />
+            </ReactFlow>
+          </ReactFlowProvider>
+        </FlowHighlight.Provider>
+      </div>
     </div>
   );
 }
@@ -312,7 +384,7 @@ export function FlowPage() {
       <div className="panel">
         <PanelHead icon="gauge" title="Card flow">
           <span className="sub">
-            hover a status for what it means: the bright path is the usual route from triage to closed
+            hover or tap a status for what it means: the bright path is the usual route from triage to closed
           </span>
         </PanelHead>
         <Drawing />

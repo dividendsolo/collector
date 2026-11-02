@@ -239,3 +239,36 @@ export const isMainEdge = (edge: FlowEdge) => MAIN_EDGES.some((m) => m.id === ed
 /** Which side of a box its tooltip opens on: below it, unless the box is in the drawing's bottom two rows, where
  * the canvas would clip the tooltip. */
 export const tipAbove = (y: number) => y > FLOW_ROW * 6;
+
+/** Which way a tooltip runs from its box: from the box's own edge toward the middle for the outer columns, so a
+ * box at the drawing's side keeps its tooltip inside the canvas (and on a phone, inside the screen). */
+export const tipAlign = (x: number): "start" | "center" | "end" =>
+  x <= -FLOW_COL ? "start" : x >= FLOW_COL ? "end" : "center";
+
+/** Every status box, as the page draws it; React Flow measures it, so it stays the size the drawing laid out. */
+export const FLOW_NODE_W = 168;
+export const FLOW_NODE_H = 54;
+/** The label size in a box (`.flow-box` in `app/globals.css`), before the canvas zooms it. */
+export const FLOW_LABEL_PX = 11.5;
+
+/** The rectangle the drawing covers, boxes and start dot included, in the drawing's own pixels. */
+export const FLOW_BOUNDS = (() => {
+  const left = Math.min(...FLOW_STATUSES.map((s) => s.x - FLOW_NODE_W / 2));
+  const right = Math.max(...FLOW_STATUSES.map((s) => s.x + FLOW_NODE_W / 2));
+  const bottom = Math.max(...FLOW_STATUSES.map((s) => s.y + FLOW_NODE_H));
+  return { x: left, y: FLOW_START.y, width: right - left, height: bottom - FLOW_START.y };
+})();
+
+/** The drawing on a narrow window (collector#51 review): fitting the whole flow to a phone's width drew the labels
+ * at about 4px, so a phone draws it at a fixed zoom that keeps them at 9px or more, on a canvas as big as the
+ * drawing at that zoom, and scrolls sideways to it. `x`/`y`/`zoom` are React Flow's viewport; `width`/`height`
+ * the canvas. */
+export function narrowViewport(zoom = 0.8, pad = 14) {
+  return {
+    zoom,
+    x: pad - FLOW_BOUNDS.x * zoom,
+    y: pad - FLOW_BOUNDS.y * zoom,
+    width: Math.ceil(FLOW_BOUNDS.width * zoom + pad * 2),
+    height: Math.ceil(FLOW_BOUNDS.height * zoom + pad * 2),
+  };
+}
