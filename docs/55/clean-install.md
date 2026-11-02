@@ -145,3 +145,16 @@ $ ls -a /root
 `node_modules` and `.next` inside the checkout, bun's own `~/.bun` and the `PATH` line in `.bashrc` its installer
 writes, and nothing else: no settings file, no `.env`, nothing outside the user's home, and nothing at all on the
 machines Collector reads.
+
+## The screenshot, taken again after review (fc2ec81)
+
+The review of b3052d7 found the screenshot showing "No services in config.json yet." twice in Service health: once
+in the panel's summary line and once in its empty list. The summary now stays empty when there are no services
+(`tests/service-health.test.ts`), and `docs/main-page.png` was taken again from a fresh install of `fc2ec81`, run the
+same way: a new `debian:stable-slim` container with `git`, `python3`, `curl`, `unzip` and `ca-certificates`, no `ps`,
+and `cat /src/install.sh | sh` cloning from a bundle of `agent/55`. The installer printed the same lines as above
+(`Downloading Collector into /root/collector` through `Collector is running at http://127.0.0.1:4000`), `/` answered
+200, `/api/services` answered `[]`, and the machine read came back with `"error": null` and no jobs. Because the
+installer binds `127.0.0.1` inside the container, the page was served again with `next start -H 0.0.0.0` for the
+host's headless Chrome (`--headless=new`, CDP, 1440×1000). The page's own text had the message once, Needs attention
+read "Nothing needs attention.", and the container was removed afterwards.
