@@ -4,6 +4,7 @@ import {
   cardState,
   currentWork,
   holdText,
+  holdTip,
   isSession,
   LAB,
   labRun,
@@ -46,6 +47,7 @@ const hold = (refs: string[]): WorkCard["hold"] => ({
     return { ref, url: `https://github.com/acme/${repo}/issues/${number}` };
   }),
   from: null,
+  why: null,
 });
 
 describe("currentWork", () => {
@@ -185,7 +187,7 @@ describe("currentWork", () => {
     expect(rows.every((r) => r.onDeck === undefined)).toBe(true);
   });
   it("orders the scheduled group: waiting on a card first, then dated soonest first, then the rest", () => {
-    const from = (day: string): WorkCard["hold"] => ({ after: [], from: day });
+    const from = (day: string): WorkCard["hold"] => ({ after: [], from: day, why: null });
     const cards = [
       card("app", 1, "scheduled", { priority: "P0" }),
       card("app", 2, "scheduled", { hold: from("2026-11-20") }),
@@ -344,11 +346,49 @@ describe("parseHold", () => {
   });
   it("reads the Not before date", () => {
     const h = parseHold("Not before: 2026-11-01 -> ready-for-human", url);
-    expect(h).toEqual({ after: [], from: "2026-11-01" });
+    expect(h).toEqual({ after: [], from: "2026-11-01", why: null });
     expect(holdText(h)).toBe("from 2026-11-01");
   });
   it("is null with neither line", () => {
     expect(parseHold("just a card", url)).toBeNull();
+  });
+  it("reads the reason off the same line (collector#50), agent-stack#272's own", () => {
+    const h = parseHold(
+      "Not before: 2026-11-16 -> ready-for-human (why: the earliest date the proof log can show two weeks green, counted from 2026-11-02)\n\nbody",
+      url,
+    );
+    expect(h).toEqual({
+      after: [],
+      from: "2026-11-16",
+      why: "the earliest date the proof log can show two weeks green, counted from 2026-11-02",
+    });
+    expect(holdText(h)).toBe("from 2026-11-16"); // what the date shows does not change
+  });
+  it("reads no reason as none: an older line, and one that only says the status", () => {
+    expect(parseHold("Not before: 2026-11-03 -> ready-for-agent", url)?.why).toBeNull();
+    expect(parseHold("**Not before:** 2026-11-03 -> ready-for-agent", url)?.why).toBeNull();
+    expect(parseHold("**Not before:** 2026-11-03 -> ready-for-agent (why: James chose tomorrow)", url)?.why).toBe(
+      "James chose tomorrow",
+    );
+  });
+});
+
+describe("holdTip", () => {
+  const url = "https://github.com/acme/app/issues/7";
+  it("carries the reason a scheduled card's date shows on hover", () => {
+    const h = parseHold(
+      "Not before: 2026-11-03 -> ready-for-human (why: James chose to do it in tomorrow's session, 2026-11-02)",
+      url,
+    );
+    expect(holdTip(h)).toEqual({
+      title: "Why it waits",
+      text: "James chose to do it in tomorrow's session, 2026-11-02",
+    });
+  });
+  it("is null with no reason, so an older card's date shows no tooltip", () => {
+    expect(holdTip(parseHold("Not before: 2026-11-01 -> ready-for-human", url))).toBeNull();
+    expect(holdTip(parseHold("**Waiting on:** #146", url))).toBeNull();
+    expect(holdTip(null)).toBeNull();
   });
 });
 
