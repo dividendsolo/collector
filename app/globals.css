@@ -527,6 +527,18 @@
     font: 12px var(--mono);
     color: var(--faint);
   }
+  /* Card flow's Statuses panel: the pills wrap, and drop under the text when the row is narrow (425 wide). */
+  .health.statuses li {
+    flex-wrap: wrap;
+  }
+  .health.statuses li > div:first-child {
+    flex: 1 1 260px;
+  }
+  .health.statuses .right {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
   .shell {
     flex: 1;
     min-width: 0;

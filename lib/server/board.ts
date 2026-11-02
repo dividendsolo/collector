@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { statusSets } from "../statuses";
 import { type Board, config } from "./config";
 import { expandHome } from "./paths";
 import { run } from "./run";
@@ -298,9 +299,12 @@ async function readCommand(cmd: string[], lanes: string[]): Promise<Row[]> {
 }
 
 const tickets = () => config().tickets || {};
+/** The card statuses Collector reads here (collector#53): the waiting set is what the Waiting on you panel holds,
+ * and the ticket view carries all three for the Card flow page. */
+const statuses = () => statusSets(config());
 const lanesOf = () => {
   const t = tickets();
-  return [...new Set([...(t.all || []), ...(t.each || []), ...(t.count || [])])];
+  return [...new Set([...(t.all || []), ...statuses().waiting, ...(t.count || [])])];
 };
 
 /** Read the board once; on a change, push the new view to every open page. */
@@ -338,7 +342,7 @@ export async function poll(reason = "timer"): Promise<void> {
     const hadError = S.error;
     S.error = null;
     const d = diffBoard(prev || [], rows);
-    keepClosed(S.closed, d, tickets().each || [], Date.now());
+    keepClosed(S.closed, d, statuses().waiting, Date.now());
     if (prev === null || !isEmpty(d) || hadError) {
       if (prev !== null && !isEmpty(d))
         console.log(
@@ -390,7 +394,7 @@ async function fillReasons() {
   if (filling || !S.rows) return;
   filling = true;
   try {
-    const each = new Set(tickets().each || []);
+    const each = new Set(statuses().waiting);
     const want = S.rows.filter((r) => {
       if (!each.has(r.lane)) return false;
       const hit = S.reasons.get(reasonKey(r));
@@ -424,14 +428,20 @@ export function keepClosed(closed: Map<string, { row: Row; at: number }>, d: Dif
 
 // ---- The views the page uses.
 
+/** The Waiting on you view: every ticket in the waiting set (called `each` here, as this view always has), with the
+ * reason the comment that moved it there gives, one row per `count` lane, and `working`/`done` for the Card flow
+ * page (collector#53). */
 export function ticketsView() {
   const t = tickets();
-  const each = t.each || [];
+  const s = statuses();
+  const each = s.waiting;
   const count = t.count || [];
   const keep = new Set([...each, ...count]);
   return {
     each,
     count,
+    working: s.working,
+    done: s.done,
     tickets: (S.rows || [])
       .filter((r) => keep.has(r.lane))
       .map((r) => ({
@@ -450,25 +460,32 @@ export function ticketsView() {
   };
 }
 
+/** The Work page's open cards: the `all` lanes, less the statuses that mean done (collector#53) — a done card is
+ * not open work — in the shape the page uses. */
+export function workCards(rows: Row[], lanes: string[], done: string[]) {
+  const known = new Set(lanesOf());
+  return rows
+    .filter((r) => lanes.includes(r.lane) && !done.includes(r.lane))
+    .map((r) => ({
+      repo: r.repo,
+      number: r.number,
+      title: r.title,
+      url: r.url,
+      lane: r.lane,
+      priority: r.priority,
+      created: r.created,
+      labels: r.labels.filter((l) => !known.has(l) && l !== r.priority),
+      hold: r.hold ?? null,
+    }));
+}
+
 export function workView() {
   const lanes = tickets().all || [];
-  const known = new Set(lanesOf());
+  const s = statuses();
   return {
     at: S.at / 1000,
     lanes,
-    cards: (S.rows || [])
-      .filter((r) => lanes.includes(r.lane))
-      .map((r) => ({
-        repo: r.repo,
-        number: r.number,
-        title: r.title,
-        url: r.url,
-        lane: r.lane,
-        priority: r.priority,
-        created: r.created,
-        labels: r.labels.filter((l) => !known.has(l) && l !== r.priority),
-        hold: r.hold ?? null,
-      })),
+    cards: workCards(S.rows || [], lanes, s.done),
     closed: [...S.closed.values()]
       .filter((c) => Date.now() - c.at <= CLOSED_SECONDS * 1000)
       .map(({ row: r, at }) => ({

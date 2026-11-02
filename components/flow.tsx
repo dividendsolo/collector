@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { isAgentStack, STATUS_GROUPS, STATUS_PILL, type StatusSets } from "@/lib/statuses";
+import { useLive } from "./data";
+import { PanelHead, Pill, SkelItems } from "./ui";
 
 /** Card flow: every status a card can have and the statuses it can move to, drawn with Graphviz (viz.js).
  *  The reference James and the droids use (2026-11-02); the source was agent-stack/docs/card-flow.html. */
@@ -58,6 +61,59 @@ const DOT = `digraph flow {
   merging -> closed [weight=10];
 }`;
 
+/** The statuses Collector reads, which are a setting (collector#53): `config.json`'s `statuses`, in the set's own
+ * order, from the board view. With nothing set they are the agent stack's own statuses, and the page says so. */
+function Statuses() {
+  const { board } = useLive();
+  const t = board?.tickets;
+  // `each` is the waiting set under the name this view has always used; working and done come beside it.
+  const sets: StatusSets | null = t ? { waiting: t.each, working: t.working, done: t.done } : null;
+  const custom = sets ? !isAgentStack(sets) : false;
+  return (
+    <section className="panel" id="statuses">
+      <PanelHead icon="layers" title="Statuses">
+        <span className="sub">
+          {custom ? "from config.json" : "the agent stack's own: set statuses in config.json to use yours"}
+        </span>
+      </PanelHead>
+      <ul className="health statuses">
+        {!sets ? (
+          <SkelItems n={3} />
+        ) : (
+          STATUS_GROUPS.map((g) => (
+            <li key={g.key}>
+              <div>
+                <div className="name">
+                  {g.label} <span className="sub">{sets[g.key].length}</span>
+                </div>
+                <div className="sub">{g.does}</div>
+              </div>
+              <div className="right">
+                {sets[g.key].length ? (
+                  sets[g.key].map((s) => (
+                    <Pill key={s} cls={STATUS_PILL[g.key]} dot={false}>
+                      {s}
+                    </Pill>
+                  ))
+                ) : (
+                  <span className="sub">none</span>
+                )}
+              </div>
+            </li>
+          ))
+        )}
+        {custom ? (
+          <li>
+            <div className="sub">
+              The drawing above is the agent stack&apos;s own flow: your statuses are the ones listed here.
+            </div>
+          </li>
+        ) : null}
+      </ul>
+    </section>
+  );
+}
+
 export function FlowPage() {
   const box = useRef<HTMLDivElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: DOT is the trigger, so an edit redraws on hot reload
@@ -79,10 +135,13 @@ export function FlowPage() {
     };
   }, [DOT]);
   return (
-    <div className="panel">
-      <div ref={box} style={{ background: "#fff", borderRadius: 12, padding: 16, overflow: "auto" }}>
-        Drawing…
+    <>
+      <div className="panel">
+        <div ref={box} style={{ background: "#fff", borderRadius: 12, padding: 16, overflow: "auto" }}>
+          Drawing…
+        </div>
       </div>
-    </div>
+      <Statuses />
+    </>
   );
 }

@@ -157,9 +157,11 @@ const RunTime = ({ r }: { r: Run }) => (
 );
 
 function StateCell({ row }: { row: WorkRow }) {
-  const { state } = useLive();
+  const { state, board } = useLive();
   const stale: Staleness = staleness(state);
-  const shown = cardState(row, stale);
+  // The `working` statuses are a setting (collector#53): a card there with no run behind it is a claim the page's
+  // read disagrees with, so its row shows how old the data is.
+  const shown = cardState(row, stale, board?.tickets?.working);
   const hold = row.card?.lane === "scheduled" ? row.card.hold : null;
   const deck = row.onDeck ?? [];
   return (

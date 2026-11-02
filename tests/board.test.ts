@@ -8,6 +8,7 @@ import {
   parseBoard,
   type Row,
   reasonOf,
+  workCards,
 } from "@/lib/server/board";
 import type { Board } from "@/lib/server/config";
 
@@ -127,6 +128,29 @@ describe("reasonOf", () => {
   it("falls back to the newest comment that reads like a reason", () => {
     const r = reasonOf({ comments: { nodes: comments }, timelineItems: { nodes: [] } }, "needs-info");
     expect(r?.url).toBe("c2");
+  });
+});
+
+describe("workCards", () => {
+  const row = (n: number, lane: string): Row => ({
+    repo: "app",
+    number: n,
+    title: `T${n}`,
+    url: `https://github.com/acme/app/issues/${n}`,
+    lane,
+    priority: null,
+    created: "2026-10-01T00:00:00Z",
+    labels: [],
+  });
+  it("holds the `all` lanes, and leaves out the statuses that mean done (collector#53)", () => {
+    const rows = [row(1, "agent-in-progress"), row(2, "closed"), row(3, "code-review"), row(4, "needs-triage")];
+    expect(workCards(rows, ["agent-in-progress", "closed", "code-review"], ["closed"]).map((c) => c.number)).toEqual([
+      1, 3,
+    ]);
+    // A user's own done status, and the lane list is still the `all` lanes: needs-triage is not on the Work page.
+    expect(workCards(rows, ["agent-in-progress", "needs-triage"], ["needs-triage"]).map((c) => c.number)).toEqual([1]);
+    // No done status set: every card in `all` is open work, which is what the page did before the setting.
+    expect(workCards(rows, ["agent-in-progress", "closed", "code-review"], []).map((c) => c.number)).toEqual([1, 2, 3]);
   });
 });
 

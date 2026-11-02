@@ -93,7 +93,10 @@ What to look at — read-only, and only what exists on this machine
   that is the `board` key: `project_id`, the `PVT_…` node id (`gh project view <number> --owner <login> --format json`
   has it), plus the option ids of the board's Status and Priority fields in `lanes` and `priorities` (`gh api graphql`
   with the project's `fieldValues` will give them). In `tickets`, name the lanes the page should watch: `each` for the
-  ones that wait on the person, `count` for the ones worth a number, `all` for every lane in board order. `label_repos`
+  ones that wait on the person, `count` for the ones worth a number, `all` for every lane in board order; `statuses`
+  is the same list from the card's side (collector#53), for a person whose statuses are not the agent stack's own:
+  `waiting` (the ones that wait on the person, in the order to show them), `working` (the ones that mean a machine
+  holds the card), `done` (the ones that mean finished). `label_repos`
   is for a repo that keeps its lane in an issue label instead of on the board. No board or no `gh`: leave `board` and
   `tickets` out, and in `actions_minutes` put the Actions minutes a month the person's GitHub plan includes
   (`gh api user --jq .plan.name` says which plan) only if the page does not read it right; otherwise leave it out.

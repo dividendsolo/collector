@@ -81,6 +81,21 @@
   "domains": [
     "example.com"
   ],
+  "statuses": {
+    "waiting": [
+      "ready-for-human",
+      "needs-manual-qa",
+      "needs-info",
+      "needs-triage"
+    ],
+    "working": [
+      "agent-in-progress",
+      "verify-in-progress"
+    ],
+    "done": [
+      "closed"
+    ]
+  },
   "tickets": {
     "each": [
       "needs-info"

@@ -139,6 +139,20 @@ describe("currentWork", () => {
     const never = staleness({ at: now - 5, machines: [{ name: "ezio", stale: true, read_at: null }] }, now);
     expect(cardState(rows[0], never)).toBe("ezio unread");
   });
+  it("reads the state of a custom set's statuses too: the working set is a setting now (collector#53)", () => {
+    // A user's own statuses: a card in one of them, with no run and stale data, reads how old the data is.
+    const rows = currentWork(
+      [card("app", 1, "review-me"), card("app", 2, "agent-in-progress")],
+      [],
+      [],
+      ["blocked-on-me"],
+      0,
+    );
+    const page = staleness({ at: 10_000 - 180, machines: [] }, 10_000);
+    expect(rows.map((r) => cardState(r, page, ["review-me"]))).toEqual(["stale 3 min", "agent-in-progress"]);
+    // With the agent stack's set, the same rows read the other way round.
+    expect(rows.map((r) => cardState(r, page, ["agent-in-progress"]))).toEqual(["review-me", "stale 3 min"]);
+  });
   it("calls the page stale only past its interval", () => {
     expect(staleness({ at: 100 }, 100 + STALE_SECONDS).page).toBeNull();
     expect(staleness({ at: 100 }, 101 + STALE_SECONDS).page).toBe(STALE_SECONDS + 1);

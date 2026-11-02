@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import type { StatusSets } from "../statuses";
 import { CONFIG_PATH } from "./paths";
 
 export interface Machine {
@@ -84,6 +85,9 @@ export interface Config {
   services?: Service[];
   vendors?: Vendor[];
   domains?: string[];
+  /** The card statuses Collector reads: which mean "waits on you" (in that order), "a droid is working", "done"
+   * (collector#53). Left out: the agent stack's own statuses, and `tickets.each` for the waiting ones. */
+  statuses?: Partial<StatusSets>;
   tickets?: { each?: string[]; count?: string[]; all?: string[]; command?: string[] };
   board?: Board;
   subscriptions?: Subscription[];
@@ -109,6 +113,7 @@ export const CONFIG_KEYS = [
   "services",
   "vendors",
   "domains",
+  "statuses",
   "tickets",
   "board",
   "subscriptions",

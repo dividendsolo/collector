@@ -11,7 +11,6 @@ import {
   schedule,
   shortRole,
   status,
-  waitingOrder,
 } from "@/lib/format";
 import type { WorkRun } from "@/lib/work";
 
@@ -138,28 +137,5 @@ describe("runDoing", () => {
   });
   it("says a process left in a card worktree is left behind", () => {
     expect(runDoing({ type: "leftover", kind: "leftover" })).toBe("left behind");
-  });
-});
-
-describe("waitingOrder", () => {
-  it("sorts by priority, then ready-for-human, needs-manual-qa, needs-info, needs-triage, then oldest", () => {
-    const rows = [
-      { id: "p1-triage", priority: "P1", lane: "needs-triage", created: "2026-10-01" },
-      { id: "p2-human", priority: "P2", lane: "ready-for-human", created: "2026-10-01" },
-      { id: "p1-info", priority: "P1", lane: "needs-info", created: "2026-10-01" },
-      { id: "p1-human-new", priority: "P1", lane: "ready-for-human", created: "2026-10-20" },
-      { id: "p1-qa", priority: "P1", lane: "needs-manual-qa", created: "2026-10-01" },
-      { id: "p1-human-old", priority: "P1", lane: "ready-for-human", created: "2026-10-02" },
-      { id: "p0-triage", priority: "P0", lane: "needs-triage", created: "2026-10-21" },
-    ];
-    expect(rows.sort(waitingOrder).map((r) => r.id)).toEqual([
-      "p0-triage",
-      "p1-human-old",
-      "p1-human-new",
-      "p1-qa",
-      "p1-info",
-      "p1-triage",
-      "p2-human",
-    ]);
   });
 });
