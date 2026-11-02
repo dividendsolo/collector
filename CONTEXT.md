@@ -255,6 +255,20 @@ since a setting that does nothing should not be silent. None of them stops a mac
 `watch` that is not a list, and an entry that is not an object, to the machine Collector runs on as they are, so
 `collect.py` says each once there, and a bad `idle_after` is that one row's `unknown`, not an exception.
 
+## A scheduled card's date says why it waits, on hover (card #50)
+
+A scheduled card's body carries the line `Not before: <date> -> <status> (why: <reason>)`, and James's rule is that
+every scheduled date says why. `lib/server/board.ts`'s `parseHold` reads the date and the reason off that one line —
+the reason is the text between `(why: ` and that line's first `)` — and the row's `hold` carries it as `why`
+(`null` when the line gives none).
+
+Current work (the Dashboard) draws a scheduled row's date as `from <date>` in its State cell. When the line gives a
+reason, that date carries the page's own hover card (`components/card-tip.tsx`, over `data-tip` and
+`data-tip-title`): "Why it waits" above the reason, with the dotted underline that says the date can be hovered.
+`lib/work.ts`'s `holdTip` is what decides the text, and it is null when the line has no reason, so an older card's
+date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
+`holdTip` is the reason hovering it shows.
+
 ## Layout
 
 - `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.
