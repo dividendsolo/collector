@@ -51,7 +51,8 @@ Each project page also shows a Stats card: monthly spend (subscriptions tagged w
 total revenue (from the project's payment providers, Stripe and Polar), and revenue and visitors over 30 days
 (from DataFast). The Payment keys page (`#/keys`) shows how to make each read-only key and whether it works.
 
-It reads only. It never changes a job or a card. Its one write is your repo choice, saved to `config.json`.
+It reads only. It never changes a job or a card on its own: the two buttons you click yourself (Start Tailscale,
+Start Hermes) act on the machine Collector runs on. Its other write is your repo choice, saved to `config.json`.
 
 ## Requirements
 

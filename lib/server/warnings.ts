@@ -2,6 +2,7 @@ import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
 import { type Config, unknownConfigKeys } from "./config";
 import type { Domain } from "./domains";
+import { TICKER_STALE_S } from "./hermes";
 import type { GithubLimit } from "./machines";
 import type { Checked } from "./services";
 import type { VendorRow } from "./vendors";
@@ -20,6 +21,10 @@ export interface Warning {
 }
 
 const START_TAILSCALE = { label: "Start Tailscale", post: "/api/tailscale" };
+const START_HERMES = { label: "Start Hermes", post: "/api/hermes" };
+
+/** A duration in the words a row reads it in: "12 min", "4 h". */
+const ageText = (s: number) => (s < 3600 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
 
 export interface WarningInputs {
   machines: any[];
@@ -34,9 +39,10 @@ export interface WarningInputs {
 }
 
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
- * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, tickets that did not list,
- * low AI or X credit, open incidents of the vendors marked "attention" in config.json, and a config.json key
- * Collector does not read. Errors first. Adds `machine` and `what` to each job. */
+ * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, the Hermes gateway or its cron
+ * ticker on a machine that has one, tickets that did not list, low AI or X credit, open incidents of the vendors
+ * marked "attention" in config.json, and a config.json key Collector does not read. Errors first. Adds `machine` and
+ * `what` to each job. */
 export function warnings(w: WarningInputs): Warning[] {
   const out: Warning[] = [];
   const byScript = new Map<string, string[]>();
@@ -68,6 +74,27 @@ export function warnings(w: WarningInputs): Warning[] {
         text: `Tailscale is ${String(m.tailscale).toLowerCase()} on ${m.name}`,
         ...(m.local ? { action: START_TAILSCALE } : {}),
       });
+    // The Hermes gateway on that machine (agent-stack#261): the waiting crew runs as a Hermes cron on the gateway's
+    // own ticker, so a gateway that is not running, or a ticker that has not moved in ten minutes, is a crew that has
+    // stopped silently. A gateway that is down is an error (nothing of the crew runs); a ticker that stopped under a
+    // running gateway is a warning (the process is up, its work is not). Only the machine Collector runs on gets the
+    // button: a click would act there, never on the machine read over ssh.
+    const gw = m.hermes_gateway;
+    if (gw) {
+      const age = typeof gw.ticker_age_s === "number" ? gw.ticker_age_s : null;
+      if (!gw.running)
+        out.push({
+          level: "error",
+          text: `Hermes gateway is down on ${m.name}`,
+          ...(m.local ? { action: START_HERMES } : {}),
+        });
+      else if (age !== null && age > (gw.ticker_stale_s ?? TICKER_STALE_S))
+        out.push({
+          level: "warn",
+          text: `Hermes cron ticker stopped ${ageText(age)} ago on ${m.name}`,
+          ...(m.local ? { action: START_HERMES } : {}),
+        });
+    }
     for (const j of m.jobs || []) {
       j.machine = m.name;
       j.what = what[j.name] ?? (j.script || "");
