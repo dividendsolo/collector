@@ -36,9 +36,9 @@ describe("README", () => {
   });
   it("points a new user at SETUP.md before hand editing", () => {
     const readme = file("README.md");
-    const runIt = readme.split("## Run it")[1].split("\n## ")[0];
-    expect(runIt).toContain("SETUP.md");
-    expect(runIt).toContain("config.example.json");
+    const install = readme.split("## Install")[1].split("\n## ")[0];
+    expect(install).toContain("SETUP.md");
+    expect(install).toContain("config.example.json");
   });
 });
 
