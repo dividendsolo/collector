@@ -38,6 +38,9 @@ worktree, on its own port (`COLLECTOR_PORT=4001 bun dev`), and leaves port 4000 
 after the merge, through the button.
 
 - A build in a worktree writes that worktree's `.next` and changes nothing on port 4000.
+- Build with `bun run build`, or `COLLECTOR_DIST_DIR=.next-rebuild` like the rebuild job: `next build` writes its
+  `distDir` into `tsconfig.json`'s `include`, so any other folder (a `.next-check` used to keep the served build
+  untouched) leaves a tracked `tsconfig.json` change behind for the next pull to trip on.
 - An open page needs no manual refresh. Every page polls `/api/version` (the build id the server process booted on)
   every two seconds and reloads itself when it moves, which is what a restart on a new build makes it do.
 
