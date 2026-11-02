@@ -170,6 +170,34 @@ does: `launchctl kickstart -k gui/<uid>/ai.hermes.gateway` — launchd's throttl
 before the next try — then the state after, ok only once launchd reports a PID, on which the page hides the rows at
 once. A machine read over ssh gets no button: the click would act here, never there.
 
+## The agents and jobs Collector watches (card #54)
+
+The jobs and agents the page already reads — Hermes's cron jobs, launchd's, `crontab -l`'s lines, the systemd timers,
+the Hermes gateway and its ticker, and the running Claude Code and Codex sessions — are the default list, and they are
+read with no setting at all. `config.json`'s `watch` adds a user's own agent or job, each one thing and the signal
+that says how it is doing:
+
+| Entry | The signal | How it reads |
+|---|---|---|
+| `{"process": "backup-agent.py"}` | a process | text its command line carries: running is busy, gone is idle |
+| `{"session": "claude"}` | a coding-agent session | `claude` or `codex`, read by the same helper the Current work rows use, so Claude Code's own helper processes are not a session |
+| `{"launchd": "com.example.backup"}` | a launchd label | its last exit code — launchd reports the raw wait status, so 256 reads as exit 1 — non-zero failed unless `ok_exits` for that label calls it a success; a job with a PID is busy, one launchd does not know is a failure |
+| `{"log": "~/.logs/sync.log", "fail_on": "error"}` | a log file | its last line carrying `fail_on` failed the run; older than `idle_after` (default 900 s) is idle |
+| `{"heartbeat": "~/.work/crew.beat", "idle_after": 900}` | a heartbeat file | the epoch second the file holds, else its mtime: older than `idle_after` is idle |
+
+`name` is what the warning calls it, and `machine` names the machine it lives on, by the name in `machines`; an entry
+that names none is read where Collector runs, since a process, a launchd label and a file each belong to one machine —
+`lib/server/machines.ts`'s `watchFor` sends each machine only its own entries, in `collect.py`'s `REMOTE_KEYS`, so
+another machine's entry never invents an idle row here.
+
+`collect.py`'s `watch_rows` reads them beside the Hermes gateway read on every machine refresh (15 seconds) and puts
+one row per entry on the machine's snapshot: `busy` (a process or a session running, a launchd job with a PID), `ok`
+(nothing running, nothing wrong), `idle` (no process, no session, no file, or a file older than its limit), or
+`failed`. `lib/server/warnings.ts` turns `failed` into an error row in Needs attention and `idle` into a warning, and
+says nothing for `busy` and `ok` — the words are `<name> on <machine>: <detail>`. An entry Collector cannot read (no
+signal, an unknown one, a `session` that is not `claude` or `codex`, a `watch` that is not a list) is a warning rather
+than a dropped setting, since a setting that does nothing should not be silent.
+
 ## Layout
 
 - `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.

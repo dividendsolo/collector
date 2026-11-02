@@ -42,6 +42,30 @@ export interface Board {
   /** Seconds between board reads (default 10). */
   interval?: number;
 }
+/** One agent or job of the user's own to warn about (collector#54). The entry names one thing and the signal that
+ * says how it is doing: `process` (a command line that should be running), `session` (a running Claude Code or
+ * Codex process), `launchd` (a label, whose last exit code says whether its last run worked), `log` (a file: its
+ * last line against `fail_on`, and how long since it was written), or `heartbeat` (a file the agent writes, or its
+ * epoch second). `machine` names the machine it lives on, by the name in `machines`; left out, the machine Collector
+ * runs on, since a process, a launchd label and a file each belong to one machine. */
+export interface Watch {
+  name: string;
+  machine?: string;
+  /** Text a command line carries while the process runs. */
+  process?: string;
+  /** `claude` or `codex`: a running coding-agent session. */
+  session?: string;
+  /** A launchd label whose job's last exit code says how its last run went. */
+  launchd?: string;
+  /** A log file: its last line, and its age, say how the run went. */
+  log?: string;
+  /** A file the agent writes as it works, or its own epoch second. */
+  heartbeat?: string;
+  /** Seconds a `log` or a `heartbeat` may go unwritten before the watch reads as idle (default 900). */
+  idle_after?: number;
+  /** Text in a `log`'s last line that means the run failed. */
+  fail_on?: string;
+}
 export interface Config {
   machines?: Machine[];
   jobs?: Record<string, string>;
@@ -55,6 +79,7 @@ export interface Config {
     steps?: string;
     max_starts_60s?: number;
   };
+  watch?: Watch[];
   verify_label?: string;
   services?: Service[];
   vendors?: Vendor[];
@@ -79,6 +104,7 @@ export const CONFIG_KEYS = [
   "launchd_prefixes",
   "ok_exits",
   "work_script",
+  "watch",
   "verify_label",
   "services",
   "vendors",

@@ -40,9 +40,9 @@ export interface WarningInputs {
 
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
  * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, the Hermes gateway or its cron
- * ticker on a machine that has one, tickets that did not list, low AI or X credit, open incidents of the vendors
- * marked "attention" in config.json, and a config.json key Collector does not read. Errors first. Adds `machine` and
- * `what` to each job. */
+ * ticker on a machine that has one, the agents and jobs the user's own `watch` entries name, tickets that did not
+ * list, low AI or X credit, open incidents of the vendors marked "attention" in config.json, and a config.json key
+ * Collector does not read. Errors first. Adds `machine` and `what` to each job. */
 export function warnings(w: WarningInputs): Warning[] {
   const out: Warning[] = [];
   const byScript = new Map<string, string[]>();
@@ -112,6 +112,17 @@ export function warnings(w: WarningInputs): Warning[] {
         byScript.set(k, [...(byScript.get(k) || []), j.name]);
       }
     }
+    // The agents and jobs the user's own `watch` entries name (collector#54): collect.py read each entry's own
+    // signal on that machine — a process, a coding-agent session, a launchd label, a log or a heartbeat file — and
+    // the row carries what it found. Failing is an error and idle too long a warning, the same as our droids; a
+    // signal that is alive (`busy`) or last worked (`ok`) says nothing here. An entry Collector cannot read is a
+    // warning: a setting that does nothing should not be silent.
+    for (const x of m.watch || [])
+      if (x.state !== "busy" && x.state !== "ok")
+        out.push({
+          level: x.state === "failed" ? "error" : "warn",
+          text: `${x.name} on ${m.name}: ${x.detail || x.state}`,
+        });
     const starts: number[] = Array.isArray(m.work_starts_10m) ? m.work_starts_10m : [];
     const limit = work.max_starts_60s ?? 5;
     // collect.py reports the starts as epoch seconds.
