@@ -170,6 +170,23 @@ does: `launchctl kickstart -k gui/<uid>/ai.hermes.gateway` — launchd's throttl
 before the next try — then the state after, ok only once launchd reports a PID, on which the page hides the rows at
 once. A machine read over ssh gets no button: the click would act here, never there.
 
+## The Sponsor button (card #52)
+
+Collector stays free and open source, and its own revenue starts with GitHub Sponsors. The button on the repo
+page is a file and nothing else: `.github/FUNDING.yml` holds one key, `github: dividendsolo`, and GitHub parses
+that file from the default branch. No code in this repo reads or renders it.
+
+Check it through the API, which is what the card's Done-when asks for:
+
+```bash
+gh api graphql -f query='query{ repository(owner:"dividendsolo", name:"collector"){ fundingLinks{ platform url } } }'
+```
+
+One `GITHUB` link — `https://github.com/dividendsolo` — means the button is there. An empty list means the file
+is missing, off the default branch, or does not parse. The `github:` name works only while that account has a
+Sponsors profile (`user(login:"dividendsolo"){ hasSponsorsListing }`); with none, GitHub shows no button whatever
+the file says.
+
 ## The agents and jobs Collector watches (card #54)
 
 The jobs and agents the page already reads — Hermes's cron jobs, launchd's, `crontab -l`'s lines, the systemd timers,
