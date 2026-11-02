@@ -212,8 +212,11 @@ one row per entry on the machine's snapshot: `busy` (a process or a session runn
 (nothing running, nothing wrong), `idle` (no process, no session, no file, or a file older than its limit), or
 `failed`. `lib/server/warnings.ts` turns `failed` into an error row in Needs attention and `idle` into a warning, and
 says nothing for `busy` and `ok` — the words are `<name> on <machine>: <detail>`. An entry Collector cannot read (no
-signal, an unknown one, a `session` that is not `claude` or `codex`, a `watch` that is not a list) is a warning rather
-than a dropped setting, since a setting that does nothing should not be silent.
+signal, an unknown one, a `session` that is not `claude` or `codex`, an `idle_after` that is not a positive number of
+seconds, an entry that is not an object, a `watch` that is not a list) is a warning rather than a dropped setting,
+since a setting that does nothing should not be silent. None of them stops a machine's read: `watchFor` sends a
+`watch` that is not a list, and an entry that is not an object, to the machine Collector runs on as they are, so
+`collect.py` says each once there, and a bad `idle_after` is that one row's `unknown`, not an exception.
 
 ## Layout
 

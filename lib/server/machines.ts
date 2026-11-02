@@ -26,8 +26,12 @@ export const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 /** The watch entries that live on this machine (collector#54): one that names a machine is read there alone, and one
  * that names none on `here` — the machine Collector runs on — since a process, a launchd label and a file each
  * belong to one machine, and another machine's entry read here would invent an idle row for it. */
-export function watchFor(watch: Watch[] | undefined, machine: string, here: string): Watch[] {
-  return (watch || []).filter((w) => (w.machine || here) === machine);
+export function watchFor(watch: unknown, machine: string, here: string): Watch[] {
+  // A mistyped setting is collect.py's to say, once, on the machine Collector runs on (collector#57): a `watch` that
+  // is not a list goes there as it is, and so does an entry that is not an object, since neither names a machine.
+  if (watch == null) return [];
+  if (!Array.isArray(watch)) return machine === here ? (watch as Watch[]) : [];
+  return watch.filter((w) => ((w && typeof w === "object" && w.machine) || here) === machine);
 }
 
 /** One machine's snapshot from collect.py: run here, or sent over SSH (`ssh host python3 -`), so nothing is installed there. */

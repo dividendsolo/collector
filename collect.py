@@ -1385,6 +1385,12 @@ def watch_row(entry, now, ps_out="", jobs=None, self_pid=None):
             row.update(state="ok", detail=f"last run exit {code or '0'}")
         return row
     # A log or a heartbeat file: how long ago it was written says both the state and the words.
+    limit = entry.get("idle_after", WATCH_IDLE_S)
+    # A limit that is not a positive number of seconds ("900", 0, true) would raise in the age comparison and take
+    # the machine's whole read down with it, so this one row says the value instead.
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not limit > 0:
+        row.update(state="unknown", detail=f"idle_after must be a positive number of seconds, not {json.dumps(limit)}")
+        return row
     path = os.path.expanduser(str(entry[signal]))
     age = watch_file_age(now, path)
     if age is None:
@@ -1395,7 +1401,6 @@ def watch_row(entry, now, ps_out="", jobs=None, self_pid=None):
         if str(entry["fail_on"]).lower() in line.lower():
             row.update(state="failed", detail=f"its log ends with {line!r}")
             return row
-    limit = entry.get("idle_after") or WATCH_IDLE_S
     if age > limit:
         row.update(state="idle", detail=f"nothing written for {ago_text(age)}")
     else:
@@ -1417,8 +1422,10 @@ def watch_rows(now, entries=None, ps_out=None, jobs=None, self_pid=None):
     if ps_out is None:
         ps_out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
     self_pid = os.getpid() if self_pid is None else self_pid
-    return [watch_row(e, now, ps_out=ps_out, jobs=jobs, self_pid=self_pid)
-            for e in entries if isinstance(e, dict)]
+    return [watch_row(e, now, ps_out=ps_out, jobs=jobs, self_pid=self_pid) if isinstance(e, dict)
+            else {"name": "watch", "signal": None, "state": "unknown",
+                  "detail": f"a watch entry must be an object, not {json.dumps(e)}"}
+            for e in entries]
 
 
 def main():

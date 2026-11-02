@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { watchFor } from "@/lib/server/machines";
+import { collect, watchFor } from "@/lib/server/machines";
 import { warnings } from "@/lib/server/warnings";
 
 /**
@@ -250,6 +250,41 @@ describe("collect.py's watch read", () => {
     expect(read({ entries: { name: "Thing" } })[0].detail).toBe("config.json's watch is not a list of entries");
   });
 
+  it("says an entry that is not an object rather than dropping it", () => {
+    // collector#57 kickback 2: `"watch": ["com.example.backup"]` showed nothing at all.
+    expect(read({ entries: ["com.example.backup", null, 7] })).toEqual([
+      {
+        name: "watch",
+        signal: null,
+        state: "unknown",
+        detail: 'a watch entry must be an object, not "com.example.backup"',
+      },
+      { name: "watch", signal: null, state: "unknown", detail: "a watch entry must be an object, not null" },
+      { name: "watch", signal: null, state: "unknown", detail: "a watch entry must be an object, not 7" },
+    ]);
+  });
+
+  it("says an idle_after that is not a positive number, and reads the rest of the machine", () => {
+    // collector#57 kickback 3: `"idle_after": "900"` raised a TypeError that took the machine's whole read down.
+    const rows = read({
+      entries: [
+        { name: "Beat", heartbeat: "~/beat", idle_after: "900" },
+        { name: "Zero", heartbeat: "~/beat", idle_after: 0 },
+        { name: "Yes", heartbeat: "~/beat", idle_after: true },
+        { name: "Missing", heartbeat: "~/never-written", idle_after: "15 min" },
+        { name: "Sync", log: "~/sync.log", idle_after: 600 },
+      ],
+      files: { beat: { age_s: 60 }, "sync.log": { content: "done\n", age_s: 60 } },
+    });
+    expect(rows.map((r) => [r.state, r.detail])).toEqual([
+      ["unknown", 'idle_after must be a positive number of seconds, not "900"'],
+      ["unknown", "idle_after must be a positive number of seconds, not 0"],
+      ["unknown", "idle_after must be a positive number of seconds, not true"],
+      ["unknown", 'idle_after must be a positive number of seconds, not "15 min"'],
+      ["ok", "written 60 s ago"],
+    ]);
+  });
+
   it("reads nothing, with no setting, so a machine that watches nothing new reads as it did", () => {
     expect(read({ entries: [] })).toEqual([]);
   });
@@ -322,6 +357,36 @@ describe("watchFor", () => {
   it("reads what names no machine where Collector runs, and nothing at all with no watch key", () => {
     expect(watchFor([{ name: "Here", heartbeat: "~/beat" }], "ezio", "altair")).toEqual([]);
     expect(watchFor(undefined, "altair", "altair")).toEqual([]);
+  });
+});
+
+describe("a watch that is not a list, on the snapshot path", () => {
+  // collector#57 kickback 1: `watchFor` called `.filter` on whatever `watch` was, so `"watch": {"name": "x"}` threw
+  // inside the snapshot before collect.py ran, and no machine was read at all. Two machines here, as
+  // `snapshot` reads them: the setting goes to the machine Collector runs on as it is, so collect.py says it once.
+  const targets = [{ name: "altair" }, { name: "ezio" }];
+
+  it.each([[{ name: "x" }], ["x"]])("reads every machine and warns once about %j", async (watch) => {
+    const cfg = { watch } as any;
+    const results = await Promise.all(
+      targets.map((t) => collect(t, { ...cfg, watch: watchFor(watch, t.name, "altair") })),
+    );
+    const machines = targets.map((t, i) => ({ ...(results[i][0] as any), name: t.name, error: results[i][1] }));
+    expect(machines.map((m) => [m.name, m.error ?? null, Array.isArray(m.watch)])).toEqual([
+      ["altair", null, true],
+      ["ezio", null, true],
+    ]);
+    // Only the watch rows: the rest of a real machine's read (its own jobs) is not this test's to pin.
+    expect(warnings({ ...base, machines }).filter((w) => w.text.startsWith("watch on"))).toEqual([
+      { level: "warn", text: "watch on altair: config.json's watch is not a list of entries" },
+    ]);
+  });
+
+  it("sends an entry that is not an object to the machine Collector runs on, without throwing", () => {
+    const watch = ["com.example.backup", null, { name: "On ezio", machine: "ezio", process: "x" }] as any;
+    expect(watchFor(watch, "altair", "altair")).toEqual(["com.example.backup", null]);
+    expect(watchFor(watch, "ezio", "altair").map((w: any) => w.name)).toEqual(["On ezio"]);
+    expect(watchFor({ name: "x" } as any, "ezio", "altair")).toEqual([]);
   });
 });
 
