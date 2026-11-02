@@ -539,6 +539,198 @@
     flex-wrap: wrap;
     gap: 6px;
   }
+
+  /* The Card flow page's drawing (collector#51), on React Flow: the Supabase-like dark ground with thin lines and
+     rounded status boxes, and light pulses travelling every path in the direction a card moves. The statuses' own
+     colours are the page's tokens: green for ready, amber for waiting, blue for working, grey for parked. */
+  .flow-canvas {
+    /* React Flow's own theming: the page's tokens, so nothing of the library's light default shows through. */
+    --xy-background-color-default: transparent;
+    --xy-background-pattern-dots-color-default: var(--line-2);
+    --xy-node-color-default: var(--text);
+    --xy-node-border-default: 1px solid var(--line-2);
+    --xy-node-background-color-default: var(--panel);
+    --xy-node-boxshadow-hover-default: none;
+    --xy-node-boxshadow-selected-default: none;
+    --xy-handle-background-color-default: transparent;
+    --xy-handle-border-color-default: transparent;
+    --xy-attribution-background-color-default: transparent;
+    /* One pulse travels a path in this long, and a status glows once per pulse that lands on it. */
+    --flow-pulse: 3.6s;
+    --flow-arrive: 1.2s;
+    /* Tall enough to draw the whole flow at its own size (the drawing is about 1000x1010), so the statuses read
+       at the size they are written and the page scrolls, exactly as the Graphviz drawing did. On a short window,
+       and on James's phone, the drawing is fitted down instead: a phone shows the shape of the flow, the way the
+       old picture did at 425 wide, and the canvas can still be panned and zoomed. */
+    height: clamp(540px, 130vh, 1240px);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .flow-canvas .react-flow__attribution {
+    color: var(--faint);
+  }
+  .flow-canvas .react-flow__attribution a {
+    color: var(--faint);
+  }
+  /* A narrow window fits the drawing to its width, so a tall canvas would only hold empty ground: it gets the
+     height the fitted drawing needs. */
+  @media (max-width: 700px) {
+    .flow-canvas {
+      height: clamp(360px, 50vh, 520px);
+    }
+  }
+  /* The handles are where a path lands on its box, not something to grab: the drawing is read only. */
+  .flow-canvas .react-flow__handle {
+    opacity: 0;
+    width: 2px;
+    height: 2px;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+  }
+  .flow-box {
+    --flow-tone: var(--faint);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 168px;
+    height: 54px;
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--text);
+    font: 500 11.5px / 1.3 var(--sans);
+    letter-spacing: 0.01em;
+    text-align: center;
+    animation: flow-arrive var(--flow-arrive) ease-in-out infinite;
+    transition:
+      opacity 0.18s ease,
+      border-color 0.18s ease;
+  }
+  .flow-box .flow-label {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .flow-box.tone-go {
+    --flow-tone: var(--green);
+    border-color: var(--green-line);
+    background: var(--green-bg);
+  }
+  .flow-box.tone-wait {
+    --flow-tone: var(--amber);
+    border-color: var(--amber-line);
+    background: var(--amber-bg);
+  }
+  .flow-box.tone-work {
+    --flow-tone: var(--blue);
+    border-color: var(--blue-line);
+    background: var(--blue-bg);
+  }
+  .flow-box.tone-park {
+    --flow-tone: var(--faint);
+    border-color: var(--line-2);
+    background: var(--panel-2);
+  }
+  /* Hovering a status brightens it and fades the rest of the drawing back. */
+  .flow-box.dim {
+    opacity: 0.3;
+  }
+  .flow-box:hover {
+    border-color: var(--flow-tone);
+  }
+  /* The tooltip: the note the old drawing put in a box beside the status. */
+  .flow-tip {
+    position: absolute;
+    left: 50%;
+    z-index: 5;
+    width: 216px;
+    padding: 7px 9px;
+    transform: translateX(-50%);
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--muted);
+    font: 400 11px / 1.45 var(--sans);
+    text-align: left;
+    box-shadow: 0 10px 24px oklch(0 0 0 / 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+  .flow-tip.below {
+    top: calc(100% + 8px);
+  }
+  .flow-tip.above {
+    bottom: calc(100% + 8px);
+  }
+  .flow-box:hover .flow-tip {
+    opacity: 1;
+  }
+  /* The dot a card starts from. */
+  .flow-box.flow-start {
+    width: 16px;
+    height: 16px;
+    border: 0;
+    background: transparent;
+    animation: none;
+  }
+  .flow-dot {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text);
+  }
+  .flow-edge .flow-line {
+    fill: none;
+    stroke: var(--flow-tone);
+    stroke-width: 1.2;
+    opacity: 0.45;
+    transition: opacity 0.18s ease;
+  }
+  .flow-edge.main .flow-line {
+    stroke-width: 1.6;
+    opacity: 0.75;
+  }
+  .flow-edge.dim .flow-line {
+    opacity: 0.1;
+  }
+  .flow-pulse {
+    opacity: 0.9;
+  }
+  .flow-edge.main .flow-pulse {
+    opacity: 1;
+    filter: drop-shadow(0 0 5px var(--flow-tone));
+  }
+  /* A dimmed path keeps its line and loses its light, so the eye follows the hovered status only. */
+  .flow-edge.dim .flow-pulse {
+    opacity: 0;
+  }
+  /* A status glows once per pulse that lands on it: the glow peaks as the light arrives. */
+  @keyframes flow-arrive {
+    0%,
+    88% {
+      box-shadow: 0 1px 2px oklch(0 0 0 / 0.3);
+    }
+    96% {
+      box-shadow: 0 0 16px -2px var(--flow-tone);
+    }
+    100% {
+      box-shadow: 0 1px 2px oklch(0 0 0 / 0.3);
+    }
+  }
+  /* Movement stays calm enough to read: with reduced motion the pulses are not drawn at all (the page reads the
+     same preference in `components/flow.tsx`) and nothing on the ground moves. */
+  @media (prefers-reduced-motion: reduce) {
+    .flow-box {
+      animation: none;
+    }
+  }
+
   .shell {
     flex: 1;
     min-width: 0;
