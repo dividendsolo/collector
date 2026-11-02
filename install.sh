@@ -169,6 +169,7 @@ else
   while [ "$port" -lt 4020 ] && ! port_free "$port"; do
     port=$((port + 1))
   done
+  port_free "$port" || die "ports 4000 to 4020 are all in use: pick another with --port"
 fi
 
 say ""

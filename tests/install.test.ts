@@ -51,7 +51,8 @@ describe("install.sh", () => {
   it("installs the folder it is run from, even as `sh install.sh` with no path in `$0`", () => {
     // A folder that looks like a Collector checkout, on a machine with nothing on PATH: the run stops at the bun
     // check, which is past the decision this test is about — that the script read the checkout, not cloned one.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-install-"));
+    // realpath: on a Mac the temp folder is a symlink (/var -> /private/var), and the script prints the real path.
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "collector-install-")));
     fs.writeFileSync(path.join(dir, "install.sh"), INSTALL);
     for (const file of ["package.json", "collect.py"]) fs.writeFileSync(path.join(dir, file), "{}");
     const bin = path.join(dir, "bin");

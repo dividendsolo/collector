@@ -199,7 +199,7 @@ def launchd_jobs():
     if platform.system() != "Darwin":
         return []
     exits = {}
-    out = subprocess.run(["launchctl", "list"], capture_output=True, text=True).stdout
+    out = read_command(["launchctl", "list"]) or ""
     for line in out.splitlines()[1:]:
         pid, status, label = (line.split("\t") + ["", "", ""])[:3]
         exits[label] = (pid, status)
