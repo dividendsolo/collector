@@ -76,7 +76,7 @@ function Statuses() {
           {custom ? "from config.json" : "the agent stack's own: set statuses in config.json to use yours"}
         </span>
       </PanelHead>
-      <ul className="health">
+      <ul className="health statuses">
         {!sets ? (
           <SkelItems n={3} />
         ) : (

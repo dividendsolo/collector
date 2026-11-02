@@ -39,15 +39,24 @@ export interface StatusesConfig {
 const set = (v: unknown, fallback: string[]): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x !== "") : fallback;
 
+/** `tickets.each` only ever chose the lanes; the agent stack's order sorted them, and a lane it does not name goes
+ * after those, in the file's order (the old `laneRank`). */
+const inAgentStackOrder = (lanes: string[]) =>
+  lanes
+    .map((lane, i) => ({ lane, i, rank: waitingRank(AGENT_STACK_STATUSES.waiting, lane) }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .map((x) => x.lane);
+
 /**
- * The statuses Collector reads here. `waiting` is the setting, else `tickets.each` — the older name for the same
- * list, so a config that already set it keeps exactly the lanes and the order it had — else the agent stack's
- * four. A config with no file at all gets the agent stack's sets: a stranger is led toward the agent stack.
+ * The statuses Collector reads here. `waiting` is the setting, in its own order; else `tickets.each` — the older
+ * name for the same lanes, sorted by the agent stack's order as it always was, so a config that already set it
+ * keeps exactly the list it had — else the agent stack's four. A config with no file at all gets the agent
+ * stack's sets: a stranger is led toward the agent stack.
  */
 export function statusSets(cfg: StatusesConfig = {}): StatusSets {
   const s = cfg.statuses || {};
   return {
-    waiting: set(s.waiting, set(cfg.tickets?.each, AGENT_STACK_STATUSES.waiting)),
+    waiting: set(s.waiting, inAgentStackOrder(set(cfg.tickets?.each, AGENT_STACK_STATUSES.waiting))),
     working: set(s.working, AGENT_STACK_STATUSES.working),
     done: set(s.done, AGENT_STACK_STATUSES.done),
   };

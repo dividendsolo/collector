@@ -48,6 +48,26 @@ describe("statusSets", () => {
     expect(statusSets({ statuses: { waiting: [] } }).waiting).toEqual([]);
   });
 
+  it("sorts tickets.each by the agent stack's order, so the list matches main card for card", () => {
+    // On main `tickets.each` only chose the lanes; the fixed agent-stack order sorted them (James, 2026-10-22).
+    const each = ["needs-triage", "my-own-lane", "needs-info", "needs-manual-qa", "ready-for-human"];
+    const s = statusSets({ tickets: { each } });
+    expect(s.waiting).toEqual(["ready-for-human", "needs-manual-qa", "needs-info", "needs-triage", "my-own-lane"]);
+    const tickets = [
+      ticket("#4", "needs-triage", { priority: "P1" }),
+      ticket("#3", "needs-info", { priority: "P1" }),
+      ticket("#2", "needs-manual-qa", { priority: "P1" }),
+      ticket("#1", "ready-for-human", { priority: "P1" }),
+      ticket("#5", "my-own-lane", { priority: "P1" }),
+    ];
+    expect(waitingList(tickets, s.waiting).map((t) => t.id)).toEqual(["#1", "#2", "#3", "#4", "#5"]);
+    // An explicit statuses.waiting keeps its own order.
+    expect(statusSets({ tickets: { each }, statuses: { waiting: ["needs-triage", "needs-info"] } }).waiting).toEqual([
+      "needs-triage",
+      "needs-info",
+    ]);
+  });
+
   it("ignores a set that is not a list of names", () => {
     expect(statusSets({ statuses: { waiting: "blocked-on-me" as never } }).waiting).toEqual(
       AGENT_STACK_STATUSES.waiting,

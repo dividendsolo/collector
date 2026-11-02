@@ -194,7 +194,9 @@ once. A machine read over ssh gets no button: the click would act here, never th
   the Work page and the open-card count) and not a wait.
 
 **With no setting, the agent stack's own statuses are used**: `waiting` falls back to `tickets.each` when that is set
-(the older name for the same list, so a config that already set it keeps exactly the lanes and the order it had), then
+(the older name for the same lanes; it only ever chose which lanes appear, so they are sorted by the agent stack's
+order, with a lane the agent stack does not name after those, and a config that already set it shows the same list card
+for card; only an explicit `statuses.waiting` sets its own order), then
 to the four above; `working` and `done` fall back to the two and the one above. The four and the two come from the
 agent stack's own lane list (`agent-stack/vps/scripts/lane.py`: `ASK_LANES` plus `needs-triage`, and the two lanes a
 machine claims a card in), so Collector leads a stranger toward the agent stack and changes nothing for James.
