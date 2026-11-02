@@ -6,6 +6,7 @@ import {
   cardState,
   currentWork,
   holdText,
+  holdTip,
   LAB,
   labRun,
   runMachine,
@@ -163,6 +164,8 @@ function StateCell({ row }: { row: WorkRow }) {
   // read disagrees with, so its row shows how old the data is.
   const shown = cardState(row, stale, board?.tickets?.working);
   const hold = row.card?.lane === "scheduled" ? row.card.hold : null;
+  // Hovering the date says why it waits (collector#50): the reason its `Not before:` line gives, when it has one.
+  const tip = holdTip(hold);
   const deck = row.onDeck ?? [];
   return (
     <td>
@@ -202,7 +205,15 @@ function StateCell({ row }: { row: WorkRow }) {
           ))}
         </span>
       ) : hold ? (
-        <span className="sub"> {holdText(hold)}</span>
+        <span
+          className={`sub${tip ? " card-tip" : ""}`}
+          data-tip={tip?.text}
+          data-tip-title={tip?.title}
+          tabIndex={tip ? 0 : undefined}
+        >
+          {" "}
+          {holdText(hold)}
+        </span>
       ) : null}
       {deck.length ? (
         <>

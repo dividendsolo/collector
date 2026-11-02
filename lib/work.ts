@@ -78,7 +78,7 @@ export interface WorkCard {
   lane: string;
   priority: string | null;
   created: string;
-  hold?: { after: { ref: string; url: string }[]; from: string | null } | null;
+  hold?: { after: { ref: string; url: string }[]; from: string | null; why: string | null } | null;
   closed_at?: number;
   labels?: string[];
 }
@@ -240,3 +240,11 @@ export function currentWork(
 /** "after #146, agent-stack#149" or "from 2026-11-01": why a scheduled card has not moved. */
 export const holdText = (h: WorkCard["hold"]) =>
   !h ? "" : h.after.length ? `after ${h.after.map((a) => a.ref).join(", ")}` : h.from ? `from ${h.from}` : "";
+
+/** What hovering a scheduled card's date shows (collector#50): the reason its `Not before:` line gives, under a
+ * heading that says what the words are. Null when that line gives none — an older card — so its date carries no
+ * tooltip rather than an empty one. */
+export function holdTip(h: WorkCard["hold"]): { title: string; text: string } | null {
+  const text = h?.why?.trim();
+  return text ? { title: "Why it waits", text } : null;
+}
