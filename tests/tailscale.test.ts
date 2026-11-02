@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { tailscaleBin } from "@/lib/server/tailscale";
+import { restartSshJobs, tailscaleBin } from "@/lib/server/tailscale";
 import { warnings } from "@/lib/server/warnings";
 
 /**
@@ -63,11 +63,51 @@ describe("Needs attention with a stopped tailnet", () => {
   });
 });
 
+describe("a machine that could not be read while the tailnet here is down", () => {
+  it("names the stopped tailnet and carries the button", () => {
+    const w = warnings({
+      ...base,
+      machines: [
+        { name: "altair", local: true, tailscale: "Stopped", jobs: [] },
+        { name: "ezio", local: false, error: "ssh: Could not resolve hostname ezio", jobs: [] },
+      ],
+    });
+    const row = w.find((x) => x.text.startsWith("Could not read ezio"));
+    expect(row?.text).toBe(
+      "Could not read ezio: ssh: Could not resolve hostname ezio (Tailscale is stopped on altair)",
+    );
+    expect(row?.action).toEqual({ label: "Start Tailscale", post: "/api/tailscale" });
+  });
+  it("adds nothing while the tailnet here runs", () => {
+    const w = warnings({
+      ...base,
+      machines: [
+        { name: "altair", local: true, tailscale: "Running", jobs: [] },
+        { name: "ezio", local: false, error: "timed out after 20 s", jobs: [] },
+      ],
+    });
+    expect(w).toEqual([{ level: "error", text: "Could not read ezio: timed out after 20 s" }]);
+  });
+});
+
 describe("tailscaleBin", () => {
   it("finds the Mac app's CLI when nothing is on PATH", () => {
     expect(tailscaleBin((p) => p.startsWith("/Applications/"))).toBe(
       "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
     );
     expect(tailscaleBin(() => false)).toBeNull();
+  });
+});
+
+describe("restartSshJobs", () => {
+  it("picks only the failed launchd ssh jobs", async () => {
+    const jobs = [
+      { scheduler: "launchd", id: "com.example.tunnel", ssh_host: "h", last_status: "exit 255" },
+      { scheduler: "launchd", id: "com.example.ok", ssh_host: "h", last_status: "ok" },
+      { scheduler: "launchd", id: "com.example.local", ssh_host: "", last_status: "exit 1" },
+      { scheduler: "cron", id: "x", ssh_host: "h", last_status: "exit 255" },
+    ];
+    // uid -1 names no launchd domain, so the kickstart fails harmlessly: only the choice is under test.
+    expect(await restartSshJobs(jobs, -1)).toEqual(["com.example.tunnel"]);
   });
 });

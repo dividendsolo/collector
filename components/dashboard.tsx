@@ -8,9 +8,9 @@ import { CurrentWork } from "./running";
 import { ServiceRows, sortServices, useServices } from "./services";
 import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelItems, SkelPlans, SkelRows, SkelStat } from "./ui";
 
-/** A row's one-click fix (Start Tailscale). The row clears on the next machine read once the fix took; a failure
- * shows its reason in place of the button. */
-function AlertAction({ action }: { action: { label: string; post: string } }) {
+/** A row's one-click fix (Start Tailscale). A failure shows its reason beside the button; a fix that took calls
+ * `done`, which hides the rows it fixed at once. */
+function AlertAction({ action, done }: { action: { label: string; post: string }; done: () => void }) {
   const [busy, setBusy] = useState(false);
   const [why, setWhy] = useState("");
   const click = async () => {
@@ -19,7 +19,8 @@ function AlertAction({ action }: { action: { label: string; post: string } }) {
     try {
       const r = await fetch(action.post, { method: "POST" });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) setWhy(body.why || `failed (${r.status})`);
+      if (r.ok) done();
+      else setWhy(body.why || `failed (${r.status})`);
     } catch (e) {
       setWhy((e as Error).message);
     }
@@ -37,7 +38,11 @@ function AlertAction({ action }: { action: { label: string; post: string } }) {
 
 function NeedsAttention() {
   const { state } = useLive();
-  const w: any[] = state?.warnings || [];
+  // A one-click fix the server confirmed (Tailscale is running again): its rows hide at once and stay hidden until
+  // a machine read newer than the click; if that read still fails, the rows come back (James, 2026-11-02).
+  const [fixed, setFixed] = useState<{ post: string; at: number } | null>(null);
+  const shown = fixed && state && state.at > fixed.at ? null : fixed;
+  const w: any[] = (state?.warnings || []).filter((x: any) => !(shown && x.action?.post === shown.post));
   const hot = w.some((x) => x.level === "error"); // red only for errors
   return (
     <section className="panel" id="attention">
@@ -66,7 +71,9 @@ function NeedsAttention() {
                   <BlurText text={x.aside} />
                 </span>
               ) : null}
-              {x.action ? <AlertAction action={x.action} /> : null}
+              {x.action ? (
+                <AlertAction action={x.action} done={() => setFixed({ post: x.action.post, at: Date.now() / 1000 })} />
+              ) : null}
             </div>
           ))
         ) : (

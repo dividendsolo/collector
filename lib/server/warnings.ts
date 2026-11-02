@@ -130,7 +130,16 @@ export function warnings(w: WarningInputs): Warning[] {
     });
   for (const x of w.services)
     if (x.status === "down") out.push({ level: "error", text: `${x.name} is down: ${x.error} (${x.url})` });
-  for (const m of w.machines) if (m.error) out.push({ level: "error", text: `Could not read ${m.name}: ${m.error}` });
+  // A machine read over ssh fails while this machine's tailnet is down: the row says so and carries the same button.
+  const here = w.machines.find((m) => m.local);
+  const hereDown = !!here?.tailscale && here.tailscale !== "Running";
+  for (const m of w.machines)
+    if (m.error)
+      out.push({
+        level: "error",
+        text: `Could not read ${m.name}: ${m.error}${!m.local && hereDown ? ` (Tailscale is ${String(here.tailscale).toLowerCase()} on ${here.name})` : ""}`,
+        ...(!m.local && hereDown ? { action: START_TAILSCALE } : {}),
+      });
   if (w.ticketsError) out.push({ level: "warn", text: `Could not list tickets: ${w.ticketsError}` });
   const watched = new Set((w.cfg.vendors || []).filter((v) => v.attention).map((v) => v.name));
   for (const v of w.vendors || [])

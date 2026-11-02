@@ -32,3 +32,15 @@ export async function startTailscale(): Promise<{ ok: boolean; state: string | n
   if (state === "Running") return { ok: true, state };
   return { ok: false, state, why: up.error || `Tailscale is ${state ?? "unreadable"} after tailscale up` };
 }
+
+/** The launchd ssh jobs that failed while the tailnet was down (signal-tunnel), started again with `launchctl
+ * kickstart`: launchd would otherwise wait out its throttle before the next try. */
+export async function restartSshJobs(jobs: any[], uid = process.getuid?.() ?? 0) {
+  const failed = jobs.filter(
+    (j) => j.scheduler === "launchd" && j.ssh_host && j.last_status && !String(j.last_status).startsWith("ok"),
+  );
+  await Promise.all(
+    failed.map((j) => runText(["/bin/launchctl", "kickstart", "-k", `gui/${uid}/${j.id}`], { timeout: 10 })),
+  );
+  return failed.map((j) => j.id);
+}
