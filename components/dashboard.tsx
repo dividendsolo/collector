@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { ago, waitingOrder } from "@/lib/format";
+import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, useAi } from "./ai";
 import { useApi, useLive } from "./data";
 import { CurrentWork } from "./running";
@@ -36,13 +37,25 @@ function AlertAction({ action, done }: { action: { label: string; post: string }
   );
 }
 
+/** "Mon 9 Nov, 8:30 AM" in the browser's own time zone. */
+function nextRun(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
+  return `${day}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+}
+
 function NeedsAttention() {
   const { state } = useLive();
   // A one-click fix the server confirmed (Tailscale is running again): its rows hide at once and stay hidden until
   // a machine read newer than the click; if that read still fails, the rows come back (James, 2026-11-02).
   const [fixed, setFixed] = useState<{ post: string; at: number } | null>(null);
   const shown = fixed && state && state.at > fixed.at ? null : fixed;
-  const w: any[] = (state?.warnings || []).filter((x: any) => !(shown && x.action?.post === shown.post));
+  const acks = useAcks();
+  const all: any[] = (state?.warnings || []).filter((x: any) => !(shown && x.action?.post === shown.post));
+  // An acknowledged row leaves the count and moves under the open ones, dimmed, until its job runs again.
+  const w = all.filter((x) => !acked(x, acks));
+  const done = all.filter((x) => acked(x, acks));
   const hot = w.some((x) => x.level === "error"); // red only for errors
   return (
     <section className="panel" id="attention">
@@ -73,6 +86,12 @@ function NeedsAttention() {
               ) : null}
               {x.action ? (
                 <AlertAction action={x.action} done={() => setFixed({ post: x.action.post, at: Date.now() / 1000 })} />
+              ) : x.ack ? (
+                <span className="act">
+                  <button className="btn" type="button" onClick={() => setAck(x.ack.key, true)}>
+                    Acknowledge
+                  </button>
+                </span>
               ) : null}
             </div>
           ))
@@ -82,6 +101,25 @@ function NeedsAttention() {
             Nothing needs attention.
           </div>
         )}
+        {state
+          ? done.map((x) => (
+              <div className="alert acked" key={x.ack.key}>
+                <span className="n" />
+                <Icon name="check" />
+                <span>
+                  {x.text}
+                  <span className="note">
+                    Acknowledged. Waiting for the next run{x.ack.next ? `, ${nextRun(x.ack.next)}` : ""}.
+                  </span>
+                </span>
+                <span className="act">
+                  <button className="btn" type="button" onClick={() => setAck(x.ack.key, false)}>
+                    Undo
+                  </button>
+                </span>
+              </div>
+            ))
+          : null}
       </div>
     </section>
   );

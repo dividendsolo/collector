@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { status } from "@/lib/format";
+import { acked, useAcks } from "./acks";
 import { AgentPage, AgentsPage } from "./agents";
 import { CardTip } from "./card-tip";
 import { CronPage, JobPage } from "./cron";
@@ -75,7 +76,8 @@ function useTags(): Record<string, { text: string; hot: boolean }> {
   const running = useRunning();
   const waiting = useWaiting();
   const vendors = useVendors();
-  const w: any[] = state?.warnings || [];
+  const acks = useAcks();
+  const w: any[] = (state?.warnings || []).filter((x: any) => !acked(x, acks));
   const failing = state
     ? state.machines.flatMap((m: any) => m.jobs || []).filter((j: any) => ["Failed", "Warning"].includes(status(j)))
         .length

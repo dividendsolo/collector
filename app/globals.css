@@ -786,6 +786,13 @@
   .alert.error .i {
     color: var(--red);
   }
+  /* An acknowledged row: dimmed, below the open rows, with what it waits for on its own line. */
+  .alert.acked {
+    color: var(--faint);
+  }
+  .alert.acked .note {
+    display: block;
+  }
   .alert.warn .i {
     color: var(--amber);
   }

@@ -15,6 +15,8 @@ export interface Warning {
   aside?: string;
   /** A one-click fix on the row's right side, posted to `post` (Start Tailscale on this machine). */
   action?: { label: string; post: string };
+  /** A failed job's row can be acknowledged until its next run: `key` names that run, `next` is when the next one is. */
+  ack?: { key: string; next: string | null };
 }
 
 const START_TAILSCALE = { label: "Start Tailscale", post: "/api/tailscale" };
@@ -75,6 +77,7 @@ export function warnings(w: WarningInputs): Warning[] {
           level: "error",
           text: `${j.name} on ${m.name}: last run ${j.last_status}${j.last_error ? ` (${j.last_error.slice(0, 140)})` : ""}`,
           ...(j.ssh_host && tailnetDown && m.local ? { action: START_TAILSCALE } : {}),
+          ack: { key: `${m.name}|${j.name}|${j.last_run_at ?? ""}`, next: j.next_run_at ?? null },
         });
       const key = workJobs.has(j.name) ? workLabel : j.script;
       if (key) {
