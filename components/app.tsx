@@ -8,6 +8,7 @@ import { CardTip } from "./card-tip";
 import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
 import { LiveProvider, useLive } from "./data";
+import { FlowPage } from "./flow";
 import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, vendorHit, WorkPage } from "./pages";
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
 import { useRunning } from "./running";
@@ -26,6 +27,7 @@ const NAV: { page: string; href: string; icon: IconName; label: string; tag?: st
   { page: "apis", href: "#/apis", icon: "activity", label: "APIs", tag: "apis" },
   { page: "subscriptions", href: "#/subscriptions", icon: "receipt", label: "Subscriptions" },
   { page: "proposals", href: "#/proposals", icon: "brief", label: "Proposals" },
+  { page: "flow", href: "#/flow", icon: "gauge", label: "Card flow", sep: true },
 ];
 const PAGES = new Set([
   "dashboard",
@@ -39,6 +41,7 @@ const PAGES = new Set([
   "subscriptions",
   "proposals",
   "keys",
+  "flow",
 ]);
 
 const subHash = (f: () => void) => {
@@ -188,6 +191,8 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
       return <SubscriptionsPage />;
     case "proposals":
       return <ProposalsPage />;
+    case "flow":
+      return <FlowPage />;
     default:
       return <Dashboard />;
   }
