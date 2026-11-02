@@ -250,7 +250,7 @@ export function CurrentWork() {
         <table>
           <thead>
             <tr>
-              <th>State</th>
+              <th>Status</th>
               <th>Name / profile</th>
               <th>Model</th>
               <th>Task</th>
