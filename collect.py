@@ -221,8 +221,10 @@ def launchd_jobs():
             schedule = "at login"
         pid, status = exits.get(label, ("", None))
         args = p.get("ProgramArguments") or [p.get("Program", "")]
+        ssh_host = args[-1].split("@")[-1] if args and os.path.basename(args[0]) == "ssh" else ""
         jobs.append({
             "scheduler": "launchd",
+            "ssh_host": ssh_host,
             "id": label,
             "name": label.split(".", 2)[-1],
             "schedule": schedule,
@@ -1146,14 +1148,45 @@ def host_broken(scratch=FOREMAN):
     return out
 
 
+TAILSCALE_BINS = ("tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+
+
+def tailscale_state():
+    """This machine's tailnet state from `tailscale status --json` ("Running", "Stopped", "NeedsLogin", ...), or
+    None with no tailscale here. The exit code is not read: `status` exits 1 while the tailnet is stopped."""
+    for exe in TAILSCALE_BINS:
+        try:
+            done = subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        try:
+            return json.loads(done.stdout).get("BackendState") or None
+        except ValueError:
+            return "Stopped" if "stopped" in (done.stdout + done.stderr).lower() else None
+    return None
+
+
+def tailnet_reasons(jobs, state):
+    """A failed ssh job's reason when this machine's tailnet is down: the job cannot reach its host, and the
+    exit code alone (ssh's 255) does not say why (signal-tunnel on altair, 2026-11-02)."""
+    if not state or state == "Running":
+        return jobs
+    for j in jobs:
+        if j.get("ssh_host") and j.get("last_status") not in (None, "ok") and not j.get("last_error"):
+            j["last_error"] = f"Tailscale is {state.lower()} here, so ssh cannot reach {j['ssh_host']}"
+    return jobs
+
+
 def main():
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
+    tailnet = tailscale_state()
     print(json.dumps({
         "host": socket.gethostname(),
         "tz": time.strftime("%Z"),
         "now": now.isoformat(),
-        "jobs": hermes_jobs(now) + launchd_jobs() + crontab_jobs(now) + systemd_jobs(now),
+        "jobs": tailnet_reasons(hermes_jobs(now) + launchd_jobs() + crontab_jobs(now) + systemd_jobs(now), tailnet),
+        "tailscale": tailnet,
         "running": running_agents(),
         "host_broken": host_broken(),
         "profiles": hermes_profiles(),

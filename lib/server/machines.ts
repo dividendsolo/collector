@@ -121,7 +121,8 @@ export const snapshot = swr<Snapshot>("snapshot", READ_SECONDS * 1000, async ():
     jogUsage(),
     ...targets.map((t) => collect(t, cfg)),
   ]);
-  const read = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, error: results[i][1] }));
+  // `local`: collect.py ran on this machine, so a button here can act on it (Start Tailscale).
+  const read = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, local: !t.ssh, error: results[i][1] }));
   const at = Math.floor(Date.now() / 1000);
   return { at, machines: mergeMachines(snapshot.peek()?.machines, read, at), github: limit, jog };
 });

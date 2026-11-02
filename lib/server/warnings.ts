@@ -13,7 +13,11 @@ export interface Warning {
   url?: string;
   /** A value for the row's right side (GitHub Actions sets the dollars billed this month). */
   aside?: string;
+  /** A one-click fix on the row's right side, posted to `post` (Start Tailscale on this machine). */
+  action?: { label: string; post: string };
 }
+
+const START_TAILSCALE = { label: "Start Tailscale", post: "/api/tailscale" };
 
 export interface WarningInputs {
   machines: any[];
@@ -50,6 +54,18 @@ export function warnings(w: WarningInputs): Warning[] {
     for (const b of m.host_broken || [])
       if (b?.repo)
         out.push({ level: "error", text: `host broken: ${b.repo} on ${m.name}${b.line ? `: ${b.line}` : ""}` });
+    // collect.py's tailnet state; null with no Tailscale on that machine. A stopped tailnet breaks every ssh job
+    // there, so the jobs' rows carry the reason and, on this machine, the button that starts it again.
+    const tailnetDown = !!m.tailscale && m.tailscale !== "Running";
+    if (
+      tailnetDown &&
+      !(m.jobs || []).some((j: any) => j.enabled && j.ssh_host && j.last_status && !j.last_status.startsWith("ok"))
+    )
+      out.push({
+        level: "warn",
+        text: `Tailscale is ${String(m.tailscale).toLowerCase()} on ${m.name}`,
+        ...(m.local ? { action: START_TAILSCALE } : {}),
+      });
     for (const j of m.jobs || []) {
       j.machine = m.name;
       j.what = what[j.name] ?? (j.script || "");
@@ -58,6 +74,7 @@ export function warnings(w: WarningInputs): Warning[] {
         out.push({
           level: "error",
           text: `${j.name} on ${m.name}: last run ${j.last_status}${j.last_error ? ` (${j.last_error.slice(0, 140)})` : ""}`,
+          ...(j.ssh_host && tailnetDown && m.local ? { action: START_TAILSCALE } : {}),
         });
       const key = workJobs.has(j.name) ? workLabel : j.script;
       if (key) {

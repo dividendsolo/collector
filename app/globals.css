@@ -772,6 +772,17 @@
     color: var(--faint);
     white-space: nowrap;
   }
+  /* A row's one-click fix, pushed to the right edge like .aside; a failed click's reason sits before the button. */
+  .alert .act {
+    margin-left: auto;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: -4px;
+  }
+  .alert .act .why {
+    color: var(--red);
+  }
   .alert.error .i {
     color: var(--red);
   }

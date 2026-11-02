@@ -8,6 +8,33 @@ import { CurrentWork } from "./running";
 import { ServiceRows, sortServices, useServices } from "./services";
 import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelItems, SkelPlans, SkelRows, SkelStat } from "./ui";
 
+/** A row's one-click fix (Start Tailscale). The row clears on the next machine read once the fix took; a failure
+ * shows its reason in place of the button. */
+function AlertAction({ action }: { action: { label: string; post: string } }) {
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState("");
+  const click = async () => {
+    setBusy(true);
+    setWhy("");
+    try {
+      const r = await fetch(action.post, { method: "POST" });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) setWhy(body.why || `failed (${r.status})`);
+    } catch (e) {
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <span className="act">
+      {why ? <span className="why">{why}</span> : null}
+      <button className="btn" type="button" onClick={click} disabled={busy}>
+        {busy ? "Starting…" : action.label}
+      </button>
+    </span>
+  );
+}
+
 function NeedsAttention() {
   const { state } = useLive();
   const w: any[] = state?.warnings || [];
@@ -39,6 +66,7 @@ function NeedsAttention() {
                   <BlurText text={x.aside} />
                 </span>
               ) : null}
+              {x.action ? <AlertAction action={x.action} /> : null}
             </div>
           ))
         ) : (
