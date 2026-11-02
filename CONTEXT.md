@@ -170,6 +170,38 @@ does: `launchctl kickstart -k gui/<uid>/ai.hermes.gateway` — launchd's throttl
 before the next try — then the state after, ok only once launchd reports a PID, on which the page hides the rows at
 once. A machine read over ssh gets no button: the click would act here, never there.
 
+## The card statuses are settings (card #53)
+
+`lib/statuses.ts` holds the three sets of card statuses the page reads, and `config.json`'s `statuses` sets them:
+
+```json
+"statuses": {
+  "waiting": ["ready-for-human", "needs-manual-qa", "needs-info", "needs-triage"],
+  "working": ["agent-in-progress", "verify-in-progress"],
+  "done": ["closed"]
+}
+```
+
+- `waiting` is the Waiting on you list: only those lanes are on it, in the order written. The set is also what has its
+  reason read (the comment that moved the card there), what Current work leaves out, and what a card leaving the board
+  is not: it waited on you, it did not close.
+- `working` is the statuses that say a machine or a session holds the card. A card there with no run in the page's
+  read shows how old the data is (`stale 4 min`) instead of its status, since the claim and the read disagree.
+- `done` is the statuses that mean the card is finished: those cards are not open work (`workCards` leaves them out of
+  the Work page and the open-card count) and not a wait.
+
+**With no setting, the agent stack's own statuses are used**: `waiting` falls back to `tickets.each` when that is set
+(the older name for the same list, so a config that already set it keeps exactly the lanes and the order it had), then
+to the four above; `working` and `done` fall back to the two and the one above. The four and the two come from the
+agent stack's own lane list (`agent-stack/vps/scripts/lane.py`: `ASK_LANES` plus `needs-triage`, and the two lanes a
+machine claims a card in), so Collector leads a stranger toward the agent stack and changes nothing for James.
+
+The Card flow page (`components/flow.tsx`) lists the three sets it is reading, in their own order, under its drawing
+of the agent stack's flow — the setting is the page's own answer for "which statuses does Collector read here", and
+with a set of the user's own it says the drawing is the agent stack's, not theirs.
+
+`/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
+
 ## Layout
 
 - `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.
@@ -183,7 +215,7 @@ once. A machine read over ssh gets no button: the click would act here, never th
 | Endpoint | What it answers |
 |---|---|
 | `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
-| `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel). |
+| `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel), and the three status sets the page reads (`each`, `working`, `done`). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
 | `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
 

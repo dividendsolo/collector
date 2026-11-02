@@ -1,4 +1,5 @@
 import { duration, prio } from "./format";
+import { AGENT_STACK_STATUSES } from "./statuses";
 
 /** One live agent or script run, as the machines report it. */
 export interface WorkRun {
@@ -95,20 +96,6 @@ export interface WorkRow {
   onDeck?: string[];
 }
 
-const REVIEW = new Set([
-  "agent-in-progress",
-  "verify-in-progress",
-  "code-review",
-  "changes-requested",
-  "ready-to-merge",
-  "merging",
-]);
-
-/** The lanes that say a machine or a session holds the card. Their name is never the State cell: a live run shows
- * its own badge, a `local` card shows the session's, and a claim with neither shows its lane (the `no run` badge
- * was removed on 2026-11-01; a claim with nothing behind it for hours is housekeeping's to send back, agent-stack#187). */
-const CLAIM_LANES = new Set(["agent-in-progress", "verify-in-progress"]);
-
 /** Seconds after which the page's machine snapshot is stale: the server reads every 10 s and the page asks every
  * 15 s, so a snapshot past 45 s means reads are failing, not slow. */
 export const STALE_SECONDS = 45;
@@ -157,23 +144,30 @@ function staleText(card: WorkCard | null, stale?: Staleness): string | null {
 
 /** What a card row's State cell shows when no run joined it: `session` (an interactive session holds it), the stale
  * data a claim was matched against (card #41: builds running on ezio read as idle while the page held a snapshot
- * minutes old), or the lane itself. No `no run` badge: a builder the foreman just claimed shows no run for its first
- * minutes, so the badge read as a fault on healthy cards (James, 2026-11-01: "It doesn't make any sense"). */
+ * minutes old), or the card's own status.
+ *
+ * The stale reading is for the `working` statuses, which are a setting (collector#53): a status that says a machine
+ * or a session holds the card, with no run behind it, is a claim the page's read disagrees with, so the row says how
+ * old the data is rather than repeating the status. Their name is never the State cell: a live run shows its own
+ * badge, a `local` card shows the session's (the `no run` badge was removed on 2026-11-01; a claim with nothing
+ * behind it for hours is housekeeping's to send back, agent-stack#187). Every other status is the truth as it is. */
 export const cardState = (
   row: Pick<WorkRow, "state" | "local" | "run"> & { card?: WorkCard | null },
   stale?: Staleness,
+  working: string[] = AGENT_STACK_STATUSES.working,
 ) =>
   row.run
     ? null
     : row.local
       ? "session"
-      : CLAIM_LANES.has(row.state)
+      : working.includes(row.state)
         ? (staleText(row.card ?? null, stale) ?? row.state)
         : row.state;
 
-/** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent, scheduled. */
-const groupOf = (lane: string) =>
-  REVIEW.has(lane) ? 1 : lane === "ready-for-agent" ? 3 : lane === "scheduled" ? 4 : 1;
+/** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent,
+ * scheduled. A card in any other status is in progress: only the agent stack's own queue and scheduled statuses sit
+ * lower, and a `done` status is not open work at all (the server leaves those rows out of the view). */
+const groupOf = (lane: string) => (lane === "ready-for-agent" ? 3 : lane === "scheduled" ? 4 : 1);
 
 /** Whether the page shows the card as being worked on: its own row is with the live work or the work in review
  * (groups 0-1). A closed, ready-for-agent or scheduled card moves nothing along. */

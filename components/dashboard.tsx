@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { ago, waitingOrder } from "@/lib/format";
+import { ago } from "@/lib/format";
+import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, useAi } from "./ai";
 import { useApi, useLive } from "./data";
@@ -182,7 +183,8 @@ export function useWaiting() {
   const { board } = useLive();
   const d = board?.tickets;
   if (!d?.loaded) return null;
-  const list = d.tickets.filter((t: any) => d.each.includes(t.lane)).sort(waitingOrder);
+  // The waiting set is a setting (collector#53): `each` is it, in its own order, resolved by the server.
+  const list = waitingList(d.tickets, d.each);
   const p0 = list.filter((t: any) => t.priority === "P0").length;
   return { d, list, p0 };
 }
