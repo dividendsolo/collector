@@ -7,8 +7,8 @@ import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, useAi } from "./ai";
 import { useApi, useLive } from "./data";
 import { CurrentWork } from "./running";
-import { ServiceRows, sortServices, useServices } from "./services";
-import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelItems, SkelPlans, SkelRows, SkelStat } from "./ui";
+import { ServiceHealthPanel, useServices } from "./services";
+import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelPlans, SkelRows, SkelStat } from "./ui";
 
 /** A row's one-click fix (Start Tailscale). A failure shows its reason beside the button; a fix that took calls
  * `done`, which hides the rows it fixed at once. */
@@ -338,39 +338,7 @@ function AiCredits() {
 }
 
 function ServiceHealth() {
-  const svc = useServices();
-  const sorted = svc ? sortServices(svc) : null;
-  const up = svc ? svc.filter((x) => x.status !== "down").length : 0;
-  const avg = svc?.length ? Math.round(svc.reduce((n, x) => n + x.ms, 0) / svc.length) : 0;
-  const slowest = svc?.length ? [...svc].sort((a, b) => b.ms - a.ms)[0] : null;
-  return (
-    <section className="panel">
-      <PanelHead icon="server" title="Service health">
-        <span className="count">{svc?.length ?? 0}</span>
-        <a className="more" href="#/services">
-          All services &rarr;
-        </a>
-      </PanelHead>
-      <div className="spend-total" id="health-total">
-        {svc ? (
-          svc.length && slowest ? (
-            <>
-              <span className="value">
-                {up} of {svc.length}
-                <small>online</small>
-              </span>
-              <span className="sub">
-                average {avg} ms · slowest {slowest.name} at {slowest.ms} ms
-              </span>
-            </>
-          ) : (
-            <span className="sub">No services in config.json yet.</span>
-          )
-        ) : null}
-      </div>
-      <ul className="health">{sorted ? <ServiceRows list={sorted.slice(0, 5)} /> : <SkelItems n={5} />}</ul>
-    </section>
-  );
+  return <ServiceHealthPanel svc={useServices()} />;
 }
 
 export function Dashboard() {

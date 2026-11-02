@@ -6,6 +6,44 @@ Hermes, each acting on the machine it runs on — and the projects list it write
 `AGENTS.md` holds the stack, the commands and the dangers; this file holds the code's layout, how the running one is
 built, restarted and served, and how its features work.
 
+## Installing it: one command, and what a clean machine needs (card #55)
+
+A stranger with none of our files installs it with one line, from the README:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install.sh | sh
+```
+
+`install.sh` (repo root, POSIX `sh`, macOS and Linux) is that command, and the same file works in a checkout
+(`./install.sh`). It decides where the source is by where it is: run as a file inside a Collector checkout it installs
+that folder, piped in (`curl | sh`, where `$0` is not a path) it clones the repo — `$HOME/collector`, or
+`COLLECTOR_DIR`/`--dir`, branch `COLLECTOR_REF` of `COLLECTOR_REPO_URL`. Then it installs Bun from bun.sh when the
+machine has none, runs `bun install` and `bun run build`, picks the first free port from 4000 (or `COLLECTOR_PORT`,
+or `--port`, which is refused when it is taken) and `exec`s `bun start`, printing the URL. A missing `python3` is a
+note, not a failure: the page starts and every machine row stays empty until it is there. `--no-install-bun` and
+`--help` are the other options.
+
+Two rules shape the script. It writes `node_modules` and `.next` inside that folder and nothing else — no
+`config.json`, no `.env`, nothing on any remote machine — apart from Bun when it installs it: Bun goes into `~/.bun`
+and its installer adds itself to `PATH` in the shell's startup file (the README says so). And it holds no path, host name, user name or job label of
+ours. Its usage text is `printf` lines rather than a heredoc, because `sh` reads a piped script from stdin and the
+heredoc's body would have to come from the same stream. `tests/install.test.ts` holds both rules, runs `sh -n` over
+it, and pipes it in as `sh -s -- --help` the way `curl | sh` does.
+
+**A machine with none of the tools reads empty, not an error.** On 2026-11-02 a clean Debian container — no `ps`, no
+`git`, no `docker`, no `gh`, no `~/.hermes` — answered `Could not read this machine: FileNotFoundError: 'ps'`: three
+reads in `collect.py` called `subprocess.run` directly instead of `read_command` (the helper that returns nothing when
+a tool is not installed), so one missing binary failed the whole snapshot. `running_agents`, `watch_rows` and
+`verify_heads` use `read_command` now. `tests/clean-machine.test.ts` is that machine: the real `collect.py` run with
+only `python3` on `PATH` and an empty `HOME`, asserting a clean exit and empty rows.
+
+`docs/main-page.png` is the README's screenshot: the Dashboard of a clean install, taken from the container that
+proved the install above, so it shows the empty states rather than any of James's machines. The README's own shape is
+part of the card: the one-line what-it-is and who-it-is-for, that screenshot, the Install block, Requirements, What it
+shows, Settings (`statuses` and `watch`, the two keys that change what the page reads), the full Configure it table,
+and the line for a reader with no agent crew pointing at Hermes Agent (the agent stack is private, so there is no
+public URL to point at).
+
 ## How it runs
 
 The live Collector is a production Next build served by the launchd job `com.james.collector`

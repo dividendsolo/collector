@@ -78,6 +78,39 @@ export function ServiceRows({ list }: { list: Svc[] }) {
   );
 }
 
+/** The Dashboard's Service health panel: the summary line and the five worst services. */
+export function ServiceHealthPanel({ svc }: { svc: Svc[] | null }) {
+  const sorted = svc ? sortServices(svc) : null;
+  const up = svc ? svc.filter((x) => x.status !== "down").length : 0;
+  const avg = svc?.length ? Math.round(svc.reduce((n, x) => n + x.ms, 0) / svc.length) : 0;
+  const slowest = svc?.length ? [...svc].sort((a, b) => b.ms - a.ms)[0] : null;
+  return (
+    <section className="panel">
+      <PanelHead icon="server" title="Service health">
+        <span className="count">{svc?.length ?? 0}</span>
+        <a className="more" href="#/services">
+          All services &rarr;
+        </a>
+      </PanelHead>
+      <div className="spend-total" id="health-total">
+        {/* With no services the list below says so; the summary stays empty rather than say it twice. */}
+        {svc?.length && slowest ? (
+          <>
+            <span className="value">
+              {up} of {svc.length}
+              <small>online</small>
+            </span>
+            <span className="sub">
+              average {avg} ms · slowest {slowest.name} at {slowest.ms} ms
+            </span>
+          </>
+        ) : null}
+      </div>
+      <ul className="health">{sorted ? <ServiceRows list={sorted.slice(0, 5)} /> : <SkelItems n={5} />}</ul>
+    </section>
+  );
+}
+
 export function ServicesPage() {
   const svc = useServices();
   return (
