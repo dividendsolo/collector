@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { swr } from "./cache";
-import { type Config, config, type Machine } from "./config";
+import { type Config, config, type Machine, type Watch } from "./config";
 import { type JogUsage, jogUsage } from "./jog";
 import { COLLECT, HOME } from "./paths";
 import { run } from "./run";
@@ -19,9 +19,20 @@ const SSH = [
   "ControlPersist=300",
 ];
 /** The settings collect.py needs on each machine; the rest stays on the server. */
-const REMOTE_KEYS = ["launchd_prefixes", "ok_exits", "work_script", "verify_label", "repos_dir"] as const;
+const REMOTE_KEYS = ["launchd_prefixes", "ok_exits", "work_script", "watch", "verify_label", "repos_dir"] as const;
 
 export const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/** The watch entries that live on this machine (collector#54): one that names a machine is read there alone, and one
+ * that names none on `here` — the machine Collector runs on — since a process, a launchd label and a file each
+ * belong to one machine, and another machine's entry read here would invent an idle row for it. */
+export function watchFor(watch: unknown, machine: string, here: string): Watch[] {
+  // A mistyped setting is collect.py's to say, once, on the machine Collector runs on (collector#57): a `watch` that
+  // is not a list goes there as it is, and so does an entry that is not an object, since neither names a machine.
+  if (watch == null) return [];
+  if (!Array.isArray(watch)) return machine === here ? (watch as Watch[]) : [];
+  return watch.filter((w) => ((w && typeof w === "object" && w.machine) || here) === machine);
+}
 
 /** One machine's snapshot from collect.py: run here, or sent over SSH (`ssh host python3 -`), so nothing is installed there. */
 export async function collect(machine: Machine, cfg: Config) {
@@ -116,10 +127,13 @@ export function mergeMachines(prev: any[] | undefined, next: any[], at: number):
 export const snapshot = swr<Snapshot>("snapshot", READ_SECONDS * 1000, async (): Promise<Snapshot> => {
   const cfg = config();
   const targets = cfg.machines?.length ? cfg.machines : [{ name: "this machine" }];
+  // A watch entry that names no machine is read where Collector runs: the machine whose entry needs no ssh, else
+  // the first one listed (collector#54).
+  const here = targets.find((t) => !t.ssh)?.name ?? targets[0].name;
   const [limit, jog, ...results] = await Promise.all([
     githubLimit(),
     jogUsage(),
-    ...targets.map((t) => collect(t, cfg)),
+    ...targets.map((t) => collect(t, { ...cfg, watch: watchFor(cfg.watch, t.name, here) })),
   ]);
   // `local`: collect.py ran on this machine, so a button here can act on it (Start Tailscale).
   const read = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, local: !t.ssh, error: results[i][1] }));

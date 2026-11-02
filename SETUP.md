@@ -57,6 +57,16 @@ What to look at — read-only, and only what exists on this machine
   systemd timers (`systemctl list-timers --all`, with each timer's service read by `systemctl show`) by itself on
   every refresh, so write no key for them — only a plain-words line in `jobs` for one whose command or unit name
   does not say what it does.
+- `watch`: Collector already warns about the jobs and coding-agent sessions it reads by itself (Hermes's jobs,
+  launchd's, the crontab lines, the systemd timers, the Hermes gateway and its ticker, a running Claude Code or Codex
+  session), so add an entry only for an agent the person runs that none of those reads: `{"name": "Nightly backup",
+  "launchd": "com.example.backup"}` for a launchd job, `{"name": "Sync", "log": "~/.logs/sync.log", "fail_on":
+  "error", "idle_after": 3600}` for one that writes a log, `{"name": "The crew", "heartbeat": "~/.work/crew.beat",
+  "idle_after": 900}` for one that beats a file, `{"name": "My agent", "process": "my-agent.py"}` for one that should
+  be running, or `{"name": "My session", "session": "claude"}` for a coding-agent session of an account Collector
+  does not read. One entry names one thing, the signal that says how it is doing, and `idle_after` where the signal
+  is a file; `machine` names another machine it runs on. Confirm the label, the path and the process before you write
+  one, and add nothing you cannot check: a wrong one sits in Needs attention forever.
 - The repos, usually under `~/code`: list that folder (or `repos_dir`, or wherever they are). In each repo read the
   dependency manifests (`package.json`, `Gemfile`, `requirements.txt`, `go.mod`, `pyproject.toml`) and the deploy files
   (`vercel.json`, `fly.toml`, `netlify.toml`, `wrangler.toml`, `.kamal`, `config/deploy.yml`, `Dockerfile`,

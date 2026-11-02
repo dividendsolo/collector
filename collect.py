@@ -3,8 +3,9 @@
 
 The server runs it locally and on each remote machine over `ssh <host> python3 - '<config>' < collect.py`,
 so it uses the standard library only. It reads Hermes's cron files (~/.hermes), the foreman's host-broken
-markers, launchd (macOS), this user's plain crontab, systemd timers, ps, docker, git, and the session files Claude
-Code and Codex keep on this machine, and changes nothing.
+markers, launchd (macOS), this user's plain crontab, systemd timers, ps, docker, git, the session files Claude
+Code and Codex keep on this machine, and the agents and jobs a config.json `watch` entry names (a process, a
+coding-agent session, a launchd label, a log or a heartbeat file), and changes nothing.
 """
 import glob
 import hashlib
@@ -1234,6 +1235,199 @@ def hermes_gateway(now, home=HOME, pid=launchctl_pid):
     }
 
 
+# The agents and jobs Collector watches (collector#54): the Hermes jobs, the launchd jobs, `crontab -l`'s lines,
+# the systemd timers, the Hermes gateway and its ticker, and the Claude Code and Codex sessions are read with no
+# setting at all — they are the list. `watch` in config.json adds a user's own: one entry names one thing and the
+# signal that says how it is doing, and how long that signal may be quiet. The server sends each machine only the
+# entries that name it (lib/server/machines.ts), since a process, a launchd label and a file each belong to one
+# machine and reading another machine's entry here would invent an idle row for it.
+WATCH = CONFIG.get("watch") or []
+# How long a log or a heartbeat file may go unwritten before the watch reads as idle, when the entry does not say.
+WATCH_IDLE_S = 900
+# The signals one entry may carry, in the order a row reads them when it carries more than one.
+WATCH_SIGNALS = ("process", "session", "launchd", "log", "heartbeat")
+# A `session` watch names the coding tool itself.
+WATCH_TOOLS = ("claude", "codex")
+
+
+def ago_text(seconds):
+    """A duration in the words a watch row reads it in: "20 s", "12 min", "4 h", "2 days"."""
+    if seconds < 90:
+        return f"{int(seconds)} s"
+    if seconds < 3600:
+        return f"{round(seconds / 60)} min"
+    if seconds < 172800:
+        return f"{round(seconds / 3600)} h"
+    return f"{round(seconds / 86400)} days"
+
+
+def watch_file_age(now, path):
+    """How long ago a watched file was last written, in seconds: the epoch second the file itself holds when it
+    holds one (a heartbeat its writer stamps), else its own mtime. None with no such file — the row says so rather
+    than reading it as an age."""
+    try:
+        text = open(path).read(64).strip()
+    except OSError:
+        return None
+    try:
+        return max(0, int(now.timestamp() - float(text)))
+    except ValueError:
+        pass
+    try:
+        return max(0, int(now.timestamp() - os.path.getmtime(path)))
+    except OSError:
+        return None
+
+
+def last_line(path):
+    """A log's last non-blank line, trimmed: what an entry's `fail_on` is matched against, and what the row shows
+    when that line is the failure. Reads the tail, so a log of megabytes is not read whole."""
+    lines = [line.strip() for line in tail_text(path, 4096).splitlines() if line.strip()]
+    return lines[-1][:200] if lines else ""
+
+
+def watch_process(ps_out, needle, skip=()):
+    """The pid of the first process whose command line carries `needle`, or None. `skip` holds the reader's own
+    pid: the entries reach collect.py as its own argument, so a watched name would otherwise match the reader
+    itself and read as a process that never stops."""
+    for pid, _, command in process_lines(ps_out):
+        if pid not in skip and needle in command:
+            return pid
+    return None
+
+
+def watch_session(ps_out, tool, skip=()):
+    """The pid of a running Claude Code or Codex session of that tool, or None. The same reader the Current work
+    rows use, so Claude Code's own helper processes are not a session here either and a Codex shim and the binary
+    under it stay one run."""
+    for pid, _, command in process_lines(ps_out):
+        if pid not in skip and tool_of(command) == tool:
+            return pid
+    return None
+
+
+def launchd_job(label):
+    """`launchctl list <label>`: (whether launchd knows the label, its output). launchd exits 113 for a label it
+    does not know, and prints the job's own dictionary — a `"PID"` line and a `"LastExitStatus"` line among
+    others — for one it does."""
+    try:
+        done = subprocess.run(["launchctl", "list", label], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return (False, "")
+    return (done.returncode == 0, done.stdout)
+
+
+def launchd_run(out):
+    """(the PID launchd reports, the job's last exit status) out of a job's own dictionary, either one None when
+    the job carries no such line. A job launchd has loaded but not started reports no PID."""
+    pid = re.search(r'"PID"\s*=\s*(\d+)\s*;', out or "")
+    code = re.search(r'"LastExitStatus"\s*=\s*(-?\d+)\s*;', out or "")
+    return (pid.group(1) if pid else None, code.group(1) if code else None)
+
+
+def launchd_code(status):
+    """A launchd exit status as a person reads it: launchd reports the raw wait status, so the live Collector job
+    that a kickstart ended with SIGTERM reads 36608 there and one that exited 1 reads 256. A status above 255 is
+    the exit code shifted up, so it is divided back; anything else is already the code. None for no status at all,
+    which is a job that has never run rather than one that failed."""
+    try:
+        code = int(status)
+    except (TypeError, ValueError):
+        return None
+    return str(code >> 8) if code > 255 else str(code)
+
+
+def watch_row(entry, now, ps_out="", jobs=None, self_pid=None):
+    """One watched agent's row: what the entry's own signal says about it now.
+
+    `state` is `busy` while the signal is alive (a process or a session running, a launchd job with a PID), `ok`
+    when nothing is wrong and nothing is running (a launchd job whose last run worked, a log or a heartbeat written
+    inside `idle_after`), `idle` when there is nothing there — no process, no session, no file, or a file older
+    than `idle_after` — and `failed` for a launchd job whose last run exited non-zero (an `ok_exits` entry for that
+    label still means success) or a log whose last line carries `fail_on`. An entry Collector cannot read is
+    `unknown`, which the page says rather than dropping the setting silently.
+
+    `detail` completes the warning's own words, `<name> on <machine>: <detail>`.
+    """
+    name = str(entry.get("name") or "a watched agent")
+    signal = next((k for k in WATCH_SIGNALS if entry.get(k)), None)
+    row = {"name": name, "signal": signal, "state": "unknown", "detail": ""}
+    if signal is None:
+        row["detail"] = f"no signal Collector reads ({', '.join(WATCH_SIGNALS)})"
+        return row
+    skip = {str(self_pid)} if self_pid else set()
+    if signal == "process":
+        pid = watch_process(ps_out, str(entry["process"]), skip)
+        row.update(state="busy" if pid else "idle", detail=f"running as pid {pid}" if pid else "not running")
+        return row
+    if signal == "session":
+        tool = str(entry["session"])
+        if tool not in WATCH_TOOLS:
+            row.update(state="unknown", detail=f"session must be one of {', '.join(WATCH_TOOLS)}, not {tool}")
+            return row
+        pid = watch_session(ps_out, tool, skip)
+        row.update(state="busy" if pid else "idle",
+                   detail=f"{TOOL_NAMES[tool]} running as pid {pid}" if pid else f"no {TOOL_NAMES[tool]} session")
+        return row
+    if signal == "launchd":
+        label = str(entry["launchd"])
+        known, out = launchd_job(label) if jobs is None else jobs(label)
+        if not known:
+            row.update(state="failed", detail=f"launchd has no {label} on this machine")
+            return row
+        pid, code = launchd_run(out)
+        code = launchd_code(code)
+        if pid:
+            row.update(state="busy", detail=f"running as pid {pid}")
+        elif code not in (None, "0") and code not in (OK_EXITS.get(label) or {}):
+            row.update(state="failed", detail=f"last run exit {code}")
+        else:
+            row.update(state="ok", detail=f"last run exit {code or '0'}")
+        return row
+    # A log or a heartbeat file: how long ago it was written says both the state and the words.
+    limit = entry.get("idle_after", WATCH_IDLE_S)
+    # A limit that is not a positive number of seconds ("900", 0, true) would raise in the age comparison and take
+    # the machine's whole read down with it, so this one row says the value instead.
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not limit > 0:
+        row.update(state="unknown", detail=f"idle_after must be a positive number of seconds, not {json.dumps(limit)}")
+        return row
+    path = os.path.expanduser(str(entry[signal]))
+    age = watch_file_age(now, path)
+    if age is None:
+        row.update(state="idle", detail=f"no {signal} file at {path}")
+        return row
+    if signal == "log" and entry.get("fail_on"):
+        line = last_line(path)
+        if str(entry["fail_on"]).lower() in line.lower():
+            row.update(state="failed", detail=f"its log ends with {line!r}")
+            return row
+    if age > limit:
+        row.update(state="idle", detail=f"nothing written for {ago_text(age)}")
+    else:
+        row.update(state="ok", detail=f"written {ago_text(age)} ago")
+    return row
+
+
+def watch_rows(now, entries=None, ps_out=None, jobs=None, self_pid=None):
+    """One row per watched agent (collector#54), from the entries config.json gave this machine. Nothing
+    configured is no rows at all, so a machine watching nothing new reads exactly as it did.
+
+    `ps_out` and `jobs` are the two reads a caller can hand in (a test does); left out, this machine is read: one
+    `ps` for its processes, and `launchctl list <label>` once per launchd entry.
+    """
+    entries = WATCH if entries is None else entries
+    if not isinstance(entries, list):
+        return [{"name": "watch", "signal": None, "state": "unknown",
+                 "detail": "config.json's watch is not a list of entries"}]
+    if ps_out is None:
+        ps_out = subprocess.run(["ps", "-axo", "pid=,etime=,command="], capture_output=True, text=True).stdout
+    self_pid = os.getpid() if self_pid is None else self_pid
+    return [watch_row(e, now, ps_out=ps_out, jobs=jobs, self_pid=self_pid) if isinstance(e, dict)
+            else {"name": "watch", "signal": None, "state": "unknown",
+                  "detail": f"a watch entry must be an object, not {json.dumps(e)}"}
+            for e in entries]
+
+
 def main():
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
@@ -1245,6 +1439,7 @@ def main():
         "jobs": tailnet_reasons(hermes_jobs(now) + launchd_jobs() + crontab_jobs(now) + systemd_jobs(now), tailnet),
         "tailscale": tailnet,
         "hermes_gateway": hermes_gateway(now),
+        "watch": watch_rows(now),
         "running": running_agents(),
         "host_broken": host_broken(),
         "profiles": hermes_profiles(),
