@@ -97,6 +97,17 @@ if (plan.pull) {
   say(`pulled to ${short(main.out)}`);
 }
 
+// Install what the lockfile asks for before every build: a commit that adds a package fails `next build` with
+// "module not found" until the package is installed (3021658 added @viz-js/viz, 2026-11-02). With nothing new to
+// install this takes a few milliseconds; `--frozen-lockfile` installs exactly what main's lockfile says.
+const installed = spawnSync(process.execPath, ["install", "--frozen-lockfile"], { cwd: dir, encoding: "utf8" });
+if (installed.status !== 0) {
+  warn(
+    `bun install failed (${lastLine(`${installed.stdout || ""}${installed.stderr || ""}`)}): the page keeps serving its old build`,
+  );
+  process.exit(1);
+}
+
 // Build beside the served `.next`, never in it: `next build` empties its own folder before it compiles, so a build in
 // place would leave the page with no build for as long as the build takes, and with none at all when it fails.
 // `next.config.ts` reads COLLECTOR_DIST_DIR; `postbuild` stamps the same folder. The served `.next` is not touched
