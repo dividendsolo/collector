@@ -53,7 +53,9 @@ Then `launchd/com.example.collector-rebuild.plist` the same way: every five minu
 page serves is behind `main` and, when it is, pulls it and builds into `.next-rebuild` beside the served `.next`. A
 finished build shows in the page's top bar as an **Update** button, and the click is what swaps it in and restarts,
 so a merge never restarts the server by itself. A failed build is logged (`[rebuild] build failed`) and the served
-`.next` is left as it was. `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check.
+`.next` is left as it was. `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check. Once a
+checkout is the one being served, leave it alone: `install.sh` builds into the `.next` that server is reading, so
+updates go through the page's button.
 
 ## Requirements
 
