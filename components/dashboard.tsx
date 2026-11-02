@@ -227,7 +227,7 @@ function Waiting() {
         <table>
           <thead>
             <tr>
-              <th>Lane</th>
+              <th>Status</th>
               <th>Ticket</th>
               <th>Reason</th>
               <th>Type</th>

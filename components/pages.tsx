@@ -602,7 +602,9 @@ export function WorkPage() {
       <section className="panel">
         <PanelHead icon="list" title="Open cards">
           <span className="count">{cards.length}</span>
-          <span className="sub">{d?.error ? `Some lanes did not load: ${d.error}` : "every lane on the board"}</span>
+          <span className="sub">
+            {d?.error ? `Some statuses did not load: ${d.error}` : "every open card, by status"}
+          </span>
         </PanelHead>
         <div className="wrap">
           <table>
@@ -611,7 +613,7 @@ export function WorkPage() {
                 <th>Repo</th>
                 <th>Card</th>
                 <th>Title</th>
-                <th>Lane</th>
+                <th>Status</th>
                 <th>Priority</th>
                 <th>Labels</th>
                 <th className="num">Opened</th>
