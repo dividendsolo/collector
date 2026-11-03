@@ -2,9 +2,73 @@
 
 One local page that shows every cron job and every agent run on all your machines, live.
 
-Built for [Hermes Agent](https://github.com/NousResearch/hermes-agent) setups: a laptop and a VPS or two, each with
-Hermes cron jobs, launchd jobs on the Mac, plain cron and systemd timers on Linux, and coding agents that build and
-review cards in git worktrees.
+It is for one person running several agents, scheduled jobs and websites: a laptop and a VPS or two, a handful of
+repos, coding agents that build and review work in git worktrees. Collector reads all of it and puts it on one page
+in your browser — what is running now, what failed, what waits on you, what it costs.
+
+![The Collector dashboard on a new install, with nothing configured yet](docs/main-page.png)
+
+No agent crew yet: start with [Hermes Agent](https://github.com/NousResearch/hermes-agent) and its cron jobs, which
+is what Collector is built to read. The agent stack that hands our own agents their cards (the board, the lanes, the
+scripts that run them) is ours and is not published yet.
+
+## Install
+
+One command, on macOS and Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install.sh | sh
+```
+
+It clones Collector into `~/collector`, installs [Bun](https://bun.sh) when you do not have it, installs the app's
+packages, builds it and starts it on http://127.0.0.1:4000. Another folder or port: `COLLECTOR_DIR` and
+`COLLECTOR_PORT`, or `install.sh --help`. When it installs Bun, Bun goes into `~/.bun` and its installer adds itself
+to your `PATH` in your shell's startup file. Apart from that it writes nothing outside the Collector folder (only
+`node_modules` and `.next` inside it): no settings file, no `.env`, and nothing at all on the machines it reads.
+
+In a checkout you already have, the same script is in the folder:
+
+```bash
+./install.sh              # install, build and start it here
+./install.sh --port 4001  # on another port
+./install.sh --help       # every option
+```
+
+Then open http://127.0.0.1:4000. With no settings at all it shows what it finds on its own: the Hermes cron jobs,
+the launchd jobs and the running coding-agent sessions of the machine it runs on.
+
+Settings are optional and live in `config.json`: [SETUP.md](SETUP.md) holds one prompt for your coding agent
+(Claude Code, Codex, Hermes) that reads your machine read-only, writes the file from what it finds and reports what
+it skipped, or `cp config.example.json config.json` and edit it by hand. [Settings](#settings) below covers the two
+keys worth knowing on the first day; [Configure it](#configure-it) has all of them.
+
+`bun dev` runs it with hot reload while you change the code. `COLLECTOR_CONFIG` points it at a config file somewhere
+else. The page reads machines and jobs every 15 seconds and the other panels once a minute. The board comes faster:
+the server reads it every 10 seconds and pushes each change to the page (server-sent events), so a lane change shows
+within about 10 seconds. No page waits on a slow reader: each panel shows skeleton rows, then fills. After a rebuild
+and a restart, an open page reloads itself.
+
+To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/Library/LaunchAgents/`, set the
+path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
+Then `launchd/com.example.collector-rebuild.plist` the same way: every five minutes it checks whether the build the
+page serves is behind `main` and, when it is, pulls it and builds into `.next-rebuild` beside the served `.next`. A
+finished build shows in the page's top bar as an **Update** button, and the click is what swaps it in and restarts,
+so a merge never restarts the server by itself. A failed build is logged (`[rebuild] build failed`) and the served
+`.next` is left as it was. `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check. Once a
+checkout is the one being served, leave it alone: `install.sh` builds into the `.next` that server is reading, so
+updates go through the page's button.
+
+## Requirements
+
+- [Bun](https://bun.sh) 1.4 or later, which `install.sh` installs when it is missing. Collector is a Next.js app
+  (TypeScript); `bun install` gets the rest.
+- Python 3.9 or later, standard library only, on this machine and on each remote machine: `collect.py` reads each one.
+- SSH access (key-based) to each remote machine, with `python3` on it.
+- The [GitHub CLI](https://cli.github.com) (`gh`), signed in with the `user` scope (`gh auth refresh -h github.com -s user`), for the board, the API limit, Actions minutes and dollars (the billing usage summary of the signed-in account; without that scope GitHub answers 404, the panel says it could not read them, and set `actions_minutes` in `config.json` if your plan is not read right), and the Projects page.
+- Optional: Docker, for verify runs in the Running now table.
+
+## What it shows
+
 The Dashboard answers these questions at a glance:
 
 1. **Needs attention:** which job failed, which script starts itself in a loop, which host cannot pass a repo's
@@ -54,46 +118,52 @@ total revenue (from the project's payment providers, Stripe and Polar), and reve
 It reads only. It never changes a job or a card on its own: the two buttons you click yourself (Start Tailscale,
 Start Hermes) act on the machine Collector runs on. Its other write is your repo choice, saved to `config.json`.
 
-## Requirements
+## Settings
 
-- [Bun](https://bun.sh) 1.4 or later. Collector is a Next.js app (TypeScript); `bun install` gets the rest.
-- Python 3.9 or later, standard library only, on this machine and on each remote machine: `collect.py` reads each one.
-- SSH access (key-based) to each remote machine, with `python3` on it.
-- The [GitHub CLI](https://cli.github.com) (`gh`), signed in with the `user` scope (`gh auth refresh -h github.com -s user`), for the board, the API limit, Actions minutes and dollars (the billing usage summary of the signed-in account; without that scope GitHub answers 404, the panel says it could not read them, and set `actions_minutes` in `config.json` if your plan is not read right), and the Projects page.
-- Optional: Docker, for verify runs in the Running now table.
+Every key in `config.json` is optional, and Collector runs without the file at all. Two are worth knowing on the
+first day, since they change what the page reads rather than adding a panel to it:
 
-## Run it
+- **`statuses`** — which card statuses Collector reads. `waiting` is the Waiting on you list: only those lanes, in
+  the order you write them. `working` is the statuses that say a machine or a session holds the card (a card there
+  with no run behind it shows how old the data is instead of its status). `done` is the statuses that mean finished:
+  those cards are not open work and not a wait. Left out, it reads the four waiting lanes of the agent stack, the two
+  working ones and `closed`. The Card flow page lists the sets the page is reading.
 
-```bash
-git clone https://github.com/dividendsolo/collector.git
-cd collector
-bun install
-bun run build
-bun start                            # http://localhost:4000
-```
+  ```json
+  {
+    "statuses": {
+      "waiting": ["blocked-on-me", "review-me"],
+      "working": ["in-progress"],
+      "done": ["closed"]
+    }
+  }
+  ```
 
-Then settings: [SETUP.md](SETUP.md) holds one prompt. Start your coding agent (Claude Code, Codex, Hermes) in this
-folder, paste it, and it looks around your machine read-only and writes `config.json` for you, then starts Collector
-and says what it found and what it skipped. To do it by hand instead: `cp config.example.json config.json` and edit
-it — every key is in [Configure it](#configure-it) below.
+- **`watch`** — the agents and jobs of your own you want a warning about, on top of the ones Collector reads by
+  itself (Hermes's jobs, launchd's, `crontab -l`'s lines, the systemd timers, the Hermes gateway and its ticker, and
+  the running Claude Code and Codex sessions). One entry names one thing and the signal that says how it is doing:
 
-`bun dev` runs it with hot reload while you change the code. Set `COLLECTOR_PORT` for another port (both commands
-read it) and `COLLECTOR_CONFIG` for a config file somewhere else.
+  ```json
+  {
+    "watch": [
+      { "name": "Nightly backup", "launchd": "com.example.backup" },
+      { "name": "Sync", "log": "~/.logs/sync.log", "fail_on": "error", "idle_after": 3600 },
+      { "name": "The crew", "heartbeat": "~/.work/crew.beat", "idle_after": 900 },
+      { "name": "My agent", "process": "my-agent.py" },
+      { "name": "My Claude Code session", "session": "claude" }
+    ]
+  }
+  ```
 
-The page reads machines and jobs every 15 seconds and the other panels once a minute. The board comes faster: the
-server reads it every 10 seconds and pushes each change to the page (server-sent events), so a lane change shows
-within about 10 seconds. No page waits on a slow reader: each panel shows skeleton rows, then fills. After
-`bun run build` and a restart, an open page reloads itself. `config.json` is read again whenever it changes.
+  `process` (text its command line carries while it runs), `session` (`claude` or `codex`, a running coding-agent
+  session), `launchd` (a label: its last exit code says whether its last run worked), `log` (a file: its last line
+  against `fail_on`, and how long since anything was written), or `heartbeat` (a file the agent writes as it goes,
+  holding an epoch second or nothing), with `idle_after` seconds without a write (default 900). `machine` names the
+  machine it lives on, by the name in `machines`; left out, the machine Collector runs on. A failure is an error in
+  Needs attention, and idle too long a warning.
 
-With no `config.json`, Collector shows the Hermes cron jobs of the machine it runs on.
-
-To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/Library/LaunchAgents/`, set the
-path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
-Then `launchd/com.example.collector-rebuild.plist` the same way: every five minutes it checks whether the build the
-page serves is behind `main` and, when it is, pulls, builds into `.next-rebuild` beside the served `.next`, moves
-that build into `.next` only once it succeeded, and restarts the job above, so a merge shows up with no hand step. A
-failed build is logged (`[rebuild] build failed`) and the served `.next` is left as it was.
-`bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check.
+Every other key is in [Configure it](#configure-it) below, and `bun run check:config` names any key Collector would
+never read, so a typo cannot hide.
 
 ## Configure it
 
