@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { runDoing } from "@/lib/format";
 import {
+  BLOCKED,
   cardState,
   currentWork,
   holdLacksReason,
@@ -165,6 +166,8 @@ function StateCell({ row }: { row: WorkRow }) {
   // read disagrees with, so its row shows how old the data is.
   const shown = cardState(row, stale, board?.tickets?.working);
   const hold = row.card?.lane === "scheduled" ? row.card.hold : null;
+  // A blocked card names the cards it waits on, where a scheduled card names its date (James, 2026-11-04).
+  const blockers = row.card?.lane === BLOCKED ? (row.card?.blockers ?? []) : [];
   // Hovering the badge or the date says why it waits (collector#50): the reason its `Not before:` line gives.
   const tip = holdTip(hold);
   const deck = row.onDeck ?? [];
@@ -195,10 +198,10 @@ function StateCell({ row }: { row: WorkRow }) {
           </Pill>
         </span>
       )}
-      {hold?.after.length ? (
+      {blockers.length || hold?.after.length ? (
         <span className={`sub${deck.length ? " on-deck" : ""}`}>
-          {" after "}
-          {hold.after.map((a, i) => (
+          {blockers.length ? " by " : " after "}
+          {(blockers.length ? blockers : (hold?.after ?? [])).map((a, i) => (
             <span key={a.url}>
               {i ? ", " : ""}
               <a

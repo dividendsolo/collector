@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  blockerQuery,
+  blockersOf,
   boardQuery,
   diffBoard,
   isEmpty,
@@ -178,5 +180,50 @@ describe("looksLikeEmptyGlitch", () => {
   });
   it("an empty label-repo search right after a read with label-repo cards is the glitch too", () => {
     expect(looksLikeEmptyGlitch({ itemNodes: 30, searchNodes: 0 }, [row("app"), row("labels")], board)).toBe(true);
+  });
+});
+
+describe("blockersOf", () => {
+  const node = (n: number, state: string) => ({
+    number: n,
+    state,
+    url: `https://github.com/acme/analytics/issues/${n}`,
+    repository: { name: "analytics" },
+  });
+  it("names the open blockers of a blocked card", () => {
+    const issue = { blockedBy: { nodes: [node(8, "OPEN"), node(5, "CLOSED")] } };
+    expect(blockersOf(issue)).toEqual([{ ref: "analytics#8", url: "https://github.com/acme/analytics/issues/8" }]);
+  });
+  it("names the closed ones when every blocker is closed (code not deployed yet)", () => {
+    expect(blockersOf({ blockedBy: { nodes: [node(5, "CLOSED")] } }).map((b) => b.ref)).toEqual(["analytics#5"]);
+  });
+  it("is empty for an issue with no blockers", () => {
+    expect(blockersOf({ blockedBy: { nodes: [] } })).toEqual([]);
+    expect(blockersOf(null)).toEqual([]);
+  });
+  it("asks for the blocked-by cards of each card, one alias per card", () => {
+    const q = blockerQuery([{ url: "https://github.com/acme/analytics/issues/7" }]);
+    expect(q).toContain('i0: repository(owner:"acme",name:"analytics"){ issue(number:7)');
+    expect(q).toContain("blockedBy(first:10)");
+  });
+});
+
+describe("workCards blocked", () => {
+  it("carries a blocked card's blockers to the page", () => {
+    const blockers = [{ ref: "analytics#8", url: "https://github.com/acme/analytics/issues/8" }];
+    const rows: Row[] = [
+      {
+        repo: "analytics",
+        number: 7,
+        title: "T7",
+        url: "https://github.com/acme/analytics/issues/7",
+        lane: "blocked",
+        priority: "P2",
+        created: "2026-11-03T00:00:00Z",
+        labels: ["blocked", "P2"],
+        blockers,
+      },
+    ];
+    expect(workCards(rows, ["blocked"], ["closed"])[0].blockers).toEqual(blockers);
   });
 });

@@ -79,9 +79,20 @@ export interface WorkCard {
   priority: string | null;
   created: string;
   hold?: { after: { ref: string; url: string }[]; from: string | null; why: string | null; to?: string | null } | null;
+  /** A `blocked` card's open "blocked by" cards (James, 2026-11-04). */
+  blockers?: { ref: string; url: string }[];
   closed_at?: number;
   labels?: string[];
 }
+
+/** The status of a card that waits on another card through GitHub's native "blocked by" link (James, 2026-11-04:
+ * "it's not ready for agent if it's not ready for agent"). Housekeeping moves it to ready-for-agent when the last
+ * blocker closes. */
+export const BLOCKED = "blocked";
+
+/** The cards a row waits on: a `blocked` card's blockers, or a scheduled card's `Waiting on:` refs. */
+export const waitsOn = (card: WorkCard | null | undefined): { ref: string; url: string }[] =>
+  !card ? [] : card.lane === BLOCKED ? (card.blockers ?? []) : (card.hold?.after ?? []);
 
 /** One Current work row: a card, a live run, or both. `group` orders the rows. `local`: an interactive
  * session works the card by hand (the card's `local` label). `onDeck`: the refs of a scheduled card's
@@ -167,7 +178,7 @@ export const cardState = (
 /** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent,
  * scheduled. A card in any other status is in progress: only the agent stack's own queue and scheduled statuses sit
  * lower, and a `done` status is not open work at all (the server leaves those rows out of the view). */
-const groupOf = (lane: string) => (lane === "ready-for-agent" ? 3 : lane === "scheduled" ? 4 : 1);
+const groupOf = (lane: string) => (lane === "ready-for-agent" ? 3 : lane === "scheduled" || lane === BLOCKED ? 4 : 1);
 
 /** Whether the page shows the card as being worked on: its own row is with the live work or the work in review
  * (groups 0-1). A closed, ready-for-agent or scheduled card moves nothing along. */
@@ -181,8 +192,10 @@ const holdKey = (ref: string, repo: string) => (ref.startsWith("#") ? `${repo}${
  * Only a row in the scheduled group (4) can be on deck: a scheduled card with a live run or the `local` label is
  * live work (group 0) and keeps the live order. */
 const deckOf = ({ group, card }: WorkRow, working: Set<string>) =>
-  group === 4 && card?.hold?.after.length
-    ? card.hold.after.filter((a) => working.has(holdKey(a.ref, card.repo))).map((a) => a.ref)
+  group === 4 && card && waitsOn(card).length
+    ? waitsOn(card)
+        .filter((a) => working.has(holdKey(a.ref, card.repo)))
+        .map((a) => a.ref)
     : [];
 
 /** Every open card that is not waiting on James, the cards closed in the last hour, and every live run, one row
@@ -219,7 +232,8 @@ export function currentWork(
   });
   const working = new Set(rows.filter(moving).map((r) => (r.card ? `${r.card.repo}#${r.card.number}` : "")));
   const deck = (r: WorkRow) => (r.onDeck ? 1 : 0);
-  const waitKind = (r: WorkRow) => (r.group !== 4 ? 0 : r.card?.hold?.after.length ? 0 : r.card?.hold?.from ? 1 : 2);
+  const waitKind = (r: WorkRow) =>
+    r.group !== 4 ? 0 : r.card?.lane === BLOCKED || r.card?.hold?.after.length ? 0 : r.card?.hold?.from ? 1 : 2;
   const fromDay = (r: WorkRow) => (r.group === 4 ? (r.card?.hold?.from ?? "") : "");
   for (const row of rows) {
     const after = deckOf(row, working);

@@ -69,6 +69,7 @@ export const AGENT_STACK_ALL = [
   "needs-info",
   "ready-for-human",
   "scheduled",
+  "blocked",
   "ready-for-agent",
   "agent-in-progress",
   "verify-in-progress",

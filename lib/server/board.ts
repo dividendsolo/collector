@@ -17,6 +17,14 @@ export interface Row {
   created: string;
   labels: string[];
   hold?: Hold | null;
+  /** A `blocked` card's open "blocked by" cards (James, 2026-11-04), read by fillBlockers. */
+  blockers?: Blocker[];
+}
+
+/** One card a `blocked` card waits on: `analytics#8` and its issue URL. */
+export interface Blocker {
+  ref: string;
+  url: string;
 }
 
 /** Why a card waits: the cards in its `Waiting on:` line, the date in its `Not before:` line, and the reason that
@@ -364,6 +372,7 @@ export async function poll(reason = "timer"): Promise<void> {
       emit();
     }
     void fillReasons();
+    void fillBlockers();
   } catch (e) {
     S.error = String((e as Error).message).slice(0, 300);
     console.log(`[board] read failed: ${S.error}`);
@@ -425,6 +434,72 @@ async function fillReasons() {
     }
   } finally {
     filling = false;
+  }
+}
+
+// ---- Blockers: the cards a `blocked` card waits on, through GitHub's native "blocked by" link (James, 2026-11-04).
+// Only blocked cards are read, ten to a query (1 point), and each answer is kept a minute.
+
+const BLOCKED = "blocked";
+const BLOCKER_SECONDS = 60;
+const blockerCache = new Map<string, { at: number; blockers: Blocker[] }>();
+
+/** Ten issues per GraphQL query: the "blocked by" cards of each. */
+export function blockerQuery(rows: Pick<Row, "url">[]): string {
+  const parts = rows.map((r, i) => {
+    const m = r.url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
+    if (!m) return "";
+    return `i${i}: repository(owner:${JSON.stringify(m[1])},name:${JSON.stringify(m[2])}){ issue(number:${m[3]}){
+  blockedBy(first:10){ nodes{ number state url repository{name} } } } }`;
+  });
+  return `query{ ${parts.join("\n")} }`;
+}
+
+/** The cards one answer says still hold the card: the open ones. When every one is closed, the card waits for the
+ * last one's code to deploy (housekeeping releases it then), so the closed ones show instead of nothing. */
+export function blockersOf(issue: any): Blocker[] {
+  const nodes: any[] = issue?.blockedBy?.nodes || [];
+  const all = nodes
+    .filter((n) => n?.number && n.repository?.name)
+    .map((n) => ({ ref: `${n.repository.name}#${n.number}`, url: n.url as string, open: n.state === "OPEN" }));
+  const open = all.filter((b) => b.open);
+  return (open.length ? open : all).map(({ ref, url }) => ({ ref, url }));
+}
+
+let fillingBlockers = false;
+async function fillBlockers() {
+  if (fillingBlockers || !S.rows) return;
+  fillingBlockers = true;
+  try {
+    const blocked = S.rows.filter((r) => r.lane === BLOCKED);
+    let changed = false;
+    for (const r of blocked) {
+      const hit = blockerCache.get(r.url);
+      if (hit && JSON.stringify(r.blockers) !== JSON.stringify(hit.blockers)) {
+        r.blockers = hit.blockers;
+        changed = true;
+      }
+    }
+    const want = blocked.filter((r) => {
+      const hit = blockerCache.get(r.url);
+      return !hit || Date.now() - hit.at > BLOCKER_SECONDS * 1000;
+    });
+    for (let i = 0; i < want.length; i += 10) {
+      const batch = want.slice(i, i + 10);
+      const [data] = await run(["gh", "api", "graphql", "-f", `query=${blockerQuery(batch)}`], { timeout: 30 });
+      if (!data?.data) continue;
+      batch.forEach((r, k) => {
+        const blockers = blockersOf(data.data[`i${k}`]?.issue);
+        blockerCache.set(r.url, { at: Date.now(), blockers });
+        if (JSON.stringify(r.blockers) !== JSON.stringify(blockers)) {
+          r.blockers = blockers;
+          changed = true;
+        }
+      });
+    }
+    if (changed) emit();
+  } finally {
+    fillingBlockers = false;
   }
 }
 
@@ -490,6 +565,7 @@ export function workCards(rows: Row[], lanes: string[], done: string[]) {
       created: r.created,
       labels: r.labels.filter((l) => !known.has(l) && l !== r.priority),
       hold: r.hold ?? null,
+      ...(r.lane === "blocked" ? { blockers: r.blockers ?? [] } : {}),
     }));
 }
 

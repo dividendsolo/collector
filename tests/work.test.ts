@@ -177,6 +177,24 @@ describe("currentWork", () => {
     expect(rows[1].onDeck).toEqual(["#9"]);
     expect(rows[2].onDeck).toBeUndefined();
   });
+  it("shows a blocked card in the waiting group, on deck while its blocker is worked on (2026-11-04)", () => {
+    const blockers = [{ ref: "app#9", url: "https://github.com/acme/app/issues/9" }];
+    const cards = [
+      card("app", 2, "scheduled", { priority: "P0" }),
+      card("app", 1, "blocked", { blockers }),
+      card("app", 9, "agent-in-progress"),
+    ];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.map((r) => r.card?.number)).toEqual([9, 1, 2]);
+    expect(rows[1].onDeck).toEqual(["app#9"]);
+  });
+  it("leaves a blocked card off deck when its blocker is not being worked on", () => {
+    const blockers = [{ ref: "app#9", url: "https://github.com/acme/app/issues/9" }];
+    const cards = [card("app", 1, "blocked", { blockers }), card("app", 9, "ready-for-agent")];
+    const rows = currentWork(cards, [], [], WAITING, 0);
+    expect(rows.find((r) => r.card?.number === 1)?.onDeck).toBeUndefined();
+    expect(rows.map((r) => r.card?.number)).toEqual([9, 1]);
+  });
   it("leaves a scheduled card off deck when its blocker is not being worked on", () => {
     const cards = [
       card("app", 2, "scheduled", { priority: "P0" }),
