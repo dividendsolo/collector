@@ -3,6 +3,7 @@ import { type Diff, keepClosed, parseHold, type Row } from "@/lib/server/board";
 import {
   cardState,
   currentWork,
+  holdLacksReason,
   holdText,
   holdTip,
   isSession,
@@ -346,7 +347,7 @@ describe("parseHold", () => {
   });
   it("reads the Not before date", () => {
     const h = parseHold("Not before: 2026-11-01 -> ready-for-human", url);
-    expect(h).toEqual({ after: [], from: "2026-11-01", why: null });
+    expect(h).toEqual({ after: [], from: "2026-11-01", why: null, to: "ready-for-human" });
     expect(holdText(h)).toBe("from 2026-11-01");
   });
   it("is null with neither line", () => {
@@ -361,6 +362,7 @@ describe("parseHold", () => {
       after: [],
       from: "2026-11-16",
       why: "the earliest date the proof log can show two weeks green, counted from 2026-11-02",
+      to: "ready-for-human",
     });
     expect(holdText(h)).toBe("from 2026-11-16"); // what the date shows does not change
   });
@@ -385,10 +387,22 @@ describe("holdTip", () => {
       text: "James chose to do it in tomorrow's session, 2026-11-02",
     });
   });
-  it("is null with no reason, so an older card's date shows no tooltip", () => {
-    expect(holdTip(parseHold("Not before: 2026-11-01 -> ready-for-human", url))).toBeNull();
-    expect(holdTip(parseHold("**Waiting on:** #146", url))).toBeNull();
+  it("reads a bare parenthesis on the line as the reason too", () => {
+    const h = parseHold("Not before: 2026-11-05 -> ready-for-agent (James, 2026-10-29: hold the Show HN)", url);
+    expect(holdTip(h)?.text).toBe("James, 2026-10-29: hold the Show HN");
+  });
+  it("says what a card waits for when the card gives no reason", () => {
+    expect(holdTip(parseHold("Not before: 2026-11-01 -> ready-for-human", url))?.text).toBe(
+      "This card does not say why it waits, so it belongs in needs-info. It waits until 2026-11-01, then moves to ready-for-human.",
+    );
+    expect(holdTip(parseHold("**Waiting on:** #146", url))?.text).toBe("It waits until #146 closes.");
     expect(holdTip(null)).toBeNull();
+  });
+  it("flags only a dated card with no reason", () => {
+    expect(holdLacksReason(parseHold("Not before: 2026-11-01 -> ready-for-human", url))).toBe(true);
+    expect(holdLacksReason(parseHold("Not before: 2026-11-01 -> ready-for-human (why: data first)", url))).toBe(false);
+    expect(holdLacksReason(parseHold("**Waiting on:** #146", url))).toBe(false);
+    expect(holdLacksReason(null)).toBe(false);
   });
 });
 

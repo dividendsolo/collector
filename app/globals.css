@@ -1044,16 +1044,16 @@
   #card-tip {
     position: fixed;
     z-index: 20;
-    max-width: 360px;
-    padding: 10px 12px;
+    max-width: 480px;
+    padding: 12px 14px;
     display: grid;
-    gap: 4px;
+    gap: 6px;
     background: var(--panel-2);
     border: 1px solid var(--line-2);
     border-radius: var(--radius);
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
-    font-size: 13px;
-    line-height: 1.45;
+    font-size: 16px;
+    line-height: 1.5;
     white-space: normal;
     pointer-events: none;
   }

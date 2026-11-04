@@ -78,7 +78,7 @@ export interface WorkCard {
   lane: string;
   priority: string | null;
   created: string;
-  hold?: { after: { ref: string; url: string }[]; from: string | null; why: string | null } | null;
+  hold?: { after: { ref: string; url: string }[]; from: string | null; why: string | null; to?: string | null } | null;
   closed_at?: number;
   labels?: string[];
 }
@@ -241,10 +241,23 @@ export function currentWork(
 export const holdText = (h: WorkCard["hold"]) =>
   !h ? "" : h.after.length ? `after ${h.after.map((a) => a.ref).join(", ")}` : h.from ? `from ${h.from}` : "";
 
-/** What hovering a scheduled card's date shows (collector#50): the reason its `Not before:` line gives, under a
- * heading that says what the words are. Null when that line gives none — an older card — so its date carries no
- * tooltip rather than an empty one. */
+/** What hovering a scheduled card's badge or date shows (collector#50): the reason its `Not before:` line gives. A
+ * card that gives none says so, and what it waits for, so every scheduled badge answers the hover. */
 export function holdTip(h: WorkCard["hold"]): { title: string; text: string } | null {
-  const text = h?.why?.trim();
-  return text ? { title: "Why it waits", text } : null;
+  if (!h) return null;
+  const why = h.why?.trim();
+  if (why) return { title: "Why it waits", text: why };
+  // A `Waiting on:` card's reason is the card it waits on.
+  if (h.after.length)
+    return { title: "Why it waits", text: `It waits until ${h.after.map((a) => a.ref).join(", ")} closes.` };
+  if (!h.from) return null;
+  // A dated card must say why it waits (James, 2026-11-04); one that does not is shown in yellow and belongs in
+  // needs-info.
+  return {
+    title: "No reason given",
+    text: `This card does not say why it waits, so it belongs in needs-info. It waits until ${h.from}${h.to ? `, then moves to ${h.to}` : ""}.`,
+  };
 }
+
+/** A scheduled card that says neither what it waits on nor why it waits for its date (James, 2026-11-04). */
+export const holdLacksReason = (h: WorkCard["hold"]) => !!h && !h.after.length && !h.why?.trim();

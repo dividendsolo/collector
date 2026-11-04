@@ -25,14 +25,18 @@ export interface Hold {
   after: { ref: string; url: string }[];
   from: string | null;
   why: string | null;
+  /** The status the `Not before:` line moves the card to (`-> ready-for-agent`). */
+  to?: string | null;
 }
 
 const WAITING_ON = /Waiting on:\**([^\n]*)/i;
 /** The whole `Not before:` line: the date and its reason are both read from it, and only from it. */
 const NOT_BEFORE_LINE = /Not before:[^\n]*/i;
 const NOT_BEFORE = /Not before:\**\s*(\d{4}-\d{2}-\d{2})/i;
-/** The reason on that line — `(why: ...)` — up to its first closing paren (a reason holding one is cut there). */
-const NOT_BEFORE_WHY = /\(why:\s*([^)\n]*)\)/i;
+/** The reason on that line: its first parenthesis, `(why: ...)` or a bare `(James, 2026-10-29: ...)`, up to the first
+ * closing paren (a reason holding one is cut there). The `why:` label is dropped. */
+const NOT_BEFORE_TO = /->\s*\**\s*([a-z][a-z-]*)/i;
+const NOT_BEFORE_WHY = /\((?:why:)?\s*([^)\n]*)\)/i;
 
 /** The hold of a card from its body. `url` is the card's own issue URL, for the owner and repo of a bare `#n`. */
 export function parseHold(body: string | null | undefined, url: string): Hold | null {
@@ -51,7 +55,8 @@ export function parseHold(body: string | null | undefined, url: string): Hold | 
   const line = body.match(NOT_BEFORE_LINE)?.[0] ?? "";
   const from = line.match(NOT_BEFORE)?.[1] ?? null;
   const why = line.match(NOT_BEFORE_WHY)?.[1]?.trim() || null;
-  return after.length || from ? { after, from, why } : null;
+  const to = line.match(NOT_BEFORE_TO)?.[1] ?? null;
+  return after.length || from ? { after, from, why, to } : null;
 }
 
 export const TICKET_TYPES = ["bug", "enhancement", "tech-debt", "security"];
