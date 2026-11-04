@@ -72,6 +72,8 @@ def main():
         out = collect.claude_model(case["cwd"], case["home"])
     elif fn == "codex_model":
         out = collect.codex_model(case["cwd"], case["home"])
+    elif fn == "pi_model":
+        out = collect.pi_model(case["cwd"], case["home"])
     else:
         raise SystemExit(f"unknown fn: {fn}")
     json.dump(out, sys.stdout)

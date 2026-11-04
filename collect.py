@@ -587,7 +587,7 @@ def tool_of(command):
         name = re.sub(r"\.(?:js|cjs|mjs|exe)$", "", os.path.basename(token))
         if name == "claude" and claude_helper(" ".join(tokens[i + 1:]) if len(tokens) > i + 1 else ""):
             return None
-        if name in ("claude", "codex"):
+        if name in ("claude", "codex", "pi"):
             return name
         # codex's own binary, named after its Rust target: codex-x86_64-unknown-linux-musl, codex-aarch64-apple-darwin
         if name.startswith("codex-") and any(target in name for target in ("linux", "darwin", "windows", "musl", "gnu")):
@@ -598,7 +598,23 @@ def tool_of(command):
 # The tool's own name, which is what the row shows (card #29): James knows "Claude Code" and "Codex" — "claude" is
 # the name of a binary, not of a profile he has. The keys stay the tools' own (`claude`, `codex`) for the session
 # files read under them.
-TOOL_NAMES = {"claude": "Claude Code", "codex": "Codex"}
+TOOL_NAMES = {"claude": "Claude Code", "codex": "Codex", "pi": "Pi"}
+
+# The provider a Pi session names, in the words James knows: Pi's `claude-code` provider is his Claude subscription,
+# reached through a headless `claude -p` that Pi starts under itself (2026-11-04).
+PI_PROVIDERS = {"claude-code": "Claude subscription"}
+
+
+def under_pi(pid, parents, commands, depth=4):
+    """True when a process runs under a Pi session: the `claude -p` Pi starts to reach the Claude subscription. It is
+    Pi's own backend, not a Claude Code session of its own, so the Pi row stands for it (2026-11-04)."""
+    seen, current = {pid}, parents.get(pid)
+    while current and current not in seen and depth:
+        if tool_of(commands.get(current) or "") == "pi":
+            return True
+        seen.add(current)
+        current, depth = parents.get(current), depth - 1
+    return False
 
 
 def lab_droid(out):
@@ -655,6 +671,11 @@ def git_facts(directory):
     return (branch, lines[1].strip() if len(lines) > 1 else None)
 
 
+# lsof lives in /usr/sbin on macOS, and launchd starts Collector with a PATH that leaves /usr/sbin out, so a bare
+# `lsof` is not found there: every session lost its folder, so its repo, card and model (2026-11-04).
+LSOF = next((p for p in ("/usr/sbin/lsof", "/usr/bin/lsof") if os.path.exists(p)), "lsof")
+
+
 def process_cwd(pid):
     """One process's working directory: /proc on Linux, lsof elsewhere (macOS has no /proc)."""
     proc = f"/proc/{pid}/cwd"
@@ -664,7 +685,7 @@ def process_cwd(pid):
         except OSError:
             return None
     try:
-        out = subprocess.run(["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+        out = subprocess.run([LSOF, "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
                              capture_output=True, text=True, timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
         return None
@@ -732,9 +753,30 @@ def codex_model(cwd, home=HOME):
     return {}
 
 
+def pi_model(cwd, home=HOME):
+    """{"model": name, "provider": words} from the newest Pi session file for this folder, else {}. Pi keeps one jsonl
+    per session under ~/.pi/agent/sessions/--<path with dashes>--. Its own model id can be `default` (the provider
+    picks), so the last real model the provider reported wins over it."""
+    if not cwd:
+        return {}
+    slug = "--" + cwd.strip("/").replace("/", "-") + "--"
+    path = newest_file(glob.glob(os.path.join(home, ".pi", "agent", "sessions", slug, "*.jsonl")))
+    text = tail_text(path) if path else ""
+    models = [m for m in re.findall(r'"model"\s*:\s*"([^"]+)"', text) if m != "default" and not m.startswith("<")]
+    providers = re.findall(r'"provider"\s*:\s*"([^"]+)"', text)
+    row = {}
+    if models:
+        row["model"] = models[-1]
+    if providers:
+        row["provider"] = PI_PROVIDERS.get(providers[-1], providers[-1])
+    return row
+
+
 def tool_model(tool, cwd, home=HOME):
     """What a tool's own session files say about a session in this folder: {"model": name}, or {} when it recorded
     none. Nothing here goes near the network."""
+    if tool == "pi":
+        return pi_model(cwd, home)
     return claude_model(cwd, home) if tool == "claude" else codex_model(cwd, home)
 
 
@@ -779,10 +821,10 @@ def tool_rows(out, facts, models=None, skip=(), parents=None):
         if pid in skip:
             continue
         tool = tool_of(command)
-        if not tool:
+        if not tool or (tool == "claude" and under_pi(pid, parents, commands)):
             continue
         cwd, branch, root = facts.get(pid, (None, None, None))
-        key = (tool, cwd or f"pid {pid}", pid if tool == "claude" else "")
+        key = (tool, cwd or f"pid {pid}", pid if tool in ("claude", "pi") else "")
         if key in found and found[key]["seconds"] >= seconds(etime):
             continue
         repo, card = session_place(cwd, branch, root)
@@ -799,11 +841,13 @@ def tool_sessions(out, skip=(), parents=None):
     whether it runs inside tmux (collector#37). `skip` holds the pids of processes another reader already shows — the
     lab droid's run, which has its own row."""
     facts, models = {}, {}
+    parents = parents or {}
+    commands = {pid: command for pid, _, command in process_lines(out)}
     for pid, _, command in process_lines(out):
         if pid in skip:
             continue
         tool = tool_of(command)
-        if not tool:
+        if not tool or (tool == "claude" and under_pi(pid, parents, commands)):
             continue
         cwd = process_cwd(pid)
         branch, root = git_facts(cwd)
@@ -911,7 +955,7 @@ def listen_ports():
             if owner and port.isdigit():
                 ports.setdefault(owner.group(1), []).append(int(port))
         return ports
-    lsof = read_command(["lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn"])
+    lsof = read_command([LSOF, "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn"])
     ports, pid = {}, None
     for line in (lsof or "").splitlines():
         # lsof prints `p<pid>` once, then one `n<address>` line per socket that pid listens on.

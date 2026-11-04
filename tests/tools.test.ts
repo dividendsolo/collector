@@ -527,3 +527,46 @@ describe("codex_model", () => {
     expect(drive({ fn: "codex_model", home: dir, cwd })).toEqual({});
   });
 });
+
+describe("pi sessions", () => {
+  it("shows a Pi session as one Pi row, and not the claude -p it starts under itself for the Claude subscription", () => {
+    expect(
+      drive<Run[]>({
+        fn: "sessions",
+        ps: ps(
+          proc(500, "11:42", "pi"),
+          proc(501, "04:18", "/opt/homebrew/bin/claude -p --model default --input-format stream-json"),
+          proc(502, "01:14", "/opt/homebrew/bin/claude -p --model default --input-format stream-json"),
+        ),
+        parents: { 501: "500", 502: "500" },
+      }),
+    ).toEqual([{ repo: null, kind: "session", card: null, seconds: 702, type: "agent", name: "Pi" }]);
+  });
+  it("still shows a claude -p that no Pi session started", () => {
+    expect(drive<Run[]>({ fn: "sessions", ps: ps(proc(600, "00:10", "claude -p hi")), parents: { 600: "1" } })).toEqual(
+      [{ repo: null, kind: "session", card: null, seconds: 10, type: "agent", name: "Claude Code" }],
+    );
+  });
+});
+
+describe("pi_model", () => {
+  const cwd = "/home/me";
+  const file = path.join(".pi", "agent", "sessions", "--home-me--", "s1.jsonl");
+
+  it("reads the model the provider reported, over Pi's own `default`, and names the Claude subscription", () => {
+    const dir = home({
+      [file]: jsonl(
+        { type: "model_change", provider: "claude-code", modelId: "default" },
+        { type: "message", message: { role: "assistant", model: "default", provider: "claude-code" } },
+        { details: { message: { model: "claude-opus-5-5" } } },
+      ),
+    });
+    expect(drive({ fn: "pi_model", home: dir, cwd })).toEqual({
+      model: "claude-opus-5-5",
+      provider: "Claude subscription",
+    });
+  });
+  it("is blank for a folder Pi wrote no session for", () => {
+    expect(drive({ fn: "pi_model", home: home({}), cwd: "/home/me/nowhere" })).toEqual({});
+  });
+});
