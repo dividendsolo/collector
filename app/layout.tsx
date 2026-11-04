@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+// The Card flow page's drawing is React Flow (collector#51); its stylesheet is loaded once, with the page's own.
+import "@xyflow/react/dist/style.css";
 
 export const metadata: Metadata = { title: "Collector" };
 

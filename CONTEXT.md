@@ -243,6 +243,37 @@ The Card flow page (`components/flow.tsx`) lists the three sets it is reading, i
 of the agent stack's flow — the setting is the page's own answer for "which statuses does Collector read here", and
 with a set of the user's own it says the drawing is the agent stack's, not theirs.
 
+The drawing itself is data, not markup: `lib/flow.ts` holds every status with the colour it wears (green ready,
+amber waiting, blue working, grey parked), the two-line label the old picture broke by hand, its `tip`, and where it
+sits; the paths a card moves along; and `MAIN_PATH`, the usual route from `needs-triage` to `closed`, which is what
+the page draws brightest. `tests/flow.test.ts` holds that list and those paths to the Graphviz source the page used
+to render from (commit 3021658), so the drawing cannot quietly lose a status or invent a path.
+
+`components/flow.tsx` lays that out with React Flow (`@xyflow/react`, MIT; `app/layout.tsx` imports its stylesheet
+once, and `.flow-canvas` in `app/globals.css` restates the page's own tokens over it). Three things are its own:
+
+- **Tooltips**: the note boxes the Graphviz picture put beside six statuses are each status's `tip` now, opening on
+  hover (or a tap, on a touch screen) above or below the box (`tipAbove`), running toward the middle from the outer
+  columns (`tipAlign`), so the canvas never clips one. Each is a React Flow `NodeToolbar`, drawn outside the zoomed
+  viewport, so it reads at 11px at any zoom: inside the node it shrank with the canvas to 3.6px text on a phone.
+- **Light pulses**: every path carries three dots moved by SVG `animateMotion` along the very curve they travel
+  (`pulseBegins` spreads them so one is always in flight), in the status's own colour, brightest down `MAIN_PATH`,
+  with an arrowhead per path saying which way a card moves; a status glows as a pulse lands on it.
+- **Hover**: hovering a status brightens its own paths, dims the rest and opens its tooltip (`neighbours` decides
+  what stays lit).
+
+Hover state reaches the boxes and the paths through a React context (`FlowHighlight`), never through the `nodes` and
+`edges` arrays: a fresh array on every hover makes React Flow rebuild its own DOM under the pointer, which fires
+`mouseleave` and `mouseenter` again, and the drawing empties itself.
+
+`prefers-reduced-motion` is read twice — the CSS drops the boxes' glow, and `components/flow.tsx` stops drawing the
+pulses at all (SMIL cannot be paused by a media query); the paths and their arrowheads stay. The canvas is as tall as
+the drawing at its own size (about 970x1110) so the labels read. A window up to 700px wide (a phone) does not fit
+the drawing to its width, which drew the labels at about 4px: it draws it at zoom 0.8 (labels 9.2px,
+`narrowViewport`), on a canvas as big as the drawing at that zoom that scrolls sideways inside its panel, opened
+on its middle where `needs-triage` sits. React Flow's own drag, pinch and `touch-action: none` are off there, so a
+finger scrolls the page and the drawing natively, and the page itself never scrolls sideways.
+
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
 ## The Sponsor button (card #52)
