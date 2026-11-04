@@ -118,7 +118,7 @@ export const FLOW_STATUSES: FlowStatus[] = [
       id: "needs-manual-qa",
       lines: ["needs-", "manual-qa"],
       tone: "wait",
-      tip: "Waits on James's own look at the finished work, on the surface the card's brief names.",
+      tip: "Waits on the user's own look at the finished work, on the surface the card's brief names.",
     },
     {
       id: "ready-to-merge",

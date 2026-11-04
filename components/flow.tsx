@@ -42,7 +42,7 @@ import {
   tipAbove,
   tipAlign,
 } from "@/lib/flow";
-import { isAgentStack, STATUS_GROUPS, STATUS_PILL, type StatusSets } from "@/lib/statuses";
+import { isAgentStack, otherStatuses, STATUS_GROUPS, STATUS_PILL, type StatusSets } from "@/lib/statuses";
 import { useLive } from "./data";
 import { PanelHead, Pill, SkelItems } from "./ui";
 
@@ -102,7 +102,7 @@ function StatusBox({ data }: NodeProps<StatusNode>) {
         align={tipAlign(status.x)}
         offset={8}
       >
-        <div className="flow-tip" data-tip={status.id}>
+        <div className={`flow-tip tone-${status.tone}`} data-tip={status.id}>
           {status.tip}
         </div>
       </NodeToolbar>
@@ -325,6 +325,14 @@ function Drawing() {
   );
 }
 
+/** A status's pill wears its colour in the drawing above, so ready-for-human is green there and here. A status the
+ * drawing does not have keeps its group's colour. */
+const PILL_BY_TONE: Record<FlowTone, string> = { go: "human", wait: "warning", work: "agent", park: "" };
+const pillFor = (status: string, fallback: string) => {
+  const tone = FLOW_STATUSES.find((f) => f.id === status)?.tone;
+  return tone ? PILL_BY_TONE[tone] : fallback;
+};
+
 /** The statuses Collector reads, which are a setting (collector#53): `config.json`'s `statuses`, in the set's own
  * order, from the board view. With nothing set they are the agent stack's own statuses, and the page says so. */
 function Statuses() {
@@ -344,18 +352,27 @@ function Statuses() {
         {!sets ? (
           <SkelItems n={3} />
         ) : (
-          STATUS_GROUPS.map((g) => (
+          [
+            ...STATUS_GROUPS.map((g) => ({ ...g, list: sets[g.key], cls: STATUS_PILL[g.key] })),
+            {
+              key: "other",
+              label: "In between",
+              does: "Queued for a droid or between two steps: nothing to do, and no machine holds the card yet.",
+              list: otherStatuses(sets),
+              cls: "",
+            },
+          ].map((g) => (
             <li key={g.key}>
               <div>
                 <div className="name">
-                  {g.label} <span className="sub">{sets[g.key].length}</span>
+                  {g.label} <span className="sub">{g.list.length}</span>
                 </div>
                 <div className="sub">{g.does}</div>
               </div>
               <div className="right">
-                {sets[g.key].length ? (
-                  sets[g.key].map((s) => (
-                    <Pill key={s} cls={STATUS_PILL[g.key]} dot={false}>
+                {g.list.length ? (
+                  g.list.map((s) => (
+                    <Pill key={s} cls={pillFor(s, g.cls)} dot={false}>
                       {s}
                     </Pill>
                   ))

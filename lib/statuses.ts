@@ -62,6 +62,28 @@ export function statusSets(cfg: StatusesConfig = {}): StatusSets {
   };
 }
 
+/** Every status the agent stack has, in the order a card meets them (`agent-stack/vps/scripts/status.py`
+ * `STATUSES`, plus `closed`). The Card flow page lists the ones no set names, so none is missing from it. */
+export const AGENT_STACK_ALL = [
+  "needs-triage",
+  "needs-info",
+  "ready-for-human",
+  "scheduled",
+  "ready-for-agent",
+  "agent-in-progress",
+  "verify-in-progress",
+  "code-review",
+  "changes-requested",
+  "needs-manual-qa",
+  "ready-to-merge",
+  "merging",
+  "closed",
+];
+
+/** The statuses no set names: queued for a droid or between two steps. */
+export const otherStatuses = (s: StatusSets) =>
+  AGENT_STACK_ALL.filter((x) => !STATUS_KEYS.some((k) => s[k].includes(x)));
+
 export const STATUS_KEYS = ["waiting", "working", "done"] as const;
 
 /** Whether these are the agent stack's statuses, untouched: the Card flow page says so, and says they are the
