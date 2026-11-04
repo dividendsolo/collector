@@ -132,6 +132,20 @@ describe("waitingRank and waitingOrder", () => {
   });
 });
 
+describe("waitingList and the waiting crew", () => {
+  it("leaves out a card the crew is checking, and shows it again once the label is off", () => {
+    const rows = [
+      { id: "a", lane: "needs-info", created: "2026-11-01", checking: true },
+      { id: "b", lane: "needs-info", created: "2026-11-02" },
+    ];
+    expect(waitingList(rows, ["needs-info"]).map((r) => r.id)).toEqual(["b"]);
+    expect(waitingList([{ ...rows[0], checking: false }, rows[1]], ["needs-info"]).map((r) => r.id)).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+});
+
 describe("the Card flow page's groups", () => {
   it("names the three sets in the order the page reads them", () => {
     expect(STATUS_GROUPS.map((g) => g.key)).toEqual(["waiting", "working", "done"]);

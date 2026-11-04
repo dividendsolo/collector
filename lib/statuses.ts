@@ -82,12 +82,18 @@ export const waitingOrder =
     waitingRank(waiting, a.lane) - waitingRank(waiting, b.lane) ||
     (a.created || "").localeCompare(b.created || "");
 
-/** The Waiting on you list: every ticket in the set's lanes, in the set's order. A lane the set does not name is
- * not on the list, whatever the agent stack calls it. */
-export const waitingList = <T extends { lane: string; priority?: string | null; created?: string | null }>(
+/** The label the waiting crew (agent-stack#261) puts on a card while it checks it. James does not see the card
+ * until the crew takes the label off, so he and the crew never move one card at once (James, 2026-11-04). */
+export const WAITING_CHECK_LABEL = "waiting-check";
+
+/** The Waiting on you list: every ticket in the set's lanes, in the set's order, less the cards the waiting crew
+ * is checking. A lane the set does not name is not on the list, whatever the agent stack calls it. */
+export const waitingList = <
+  T extends { lane: string; priority?: string | null; created?: string | null; checking?: boolean },
+>(
   tickets: T[],
   waiting: string[],
-) => tickets.filter((t) => waiting.includes(t.lane)).sort(waitingOrder(waiting));
+) => tickets.filter((t) => waiting.includes(t.lane) && !t.checking).sort(waitingOrder(waiting));
 
 /** The three sets as the Card flow page lists them: the page's own words for what each one does. */
 export const STATUS_GROUPS: { key: (typeof STATUS_KEYS)[number]; label: string; does: string }[] = [
