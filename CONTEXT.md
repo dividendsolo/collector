@@ -331,7 +331,7 @@ every scheduled date says why. `lib/server/board.ts`'s `parseHold` reads the dat
 the reason is the text between `(why: ` and that line's first `)` — and the row's `hold` carries it as `why`
 (`null` when the line gives none).
 
-Current work (the Dashboard) draws a scheduled row's date as `from <date>` in its State cell. When the line gives a
+Current work (the Dashboard) draws a scheduled row's date as `from <date>` in its Status cell. When the line gives a
 reason, that date carries the page's own hover card (`components/card-tip.tsx`, over `data-tip` and
 `data-tip-title`): "Why it waits" above the reason, with the dotted underline that says the date can be hovered.
 `lib/work.ts`'s `holdTip` is what decides the text, and it is null when the line has no reason, so an older card's

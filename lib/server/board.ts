@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { statusSets } from "../statuses";
+import { statusSets, WAITING_CHECK_LABEL } from "../statuses";
 import { type Board, config } from "./config";
 import { expandHome } from "./paths";
 import { run } from "./run";
@@ -461,6 +461,7 @@ export function ticketsView() {
         priority: r.priority,
         created: r.created,
         type: r.labels.find((l) => TICKET_TYPES.includes(l)) ?? null,
+        checking: r.labels.includes(WAITING_CHECK_LABEL),
         ...(each.includes(r.lane) ? { reason: S.reasons.get(reasonKey(r))?.reason ?? null } : {}),
       })),
     error: S.error,
