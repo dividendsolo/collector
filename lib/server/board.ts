@@ -357,6 +357,8 @@ export async function poll(reason = "timer"): Promise<void> {
     S.stats.last_ms = Date.now() - start;
     S.stats.last_at = Date.now();
     S.stats.costs = S.stats.costs.filter(([t]) => Date.now() - t < 3600_000);
+    // A blocked card keeps the blockers it was last read with, so a fresh read never draws it without them.
+    for (const r of rows) if (r.lane === BLOCKED) r.blockers = blockerCache.get(r.url)?.blockers;
     const prev = S.rows;
     S.rows = rows;
     S.at = Date.now();
@@ -473,13 +475,6 @@ async function fillBlockers() {
   try {
     const blocked = S.rows.filter((r) => r.lane === BLOCKED);
     let changed = false;
-    for (const r of blocked) {
-      const hit = blockerCache.get(r.url);
-      if (hit && JSON.stringify(r.blockers) !== JSON.stringify(hit.blockers)) {
-        r.blockers = hit.blockers;
-        changed = true;
-      }
-    }
     const want = blocked.filter((r) => {
       const hit = blockerCache.get(r.url);
       return !hit || Date.now() - hit.at > BLOCKER_SECONDS * 1000;
