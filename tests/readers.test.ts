@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clock, renewsText } from "@/lib/server/ai";
+import { clock, nousTopup, renewsText } from "@/lib/server/ai";
 import { perMonth, polarRevenue, stripeRevenue } from "@/lib/server/billing";
 import { daysLeft, parseRdap, parseWhois } from "@/lib/server/domains";
 import { parseEnv } from "@/lib/server/env";
@@ -546,5 +546,18 @@ describe("a machine whose read fails keeps its last good read, marked stale (car
     expect(mergeMachines(undefined, [{ name: "ezio", error: "exit 255" }], 100)).toEqual([
       { name: "ezio", error: "exit 255", read_at: null, stale: true },
     ]);
+  });
+});
+
+describe("nousTopup", () => {
+  it("reads the balance as the share of the current $25 top-up used", () => {
+    expect(nousTopup(15.35)).toMatchObject({ label: "Top-up ($25)", used: 39, left: "$15.35 of $25 left" });
+  });
+  it("counts the full top-ups still waiting behind the current one", () => {
+    expect(nousTopup(40)).toMatchObject({ used: 40, left: "$15.00 of $25 left · 1 more $25 top-up waiting" });
+    expect(nousTopup(75)).toMatchObject({ used: 0, left: "$25.00 of $25 left · 2 more $25 top-ups waiting" });
+  });
+  it("shows a spent top-up as 100% used", () => {
+    expect(nousTopup(0)).toMatchObject({ used: 100, left: "$0.00 of $25 left" });
   });
 });

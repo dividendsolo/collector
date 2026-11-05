@@ -338,6 +338,18 @@ reason, that date carries the page's own hover card (`components/card-tip.tsx`, 
 date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
 `holdTip` is the reason hovering it shows.
 
+## The AI credits rows
+
+- The Dashboard's AI credits panel lists Anthropic, then Nous, then Grok (`AI_ORDER` in `components/ai.tsx`).
+- Each provider's bars use its own color: Anthropic is Claude's orange (`--claude`, `#d97757`), Nous is the
+  dark blue of nousresearch.com (`--nous`, `#000091`, its `--marketing-dark-blue`). Any bar turns red when the
+  provider runs low.
+- Nous has two bars. **Plan credits** is the share of the month's plan credits used (Hermes's
+  `subscription_credits_remaining` against `monthly_credits`), with the renewal date. **Top-up ($25)** is the
+  share of the current $25 top-up used, because James always tops up $25 (`NOUS_TOPUP_USD` in
+  `lib/server/ai.ts`); a balance over $25 says how many more full top-ups wait behind it. The Nous API has no
+  top-up history, so the count of top-ups this month is not shown.
+
 ## Layout
 
 - `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.

@@ -44,6 +44,8 @@
     --muted: oklch(0.8 0.003 var(--hue));
     --faint: oklch(0.67 0.003 var(--hue));
     --blue: oklch(0.76 0.15 var(--hue));
+    --claude: #d97757;
+    --nous: #000091;
     --blue-2: oklch(0.82 0.12 var(--hue));
     --blue-bg: oklch(0.76 0.15 var(--hue) / 0.1);
     --blue-line: oklch(0.76 0.15 var(--hue) / 0.3);
@@ -81,6 +83,8 @@
     --muted: oklch(0.42 0.004 var(--hue));
     --faint: oklch(0.52 0.004 var(--hue));
     --blue: oklch(0.55 0.17 var(--hue));
+    --claude: #d97757;
+    --nous: #000091;
     --blue-2: oklch(0.48 0.16 var(--hue));
     --blue-bg: oklch(0.55 0.17 var(--hue) / 0.08);
     --blue-line: oklch(0.55 0.17 var(--hue) / 0.3);
@@ -1567,6 +1571,14 @@
     height: 100%;
     background: var(--blue);
     box-shadow: 0 0 8px var(--blue);
+  }
+  .bar.anthropic span {
+    background: var(--claude);
+    box-shadow: 0 0 8px var(--claude);
+  }
+  .bar.nous span {
+    background: var(--nous);
+    box-shadow: 0 0 8px var(--nous);
   }
   .bar.low span {
     background: var(--red);

@@ -10,6 +10,12 @@ const AI_NAMES: Record<string, string> = {
   "xai-oauth": "Grok (xAI)",
 };
 const aiName = (slug: string) => AI_NAMES[slug] || slug;
+const AI_ORDER = ["anthropic", "nous", "minimax", "xai-oauth"];
+const aiRank = (slug: string) => {
+  const i = AI_ORDER.indexOf(slug);
+  return i < 0 ? AI_ORDER.length - 1 : i;
+};
+export const byAiOrder = (a: any, b: any) => aiRank(a.provider) - aiRank(b.provider);
 
 export const useAi = () => useApi("/api/ai");
 
@@ -33,7 +39,10 @@ function resets(iso: string) {
   const t = new Date(iso);
   if (Number.isNaN(t.getTime())) return "";
   const time = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  return t.getTime() - Date.now() < 864e5 ? time : `${t.toLocaleDateString([], { weekday: "short" })} ${time}`;
+  const ahead = t.getTime() - Date.now();
+  if (ahead < 864e5) return time;
+  if (ahead > 6 * 864e5) return t.toLocaleDateString([], { month: "short", day: "numeric" });
+  return `${t.toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
 /** One provider: its usage windows as GitHub-limit style bars, a balance, or a note. */
@@ -50,33 +59,36 @@ export function AiPlan({ a }: { a: any }) {
           {a.profiles} {a.profiles === 1 ? "profile" : "profiles"}
         </span>
       </div>
-      {a.windows ? (
+      {a.windows?.length || a.kind === "usage" ? (
         <div className="stats">
-          {a.windows.map((w: any) => (
+          {(a.windows || []).map((w: any) => (
             <div className="stat" key={w.label}>
               <span className="label">{w.label}</span>
               <span className="value">
-                {w.used}% <small>used{w.resets ? ` · resets ${resets(w.resets)}` : ""}</small>
+                {w.used}%{" "}
+                <small>
+                  used{w.resets ? ` · resets ${resets(w.resets)}` : ""}
+                  {w.left ? ` · ${w.left}` : ""}
+                </small>
               </span>
-              <div className={`bar ${w.used > 90 ? "low" : ""}`}>
+              <div className={`bar ${a.provider}${(w.low ?? w.used > 90) ? " low" : ""}`}>
                 <span style={{ width: `${Math.min(100, w.used)}%` }} />
               </div>
             </div>
           ))}
-        </div>
-      ) : a.kind === "usage" ? (
-        <div className="stats">
-          <div className="stat">
-            <span className="label">Balance</span>
-            <span className="value">
-              <Left a={a} />
-            </span>
-            {a.detail ? (
-              <span className="sub">
-                <BlurText text={a.detail} />
+          {a.kind === "usage" && !a.windows?.length ? (
+            <div className="stat">
+              <span className="label">Balance</span>
+              <span className="value">
+                <Left a={a} />
               </span>
-            ) : null}
-          </div>
+              {a.detail ? (
+                <span className="sub">
+                  <BlurText text={a.detail} />
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="note sub">{a.note || a.detail || ""}</div>

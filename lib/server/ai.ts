@@ -22,7 +22,7 @@ export interface AiRow {
   note?: string;
   low?: boolean;
   alert?: string;
-  windows?: { label: string; used: number; resets: string | null }[];
+  windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string }[];
 }
 type Reading = Omit<AiRow, "provider" | "profiles" | "link" | "kind">;
 
@@ -36,6 +36,8 @@ info = get_nous_portal_account_info(force_fresh=True)
 access, sub = getattr(info, "paid_service_access_info", None), getattr(info, "subscription", None)
 print(json.dumps({"logged_in": bool(getattr(info, "logged_in", False)), "plan": getattr(sub, "plan", None),
                   "usable": getattr(access, "total_usable_credits", None), "monthly": getattr(sub, "monthly_credits", None),
+                  "plan_left": getattr(access, "subscription_credits_remaining", None),
+                  "topup": getattr(access, "purchased_credits_remaining", None),
                   "renews": getattr(sub, "current_period_end", None)}))
 `;
 const LINKS: Record<string, string> = {
@@ -58,19 +60,41 @@ export function renewsText(iso: string | null | undefined, now = new Date()): st
   return days > 0 ? `in ${days} ${days === 1 ? "day" : "days"} (${when})` : `today (${when})`;
 }
 
+export const NOUS_TOPUP_USD = 25;
+
+/** James tops up Nous $25 at a time, so the top-up reads as the share of the current $25 used. */
+export function nousTopup(left: number, size = NOUS_TOPUP_USD) {
+  const blocks = Math.max(1, Math.ceil(left / size));
+  const current = left - (blocks - 1) * size;
+  const waiting = blocks - 1;
+  return {
+    label: `Top-up ($${size})`,
+    used: Math.round(Math.min(100, Math.max(0, (1 - current / size) * 100))),
+    resets: null,
+    left: `$${current.toFixed(2)} of $${size} left${waiting ? ` · ${waiting} more $${size} top-up${waiting === 1 ? "" : "s"} waiting` : ""}`,
+  };
+}
+
 async function nous(): Promise<Reading> {
   const py = path.join(HERMES_HOME, "hermes-agent", "venv", "bin", "python");
   const [data, err] = await run([py, "-c", NOUS_SCRIPT], { timeout: 30 });
   if (!data?.logged_in) return { note: `Could not read the Nous portal: ${err || "not logged in"}` };
-  const left = data.usable;
-  const renews = renewsText(data.renews);
+  const usable = data.usable;
+  const low = isNum(usable) && usable < AI_LOW_USD;
+  const topup = isNum(data.topup) ? data.topup : usable;
+  const topupWindow = isNum(topup) ? nousTopup(topup) : null;
+  const planUsed =
+    isNum(data.monthly) && data.monthly > 0 && isNum(data.plan_left)
+      ? Math.round(Math.min(100, Math.max(0, (1 - data.plan_left / data.monthly) * 100)))
+      : null;
   return {
-    plan: data.plan,
-    left: isNum(left) ? `$${left.toFixed(2)}` : null,
-    detail: isNum(data.monthly)
-      ? `usable on the $${data.monthly.toFixed(0)}/month plan with top-ups${renews ? `, renews ${renews}` : ""}`
-      : null,
-    low: isNum(left) && left < AI_LOW_USD,
+    plan: isNum(data.monthly) ? `${data.plan} ($${data.monthly.toFixed(0)}/month)` : data.plan,
+    left: isNum(topup) ? `$${topup.toFixed(2)}` : null,
+    windows: [
+      ...(planUsed === null ? [] : [{ label: "Plan credits", used: planUsed, resets: data.renews ?? null, low }]),
+      ...(topupWindow ? [{ ...topupWindow, low }] : []),
+    ],
+    low,
   };
 }
 

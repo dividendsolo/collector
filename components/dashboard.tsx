@@ -4,7 +4,7 @@ import { Fragment, useState } from "react";
 import { ago } from "@/lib/format";
 import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
-import { AiPlan, useAi } from "./ai";
+import { AiPlan, byAiOrder, useAi } from "./ai";
 import { useApi, useLive } from "./data";
 import { JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
@@ -329,7 +329,7 @@ function AiCredits() {
         {!data ? (
           <SkelPlans />
         ) : rows.length ? (
-          [...plans, ...usage].map((a) => <AiPlan a={a} key={a.provider} />)
+          [...plans, ...usage].sort(byAiOrder).map((a) => <AiPlan a={a} key={a.provider} />)
         ) : (
           <div className="note sub">No Hermes profiles found.</div>
         )}
