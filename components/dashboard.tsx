@@ -6,6 +6,7 @@ import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, useAi } from "./ai";
 import { useApi, useLive } from "./data";
+import { JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
 import { ServiceHealthPanel, useServices } from "./services";
 import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelPlans, SkelRows, SkelStat } from "./ui";
@@ -337,6 +338,24 @@ function AiCredits() {
   );
 }
 
+/** Jog runner minutes this month on the Dashboard, the same stat as on the APIs page, so the minutes that carry most
+ * of our CI are in view before they run out. */
+function JogPanel() {
+  const { state } = useLive();
+  return (
+    <section className="panel">
+      <PanelHead icon="activity" title="Jog minutes">
+        <a className="more" href="#/apis">
+          All APIs &rarr;
+        </a>
+      </PanelHead>
+      <div className="stats">
+        {state ? <JogMinutes j={state.jog} /> : <div className="note sub">Reading Jog&hellip;</div>}
+      </div>
+    </section>
+  );
+}
+
 function ServiceHealth() {
   return <ServiceHealthPanel svc={useServices()} />;
 }
@@ -351,6 +370,7 @@ export function Dashboard() {
       <NeedsAttention />
       <WorkPanel />
       <Waiting />
+      <JogPanel />
       <div className="pair">
         <AiCredits />
         <ServiceHealth />

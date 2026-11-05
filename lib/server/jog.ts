@@ -12,9 +12,9 @@ const API = "https://usejog.com/api";
 const FREE_MINUTES = 5000;
 /** Runs come 1,000 a page; a month that needs more than this many is read as far as it gets. */
 const MAX_PAGES = 10;
-/** The advice route is at version 2; a call that names no version gets `409 updated`. The runs route is still
- * version 1 and takes no version header — sending one answers `409 updated` there too. */
-const ADVICE_VERSION = "2";
+/** Both routes (advice and advice/runs) are at version 4; a call that names an older version, or none, gets
+ * `409 updated` (usejog.com/docs/api.md, checked 2026-11-05). */
+const ROUTE_VERSION = "4";
 
 /** One run from /advice/runs: when it was charged, the size it ran on, how long it took, and the micro-dollars Jog
  * prices it at. `cost` is that list value, not money taken: the free minutes cover it. */
@@ -156,8 +156,14 @@ async function knownLogins(): Promise<string[]> {
 
 const adviceUrl = (login: string, path: string) => `${API}/orgs/${encodeURIComponent(login)}/${path}`;
 
+/** The query for the next page of runs: Jog's `next` passed back as `after` and nothing else, as it came (a string
+ * as it is, any other form as JSON). */
+export function nextPageQuery(next: unknown): URLSearchParams {
+  return new URLSearchParams({ after: typeof next === "string" ? next : JSON.stringify(next) });
+}
+
 /** One account's runs in the advice window, newest first, read back as far as the month's first: page after page
- * until a page reaches past it, or Jog has none left. The runs route is version 1, so it takes the token alone. */
+ * until a page reaches past it, or Jog has none left. */
 async function runsSince(
   login: string,
   until: unknown,
@@ -165,19 +171,14 @@ async function runsSince(
   from: number,
 ): Promise<JogRun[][]> {
   const pages: JogRun[][] = [];
-  let before: { at?: string; jobId?: number } | null = null;
+  let q = new URLSearchParams(until ? { until: String(until) } : {});
   for (let page = 0; page < MAX_PAGES; page++) {
-    const q = new URLSearchParams(until ? { until: String(until) } : {});
-    if (before?.at && before.jobId != null) {
-      q.set("beforeAt", before.at);
-      q.set("beforeJobId", String(before.jobId));
-    }
     const answer = await getJson<any>(`${adviceUrl(login, "advice/runs")}?${q}`, auth, 20);
     const runs: JogRun[] = answer?.runs || [];
     pages.push(runs);
     // Newest first: a page that reaches back past the month's first ends the read.
-    if (!answer?.next?.at || !runs.some((r) => runAt(r) >= from)) break;
-    before = answer.next;
+    if (answer?.next == null || !runs.some((r) => runAt(r) >= from)) break;
+    q = nextPageQuery(answer.next);
   }
   return pages;
 }
@@ -189,7 +190,7 @@ const cache = swr<JogUsage>("jog", 5 * 60_000, async () => {
   const missing = missingToken(token);
   if (missing) return { error: missing };
   const now = Math.floor(Date.now() / 1000);
-  const auth = bearer(token);
+  const auth = { ...bearer(token), "Jog-Route-Version": ROUTE_VERSION };
   const override = secret("JOG_ACCOUNT").trim();
   const candidates = loginCandidates(override, override ? [] : await knownLogins());
   if (!candidates.length)
@@ -197,7 +198,7 @@ const cache = swr<JogUsage>("jog", 5 * 60_000, async () => {
   try {
     const { accounts, error } = await accountsThatAnswer(
       candidates,
-      (login) => getJson(adviceUrl(login, "advice"), { ...auth, "Jog-Route-Version": ADVICE_VERSION }, 20),
+      (login) => getJson(adviceUrl(login, "advice"), auth, 20),
       (e) => (e instanceof HttpError ? e.code : null),
     );
     if (!accounts.length) return { error };

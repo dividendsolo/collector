@@ -6,6 +6,7 @@ import {
   missingToken,
   monthStart,
   monthUsage,
+  nextPageQuery,
   resetAt,
   sizeWeight,
 } from "@/lib/server/jog";
@@ -155,5 +156,16 @@ describe("jogError", () => {
     expect(jogError(503)).toContain("busy");
     expect(jogError(409)).toContain("Jog changed its answer");
     expect(jogError(500)).toBe("Jog answered 500");
+  });
+});
+
+describe("nextPageQuery", () => {
+  it("passes Jog's next back as after and nothing else, as it came", () => {
+    expect(nextPageQuery("abc123").toString()).toBe("after=abc123");
+  });
+  it("sends a next that is not a string as JSON", () => {
+    const q = nextPageQuery({ at: "2026-11-01T00:00:00Z", jobId: 7 });
+    expect([...q.keys()]).toEqual(["after"]);
+    expect(JSON.parse(q.get("after") || "")).toEqual({ at: "2026-11-01T00:00:00Z", jobId: 7 });
   });
 });

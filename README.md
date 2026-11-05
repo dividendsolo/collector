@@ -74,7 +74,7 @@ The Dashboard answers these questions at a glance:
 1. **Needs attention:** which job failed, which script starts itself in a loop, which host cannot pass a repo's
    checks, which GitHub limit is nearly gone (the API limits, and GitHub Actions minutes at 90% of what the plan
    includes; that row carries the dollars billed this month on its right). The APIs page shows the same bar for Jog's
-   runner minutes beside them.
+   runner minutes beside them, and the Dashboard shows the Jog bar in its own panel.
 2. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long. Hover a card number to read what the card is for.
    A build turns amber after 30 minutes and red after an hour.
    A process left in a card's worktree — a test server nothing stopped — is its own row: `leftover`, the program it
@@ -246,8 +246,9 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
   size's — and stops paging once a page reaches back past the month's first. The account is found the same way:
   Jog answers the advice route only for an account the token reaches and owns, so the reader asks the logins it can
   name (the `gh` login and its orgs, or `JOG_ACCOUNT` alone when `.env` sets it) and keeps the ones that answer; a
-  `404` is simply a login that is not a Jog account of his. The runs route is version 1 and takes the token alone —
-  naming the advice route's `Jog-Route-Version: 2` there answers `409 updated`. No dollars are shown: a token cannot
+  `404` is simply a login that is not a Jog account of his. Both routes take `Jog-Route-Version: 4`; an older
+  version, or none, answers `409 updated`. A later page of runs is asked for with the last page's `next` as `after`,
+  and nothing else. No dollars are shown: a token cannot
   read the credit balance, and a run's own `cost` is Jog's list price for it, which the free minutes cover. Read
   every 5 minutes.
 - **Caching:** each reader keeps its last answer and its own refresh rate (machines 10 s, AI and vendors 5 min,

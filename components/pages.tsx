@@ -268,7 +268,7 @@ function ActionsMinutes({ a }: { a?: any }) {
 /** Jog runner minutes this month (usejog.com) against the free minutes the accounts include. A failed read says why,
  * like the Actions stat. No dollar figure: a token cannot read the account's credit balance, and the runs' own cost
  * is Jog's list price for them, which the free minutes cover. */
-function JogMinutes({ j }: { j?: any }) {
+export function JogMinutes({ j }: { j?: any }) {
   if (!j) return null;
   if (j.error)
     return (
