@@ -1021,6 +1021,43 @@
   .alert .act .why {
     color: var(--red);
   }
+  /* How long ago the row first showed up: always the last column. It takes the right edge itself when no
+     .aside or .act did, and a fixed width keeps the ages lined up down the list. */
+  .alert .since {
+    margin-left: auto;
+    min-width: 72px;
+    text-align: right;
+    font: 500 12px / 20px var(--mono);
+    color: var(--faint);
+    white-space: nowrap;
+  }
+  .alert .aside ~ .since,
+  .alert .act ~ .since {
+    margin-left: 0;
+  }
+  /* A phone has no room for a right column: the text takes the line, and the button and age wrap under it,
+     lined up with the text. The text breaks a long SHA instead of pushing the panel wider. */
+  @media (max-width: 600px) {
+    .alert {
+      flex-wrap: wrap;
+    }
+    .alert > span:not(.n):not(.aside):not(.act):not(.since),
+    .alert > a {
+      flex: 1 1 calc(100% - 60px);
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .alert .act,
+    .alert .since {
+      margin-top: 0;
+      margin-left: 44px;
+      min-width: 0;
+      text-align: left;
+    }
+    .alert .act ~ .since {
+      margin-left: auto;
+    }
+  }
   .alert.error .i {
     color: var(--red);
   }
