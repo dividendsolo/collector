@@ -51,7 +51,8 @@ export function UpdateButton() {
         setBusy(false);
         return;
       }
-      setState((s) => (s ? { ...s, ready: false } : s));
+      // The button stays, with its spinner, until the page reloads on the new build: hiding it here left the page
+      // looking idle for the seconds the server takes to restart (James, 2026-11-06).
       // The restart is coming, so the page reloads from the version poll and not from here: a reload landing in the
       // second the server is away would show the browser's own error page. This is the note for when it stays away.
       window.setTimeout(async () => {
@@ -73,11 +74,19 @@ export function UpdateButton() {
         type="button"
         onClick={click}
         disabled={busy}
+        aria-busy={busy}
         title={`The server is serving ${state.running.commit ?? state.running.id ?? "an unknown build"}; ${
           state.staged?.commit ?? state.staged?.id ?? "a newer build"
         } is built and waits for this click`}
       >
-        {busy ? "Updating…" : "Update"}
+        {busy ? (
+          <>
+            <span className="spinner" aria-hidden="true" />
+            Updating…
+          </>
+        ) : (
+          "Update"
+        )}
       </button>
       {said ? <span className="said">{said}</span> : null}
     </span>
