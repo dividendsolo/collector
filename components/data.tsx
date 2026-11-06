@@ -25,6 +25,15 @@ export interface Live {
 const LiveContext = createContext<Live | null>(null);
 export const useLive = () => useContext(LiveContext) as Live;
 
+/** Reload on a new build with a short fade instead of a redraw in one frame (James, 2026-11-06: "it just redraws the
+ * whole page, like in one instant"): the page fades out, reloads, and the new page fades in (`body.fade-in`). */
+function softReload() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return location.reload();
+  sessionStorage.setItem("collector.fade-in", "1");
+  document.body.classList.add("fade-out");
+  setTimeout(() => location.reload(), 160);
+}
+
 /** The main read every 15 seconds, the board pushed over server-sent events, and a reload
  * when the server runs a new build. */
 export function LiveProvider({ children }: { children: ReactNode }) {
@@ -63,13 +72,23 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     return () => es.close();
   }, []);
 
+  // The page a soft reload brought back fades in once.
+  useEffect(() => {
+    if (sessionStorage.getItem("collector.fade-in") !== "1") return;
+    sessionStorage.removeItem("collector.fade-in");
+    document.documentElement.classList.remove("fading-in");
+    document.body.classList.add("fade-in");
+    const t = setTimeout(() => document.body.classList.remove("fade-in"), 300);
+    return () => clearTimeout(t);
+  }, []);
+
   // Hot reload: a new build on the server reloads the page.
   useEffect(() => {
     let seen: string | null = null;
     const t = setInterval(async () => {
       try {
         const v = await (await fetch("/api/version", { cache: "no-store" })).text();
-        if (seen && v !== seen) location.reload();
+        if (seen && v !== seen) softReload();
         seen = v;
       } catch {}
     }, 2000);

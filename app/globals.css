@@ -791,6 +791,45 @@
     align-items: center;
     gap: 8px;
   }
+  /* The Update button while the new build goes in: a small spinner in the button, then the page fades over. */
+  .update .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    border-right-color: transparent;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  body.fade-out {
+    opacity: 0;
+    transition: opacity 0.15s ease-out;
+  }
+  html.fading-in body {
+    opacity: 0;
+  }
+  body.fade-in {
+    animation: page-in 0.25s ease-out;
+  }
+  @keyframes page-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner {
+      animation-duration: 1.6s;
+    }
+  }
   .update .said {
     color: var(--muted);
     font-size: 12px;

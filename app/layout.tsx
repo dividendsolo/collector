@@ -16,6 +16,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Code+Pro:wght@400;500&display=swap"
           rel="stylesheet"
         />
+        {/* A page an Update brought back starts hidden, before its first paint, so the fade-in has no flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(sessionStorage.getItem("collector.fade-in")==="1")document.documentElement.classList.add("fading-in")}catch(e){}`,
+          }}
+        />
       </head>
       <body id="top">{children}</body>
     </html>
