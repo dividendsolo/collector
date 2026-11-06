@@ -611,3 +611,15 @@ describe("the section one machine reads", () => {
     });
   });
 });
+
+describe("the operating system", () => {
+  it("reads macOS from sw_vers and Linux from /etc/os-release, and nothing from nothing", () => {
+    expect(
+      drive({ fn: "os", sw_vers: "ProductName:\t\tmacOS\nProductVersion:\t\t27.2\nBuildVersion:\t\t26B123\n" }),
+    ).toBe("macOS 27.2");
+    expect(
+      drive({ fn: "os", os_release: 'NAME="Ubuntu"\nPRETTY_NAME="Ubuntu 26.04.1 LTS"\nVERSION_ID="26.04"\n' }),
+    ).toBe("Ubuntu 26.04.1 LTS");
+    expect(drive({ fn: "os" })).toBeNull();
+  });
+});

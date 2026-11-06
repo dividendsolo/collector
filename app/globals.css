@@ -1582,6 +1582,24 @@
   }
   /* A machine's Security checks (James, 2026-11-06): a line saying where it stands, then one row per check with its
      dot. The rows sit in two columns on a wide screen, one on a phone. */
+  /* A machine summary's shield wears its worst check's colour; its operating system sits at the right of the head. */
+  .net-shield.ok {
+    color: var(--green);
+  }
+  .net-shield.warn {
+    color: var(--amber);
+  }
+  .net-shield.bad {
+    color: var(--red);
+  }
+  .net-shield.unread {
+    color: var(--faint);
+  }
+  .net-os {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
+  }
   .net-checks-wrap {
     padding: 12px 16px 14px;
     display: grid;

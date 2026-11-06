@@ -1556,12 +1556,33 @@ def network_rows(sockets, networks, details=None, fw=None, acl=None):
 
 
 def network_section(sockets, networks, ssh_text=None, ssh_source=None, details=None, fw=None, acl=None,
-                    peers=None):
+                    peers=None, os=None):
     """One machine's Network section: the networks it is on, every listening port with who can connect to it, and
     the two sshd settings with where they were read — or null where the machine has nothing to say about ssh."""
     ssh = None if ssh_text is None else {"source": ssh_source, **sshd_flags(ssh_text)}
-    return {"networks": networks, "firewall": fw, "tailnet_acl": acl, "tailnet_peers": peers or {},
+    return {"networks": networks, "firewall": fw, "tailnet_acl": acl, "tailnet_peers": peers or {}, "os": os,
             "sockets": network_rows(sockets, networks, details, fw, acl), "ssh": ssh}
+
+
+def os_name(os_release=None, sw_vers=None):
+    """The machine's operating system and version, as a person says it: "macOS 27.2" from `sw_vers`, "Ubuntu 26.04.1
+    LTS" from /etc/os-release's PRETTY_NAME. None when neither is there."""
+    if sw_vers:
+        name = re.search(r"ProductName:\s*(.+)", sw_vers)
+        ver = re.search(r"ProductVersion:\s*(.+)", sw_vers)
+        if name:
+            return f"{name.group(1).strip()} {ver.group(1).strip()}".strip() if ver else name.group(1).strip()
+    for line in (os_release or "").splitlines():
+        if line.startswith("PRETTY_NAME="):
+            return line.split("=", 1)[1].strip().strip('"') or None
+    return None
+
+
+def os_read():
+    """This machine's `os_name`: `sw_vers` on a Mac, /etc/os-release elsewhere."""
+    if platform.system() == "Darwin":
+        return os_name(sw_vers=read_command(["sw_vers"]))
+    return os_name(os_release=read_text("/etc/os-release") if os.path.exists("/etc/os-release") else None)
 
 
 def network_read():
@@ -1575,7 +1596,7 @@ def network_read():
     )
     return network_section(listen_sockets(), machine_networks(interface_addresses()),
                            ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None, details=details,
-                           fw=firewall_read(), acl=tailnet_acl_read(), peers=tailnet_peers())
+                           fw=firewall_read(), acl=tailnet_acl_read(), peers=tailnet_peers(), os=os_read())
 
 
 def child_pids(links=None):

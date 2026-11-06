@@ -60,6 +60,8 @@ export interface NetworkSsh {
 
 export interface NetworkRead {
   networks: MachineNetworks;
+  /** The operating system and version ("macOS 27.2", "Ubuntu 26.04.1 LTS"), or null when it was not read. */
+  os?: string | null;
   /** Tailscale IP -> device name, to name who the access rules let in. */
   tailnet_peers?: Record<string, string>;
   firewall?: Firewall | null;
