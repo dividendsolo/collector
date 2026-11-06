@@ -20,6 +20,6 @@ export async function POST(req: Request) {
     id = id || (typeof body?.id === "string" ? body.id : null);
   }
   if (!machine || !id) return json({ why: "machine and id are required" }, 400);
-  const { cleared, marks } = clearMark(machine, id);
+  const { cleared, marks } = await clearMark(machine, id);
   return json({ machine, id, cleared, marks });
 }

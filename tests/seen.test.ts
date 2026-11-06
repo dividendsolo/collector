@@ -111,9 +111,9 @@ describe("what gets marked (collector#66)", () => {
       seen.foldRead({ ...vars, bytes: { curl: 100_000_000 } }, [conn({ bytes_sent: 5_000_000 })], { now: 1010 }).marks,
     ).toEqual([]);
     // A process the read has known but counted nothing for (no counters on its socket) is measured from nothing.
-    expect(ids(seen.foldRead({ ...vars, bytes: {} }, [conn({ bytes_sent: 60_000_000 })], { now: 1010 }).marks)).toEqual([
-      "upload:curl",
-    ]);
+    expect(ids(seen.foldRead({ ...vars, bytes: {} }, [conn({ bytes_sent: 60_000_000 })], { now: 1010 }).marks)).toEqual(
+      ["upload:curl"],
+    );
   });
 
   it("takes the threshold from config.json's network.uploadWarnMB", () => {
@@ -180,16 +180,16 @@ describe("Seen (collector#66)", () => {
     const marked = await read([conn(), conn({ process: "nc", pid: "999" })], 2010);
     expect(marked[0].network.marks.map((m: NetworkMark) => m.id)).toEqual(["process:nc"]);
 
-    expect(seen.clearMark("altair", "process:nc")).toEqual({ cleared: true, marks: [] });
+    expect(await seen.clearMark("altair", "process:nc")).toEqual({ cleared: true, marks: [] });
     expect(seen.readSeen().machines.altair.marks).toEqual([]);
     // The next read has the process in its list, so the mark is gone for good; and a click on a mark that is not
     // there says so rather than failing.
     const after = await read([conn(), conn({ process: "nc", pid: "999" })], 2020);
     expect(after[0].network.marks).toEqual([]);
-    expect(seen.clearMark("altair", "process:nc").cleared).toBe(false);
+    expect((await seen.clearMark("altair", "process:nc")).cleared).toBe(false);
   });
 
-  it("clears one mark of one machine and leaves the rest", () => {
+  it("clears one mark of one machine and leaves the rest", async () => {
     const marks: NetworkMark[] = [
       {
         id: "process:nc",
@@ -218,8 +218,46 @@ describe("Seen (collector#66)", () => {
       seen.seenPath(),
       JSON.stringify({ machines: { ezio: { at: 1, processes: {}, bytes: {}, inbound: [], names: {}, marks } } }),
     );
-    expect(seen.clearMark("ezio", "upload:curl")).toEqual({ cleared: true, marks: [marks[0]] });
+    expect(await seen.clearMark("ezio", "upload:curl")).toEqual({ cleared: true, marks: [marks[0]] });
     expect(seen.readSeen().machines.ezio.marks).toHaveLength(1);
+  });
+
+  it("keeps a Seen click that lands while a read is folding: the read cannot write the mark back", async () => {
+    const read = (now: number, address: string, lookup: (ip: string) => Promise<string>, withNc = true) =>
+      seen.observeAll(
+        [
+          {
+            name: "cobalt",
+            network: {
+              connections: withNc
+                ? [conn({ address }), conn({ address, process: "nc", pid: "999" })]
+                : [conn({ address })],
+              upload_warn_mb: 50,
+            },
+          },
+        ],
+        now,
+        lookup,
+      );
+    // The first read fills the list; the second marks the process this machine has not seen before.
+    await read(3000, "198.51.100.1", async () => "", false);
+    await read(3010, "198.51.100.1", async () => "");
+    expect(seen.readSeen().machines.cobalt.marks.map((m) => m.id)).toEqual(["process:nc"]);
+
+    // A read held open inside its reverse DNS — the window a Seen click lands in. The click's own write must not be
+    // undone by this read writing back the state it read before the click.
+    let release = () => {};
+    const held = new Promise<string>((r) => {
+      release = () => r("");
+    });
+    const folding = read(3020, "203.0.113.88", () => held);
+    await new Promise((r) => setTimeout(r, 0)); // let that read pick up the seen-list and reach the held lookup
+    const clicked = seen.clearMark("cobalt", "process:nc");
+    release();
+    await Promise.all([folding, clicked]);
+
+    expect(await clicked).toMatchObject({ cleared: true });
+    expect(seen.readSeen().machines.cobalt.marks.map((m) => m.id)).not.toContain("process:nc");
   });
 });
 

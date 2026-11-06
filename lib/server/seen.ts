@@ -43,6 +43,22 @@ const MAX_DESTS = 50;
 /** Reverse DNS is a nicety, never a reason to hold a read up: an answer that takes longer than this is no answer. */
 export const DNS_TIMEOUT_MS = 700;
 
+/**
+ * The seen-list is read, changed and written whole, so its steps run one at a time. A Seen click that lands while a
+ * read is folding must not be undone by that read writing back the state it read before the click — caught live on
+ * 2026-11-06, when a mark came back one read after it was cleared — and two reads folding at once must not each
+ * write the other's state away. Everything that touches the file goes through here.
+ */
+let tail: Promise<unknown> = Promise.resolve();
+function oneAtATime<T>(work: () => Promise<T> | T): Promise<T> {
+  const run = tail.then(work, work);
+  tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 export function seenPath(): string {
   return process.env.COLLECTOR_SEEN || path.join(path.dirname(CONFIG_PATH), "network-seen.json");
 }
@@ -289,27 +305,31 @@ export async function observeAll(
   now: number,
   lookup: (ip: string) => Promise<string> = reverseName,
 ): Promise<any[]> {
-  const state = readSeen();
-  const out = await Promise.all(
-    machines.map(async (m) => {
-      if (!m?.name || m.error || !m.network) return m;
-      const next = await observe(state.machines[m.name], m, now, lookup);
-      state.machines[m.name] = next.state;
-      return { ...m, network: { ...m.network, connections: next.connections, marks: next.state.marks } };
-    }),
-  );
-  writeSeen(state);
-  return out;
+  return oneAtATime(async () => {
+    const state = readSeen();
+    const out = await Promise.all(
+      machines.map(async (m) => {
+        if (!m?.name || m.error || !m.network) return m;
+        const next = await observe(state.machines[m.name], m, now, lookup);
+        state.machines[m.name] = next.state;
+        return { ...m, network: { ...m.network, connections: next.connections, marks: next.state.marks } };
+      }),
+    );
+    writeSeen(state);
+    return out;
+  });
 }
 
 /** Drop one mark a machine carries, because someone clicked Seen. Hands back what is left, so the click's answer is
  * the list it now has. The fact behind the mark stays in the seen-list, which is what keeps it from coming back. */
-export function clearMark(machine: string, id: string): { cleared: boolean; marks: NetworkMark[] } {
-  const state = readSeen();
-  const seen = state.machines[machine];
-  if (!seen) return { cleared: false, marks: [] };
-  const before = seen.marks.length;
-  seen.marks = seen.marks.filter((m) => m?.id !== id);
-  writeSeen(state);
-  return { cleared: seen.marks.length < before, marks: seen.marks };
+export async function clearMark(machine: string, id: string): Promise<{ cleared: boolean; marks: NetworkMark[] }> {
+  return oneAtATime(() => {
+    const state = readSeen();
+    const seen = state.machines[machine];
+    if (!seen) return { cleared: false, marks: [] };
+    const before = seen.marks.length;
+    seen.marks = seen.marks.filter((m) => m?.id !== id);
+    writeSeen(state);
+    return { cleared: seen.marks.length < before, marks: seen.marks };
+  });
 }

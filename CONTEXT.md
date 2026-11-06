@@ -360,7 +360,10 @@ Reverse DNS happens here, not on the machine: `resolveNames` asks once per addre
 with 700 ms on it (a name that takes longer is no name), keeps an empty answer so the address is not asked again, and
 skips this machine's own loopback. `observeAll` folds every machine's read into the list once per snapshot read (the
 same 10-second read, no extra ssh) and writes the file back only when it changed; a machine whose read failed keeps
-its last good read and its marks rather than folding an empty one.
+its last good read and its marks rather than folding an empty one. The file is read, changed and written whole, so
+those steps run one at a time (`seen.ts`'s one-at-a-time tail): a Seen click that lands while a read is folding is
+not undone by that read writing back the state it read before the click (2026-11-06, the one race this page's one
+write had).
 
 `lib/server/network.ts`'s `network()` is what `/api/network` answers, so a machine's section is
 `{allow, sockets, ssh, connections, upload_warn_mb, marks}`. The page draws the marks at the top of the machine's
