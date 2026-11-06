@@ -4,6 +4,7 @@ import { type Config, unknownConfigKeys } from "./config";
 import type { Domain } from "./domains";
 import { TICKER_STALE_S } from "./hermes";
 import type { GithubLimit } from "./machines";
+import { openSockets } from "./network";
 import type { Checked } from "./services";
 import type { VendorRow } from "./vendors";
 import type { XUsage } from "./x";
@@ -123,6 +124,25 @@ export function warnings(w: WarningInputs): Warning[] {
           level: x.state === "failed" ? "error" : "warn",
           text: `${x.name} on ${m.name}: ${x.detail || x.state}`,
         });
+    // The ports open to everyone on that machine (collector#65): collect.py marked every listening socket against
+    // the machine's own allow list, and one bound beyond the machine whose port is not on that list is an error — a
+    // database, a dev server or Docker's API an agent left on every interface. One row per machine, naming the
+    // ports: a machine can have twenty of them (a browser's own UDP sockets among them), and a row each would bury
+    // every other warning on the Dashboard. The Network page has each socket with its address and its process. The
+    // ports a machine means to be public go in config.json's `network.allow`, and that is the fix.
+    const open = openSockets(m);
+    if (open.length) {
+      const shown = open.slice(0, 10).map((s) => `${s.proto} ${s.port}`);
+      const rest = open.length - shown.length;
+      out.push({
+        level: "error",
+        text: `${open.length === 1 ? "A port is" : `${open.length} ports are`} open to everyone on ${m.name}: ${shown.join(", ")}${rest ? `, and ${rest} more (see the Network page)` : ""}`,
+      });
+    }
+    // The two sshd settings that should not be on, read on the same machine read (collector#65).
+    if (m.network?.ssh?.passwordauthentication)
+      out.push({ level: "error", text: `SSH on ${m.name}: password authentication is on` });
+    if (m.network?.ssh?.permitrootlogin) out.push({ level: "error", text: `SSH on ${m.name}: root login is on` });
     const starts: number[] = Array.isArray(m.work_starts_10m) ? m.work_starts_10m : [];
     const limit = work.max_starts_60s ?? 5;
     // collect.py reports the starts as epoch seconds.

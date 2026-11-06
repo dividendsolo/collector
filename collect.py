@@ -968,6 +968,189 @@ def listen_ports():
     return ports
 
 
+# The Network section (collector#65): every listening TCP and UDP socket on this machine, with the ones open to
+# everyone flagged. Read only, no sudo, nothing installed anywhere, and no port ever scanned from outside — this is
+# what each machine says it listens on. `ss -tulnp` on Linux, `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -nP -iUDP` on
+# macOS (a Mac has no ss); both read through `read_command`, so a machine without the tool reads empty.
+NETWORK = CONFIG.get("network") or {}
+# The ports a machine means to be public when its config says nothing else; config.json's network.allow replaces it.
+DEFAULT_ALLOW = (22, 80, 443)
+# The two sshd settings that should not be on: password logins, and root's.
+SSHD_DIRECTIVES = ("passwordauthentication", "permitrootlogin")
+SSHD_CONFIG = "/etc/ssh/sshd_config"
+# The addresses the two tools print for a socket bound on every address of the machine.
+WILDCARD_ADDRESSES = ("*", "0.0.0.0", "::", "0:0:0:0:0:0:0:0")
+
+
+def network_allow(cfg=None):
+    """The ports a machine's allow list says may be public: config.json's `network.allow`, else [22, 80, 443]. An
+    entry that is not a port is left out rather than obeyed, so a typo cannot turn a port into an expected one;
+    `allow` given as an empty list is obeyed and nothing is expected to be public."""
+    raw = (NETWORK if cfg is None else cfg).get("allow") if isinstance(NETWORK if cfg is None else cfg, dict) else None
+    if not isinstance(raw, list):
+        return list(DEFAULT_ALLOW)
+    ports = set()
+    for value in raw:
+        if isinstance(value, bool) or not isinstance(value, (int, str)) or not str(value).isdigit():
+            continue
+        if 0 < int(value) <= 65535:
+            ports.add(int(value))
+    return sorted(ports)
+
+
+def is_local_address(address):
+    """True when a socket's address is one only this machine or its own tailnet can reach: a loopback address
+    (127.0.0.0/8, ::1), a Tailscale address (100.64.0.0/10, fd7a:115c:a1e0::/48) or a link-local one. Anything
+    else — a wildcard, a public address, a LAN one — is an address other machines can reach. An address that cannot
+    be placed reads as reachable, not as private: the flag is the safe direction."""
+    a = (address or "").strip().strip("[]").lower().split("%", 1)[0]
+    if a in WILDCARD_ADDRESSES:
+        return False
+    if a == "localhost" or a.startswith("127.") or a == "::1":
+        return True
+    # An IPv4 address mapped into IPv6 (`::ffff:127.0.0.1`) is the IPv4 address.
+    if a.startswith("::ffff:"):
+        return is_local_address(a[len("::ffff:") :])
+    head = a.split(":", 1)[0]
+    if re.fullmatch(r"[0-9a-f]{1,4}", head):
+        # fe80::/10: the link-local range, fe80 to febf in the first hextet.
+        if 0xFE80 <= int(head, 16) <= 0xFEBF:
+            return True
+        if a.startswith("fd7a:115c:a1e0:"):
+            return True
+    parts = a.split(".")
+    if len(parts) == 4 and all(part.isdigit() for part in parts):
+        # 100.64.0.0/10 is Tailscale's own range, the address a machine is reached on inside its tailnet.
+        return int(parts[0]) == 100 and 64 <= int(parts[1]) <= 127
+    return False
+
+
+def split_address(text):
+    """(address, port) out of the text the two tools print for one socket: `127.0.0.53%lo:53`, `[::1]:631`,
+    `*:3000`, `100.64.0.10%tailscale0:49375`, and an IPv6 bind with both, `[fd7a:115c:a1e0::1]%tailscale0:40724`.
+    The zone ss appends to a bind and the brackets around an IPv6 address are not part of either; the port is None
+    when there is not one."""
+    address, _, port = (text or "").strip().rpartition(":")
+    address = address.split("%", 1)[0].strip().strip("[]")
+    return (address, int(port)) if port.isdigit() else (address, None)
+
+
+def parse_ss(text):
+    """`ss -tulnp` output -> one row per listening TCP or UDP socket: protocol, address, port, and the process that
+    owns it, where this user may read one (`-p` shows the user's own processes without sudo, so a socket of
+    another user's keeps its address and port and no name). The header line, and anything that is not a socket
+    line, is skipped."""
+    out = []
+    for line in (text or "").splitlines():
+        fields = line.split()
+        proto = fields[0].lower() if fields else ""
+        if proto not in ("tcp", "udp") or len(fields) < 6:
+            continue
+        address, port = split_address(fields[4])
+        if port is None:
+            continue
+        # One row per socket: ss prints one line per socket, with its owner (the first) when it has one.
+        owner = re.search(r'\("([^"]*)",pid=(\d+)', line)
+        out.append({"proto": proto, "address": address, "port": port,
+                    "process": owner.group(1) if owner else None, "pid": owner.group(2) if owner else None})
+    return out
+
+
+def parse_lsof(text):
+    """`lsof -nP -iTCP -sTCP:LISTEN` or `lsof -nP -iUDP` output -> the same rows as `parse_ss`. lsof prints the
+    command and its pid at the left and the protocol and the socket at the right (`TCP *:3000 (LISTEN)`), so the
+    process is the first field and the address the token after the protocol; the state lsof appends is not part
+    of it."""
+    out = []
+    for line in (text or "").splitlines():
+        fields = line.split()
+        if len(fields) < 3 or not fields[1].isdigit():
+            continue  # the header, and anything that is not a socket row
+        proto = next((i for i, word in enumerate(fields) if word.lower() in ("tcp", "udp")), None)
+        if proto is None or proto + 1 >= len(fields):
+            continue
+        address, port = split_address(fields[proto + 1])
+        if port is None:
+            continue
+        out.append({"proto": fields[proto].lower(), "address": address, "port": port,
+                    "process": fields[0] or None, "pid": fields[1]})
+    return out
+
+
+def listen_sockets():
+    """Every listening TCP and UDP socket on this machine: `ss -tulnp` on Linux, `lsof -nP -iTCP -sTCP:LISTEN` and
+    `lsof -nP -iUDP` where there is no ss (a Mac, and any other Unix). [] when the machine has no tool to read —
+    the section then reads empty, the way every other read here does without its tool."""
+    if platform.system() == "Linux":
+        return parse_ss(read_command(["ss", "-tulnp"]) or "")
+    return parse_lsof(read_command([LSOF, "-nP", "-iTCP", "-sTCP:LISTEN"]) or "") + parse_lsof(
+        read_command([LSOF, "-nP", "-iUDP"]) or ""
+    )
+
+
+def sshd_read():
+    """(where the sshd settings were read, their text) on a Linux machine, or None where there is nothing to read:
+    a Mac, or a machine with no sshd and no config file. `sshd -T` prints the effective configuration and needs
+    root, so a read that fails falls back to the config file itself — read only, nothing changed."""
+    if platform.system() != "Linux":
+        return None
+    text = read_command(["sshd", "-T"])
+    if text:
+        return ("sshd -T", text)
+    text = read_text(SSHD_CONFIG) if os.path.exists(SSHD_CONFIG) else None
+    return (SSHD_CONFIG, text) if text else None
+
+
+def sshd_flags(text):
+    """The two sshd settings that should not be on, read the same way out of `sshd -T` (whose keys are lower case)
+    and out of the config file (whose directive names are not): a line that is not commented out and sets the
+    directive to `yes`. Anything else is off — `no`, `prohibit-password`, a directive that is only commented out,
+    and an `Include` this reader does not follow."""
+    on = {}
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if parts[0].lower() not in SSHD_DIRECTIVES:
+            continue
+        on[parts[0].lower()] = parts[1].split("#")[0].strip().lower() if len(parts) > 1 else ""
+    return {name: on.get(name) == "yes" for name in SSHD_DIRECTIVES}
+
+
+def mark_of(port, address, allow=DEFAULT_ALLOW):
+    """One socket's mark: `local` when only this machine or its tailnet can reach it, `allowed` when the machine's
+    allow list says that port may be public, and `open` otherwise — the ones that matter, a database, a dev server
+    or Docker's API an agent left on every interface (collector#65)."""
+    if is_local_address(address):
+        return "local"
+    return "allowed" if port in allow else "open"
+
+
+def network_rows(sockets, allow=None):
+    """The machine's sockets with their marks: the ones open to everyone first, then the expected-public ports,
+    then the local ones, each group in port order."""
+    allow = network_allow() if allow is None else allow
+    rank = {"open": 0, "allowed": 1, "local": 2}
+    rows = [dict(row, mark=mark_of(row.get("port"), row.get("address"), allow)) for row in sockets]
+    return sorted(rows, key=lambda r: (rank[r["mark"]], r.get("port") or 0, r.get("proto") or "", r.get("address") or ""))
+
+
+def network_section(sockets, ssh_text=None, ssh_source=None, allow=None):
+    """One machine's Network section: the allow list it was read with, every listening socket with its mark, and the
+    two sshd settings with where they were read — or null where the machine has nothing to say about ssh."""
+    allow = network_allow() if allow is None else allow
+    ssh = None if ssh_text is None else {"source": ssh_source, **sshd_flags(ssh_text)}
+    return {"allow": allow, "sockets": network_rows(sockets, allow), "ssh": ssh}
+
+
+def network_read():
+    """This machine's Network section (collector#65): what it listens on, and what its sshd allows. No ss and no
+    lsof is not an error — the section reads empty, the way every other read here does without its tool."""
+    ssh = sshd_read()
+    return network_section(listen_sockets(), ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None)
+
+
 def child_pids(links=None):
     """pid -> the pids started under it, from `ps -axo pid=,ppid=`. A leftover often holds no socket itself: the
     server it started listens (a shell runs `bun start`, and the server under that holds the port)."""
@@ -1483,6 +1666,7 @@ def main():
         "jobs": tailnet_reasons(hermes_jobs(now) + launchd_jobs() + crontab_jobs(now) + systemd_jobs(now), tailnet),
         "tailscale": tailnet,
         "hermes_gateway": hermes_gateway(now),
+        "network": network_read(),
         "watch": watch_rows(now),
         "running": running_agents(),
         "host_broken": host_broken(),

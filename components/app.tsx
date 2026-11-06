@@ -9,6 +9,7 @@ import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
 import { LiveProvider, useLive } from "./data";
 import { FlowPage } from "./flow";
+import { NetworkPage } from "./network";
 import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, vendorHit, WorkPage } from "./pages";
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
 import { useRunning } from "./running";
@@ -24,6 +25,7 @@ const NAV: { page: string; href: string; icon: IconName; label: string; tag?: st
   { page: "projects", href: "#/projects", icon: "layers", label: "Projects", sep: true },
   { page: "domains", href: "#/domains", icon: "globe", label: "Domains" },
   { page: "services", href: "#/services", icon: "server", label: "Services" },
+  { page: "network", href: "#/network", icon: "shield", label: "Network" },
   { page: "apis", href: "#/apis", icon: "activity", label: "APIs", tag: "apis" },
   { page: "subscriptions", href: "#/subscriptions", icon: "receipt", label: "Subscriptions" },
   { page: "proposals", href: "#/proposals", icon: "brief", label: "Proposals" },
@@ -37,6 +39,7 @@ const PAGES = new Set([
   "projects",
   "domains",
   "services",
+  "network",
   "apis",
   "subscriptions",
   "proposals",
@@ -185,6 +188,8 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
       return <DomainsPage />;
     case "services":
       return <ServicesPage />;
+    case "network":
+      return <NetworkPage />;
     case "apis":
       return <ApisPage />;
     case "subscriptions":
