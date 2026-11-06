@@ -409,9 +409,9 @@ A mark stays in the state until Seen drops it, and the fact behind it stays in t
 cleared mark stay cleared; an upload that keeps going earns a fresh mark, because that is what "since the last read"
 means. A connection of another user's has no name to mark by and is left out of the process rows. Only the
 destination marks are capped, at 50 a machine (the newest kept), so the file cannot grow without end; a process,
-upload or knock mark leaves only through Seen (`capDestinations`). A ceiling of 500 marks in all
-(`MAX_MARKS_CEILING`) is the one exception, there so a local device knocking from address after address cannot grow
-the file without end.
+upload or knock mark leaves only through Seen (`capDestinations`). The one exception is a ceiling of 500 knock marks
+(`MAX_MARKS_CEILING`, the oldest knocks go), there so a local device knocking from address after address cannot grow
+the file without end; process and upload marks are one per process name, so they never need a cap.
 
 Reverse DNS happens here, not on the machine: `resolveNames` asks once per address ever, from the cache in the state,
 with 700 ms on it (a name that takes longer is no name), keeps an empty answer so the address is not asked again, and
@@ -436,6 +436,18 @@ the words, with the machine's name in the Dashboard row and without it on the pa
 warning's action is a URL, not a body`). `app/api/network/seen/route.ts` is the one write this page adds, and it
 takes the same two values from a JSON body too, for a shell or an agent. The route answers `{machine, id, cleared,
 marks}` — the list that machine now carries.
+
+## Security checks (each machine's rubric)
+
+Above each machine's ports sits its Security checks (`lib/checks.ts`, `securityChecks`): one row per check with a
+dot (green good, amber a weak setting, red a real exposure, grey not read; an unread check is never green), a line
+that says where the machine stands, and a card on hover with what the check means and its fix. The Mac reads its
+application firewall with `socketfilterfw` (no password): on, block all, stealth mode, downloaded signed apps
+allowed automatically, and the allow list, where node, python3, ruby and other runners are flagged (they run any
+dev server). The Mac firewall allows programs, not ports, so it changes no port's reach. Linux reads ufw (on,
+incoming default). Both read SSH (`sshd -T` only), the tailnet devices the access rules let in, and the ports open to
+the internet. A red check raises a toast that stays until it is green; an amber one raises a toast with Dismiss,
+kept per value in localStorage (`collector.toasts`), so a new value shows again.
 
 ## The toasts (card #67)
 

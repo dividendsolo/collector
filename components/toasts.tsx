@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { networkToasts, newAlarms, serviceToasts, sortToasts, sshToasts } from "@/lib/toasts";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { securityChecks } from "@/lib/checks";
+import { checkToasts, newAlarms, serviceToasts, sortToasts, visibleToasts } from "@/lib/toasts";
 import { useLive } from "./data";
 import { SCROLL_EVENT } from "./network";
 import { useServices } from "./services";
@@ -56,18 +57,55 @@ function alarm() {
   }
 }
 
-/** The toasts, bottom right on every page: a service that is Slow or Down, and a machine with ports open to the
- * internet. No Dismiss: each stays until its problem is resolved. */
+/** The amber toasts dismissed in this browser: key -> the state it was dismissed in (localStorage, like the Needs
+ * attention acknowledgements; Collector has no database). */
+const KEY = "collector.toasts";
+const EVENT = "collector-toasts";
+let cache = "";
+let held: Record<string, string> = {};
+function dismissed(): Record<string, string> {
+  const raw = typeof localStorage === "undefined" ? "{}" : localStorage.getItem(KEY) || "{}";
+  if (raw !== cache) {
+    cache = raw;
+    try {
+      const v = JSON.parse(raw);
+      held = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+    } catch {
+      held = {};
+    }
+  }
+  return held;
+}
+function onDismiss(cb: () => void) {
+  addEventListener(EVENT, cb);
+  addEventListener("storage", cb);
+  return () => {
+    removeEventListener(EVENT, cb);
+    removeEventListener("storage", cb);
+  };
+}
+const NONE: Record<string, string> = {};
+function dismiss(key: string, state: string) {
+  localStorage.setItem(KEY, JSON.stringify({ ...dismissed(), [key]: state }));
+  dispatchEvent(new Event(EVENT));
+}
+
+/** The toasts, bottom right on every page: a service that is Slow or Down, and each machine's Security checks that
+ * are not green. Red stays until fixed; amber has Dismiss, and comes back when its value changes. */
 export function Toasts() {
   const services = useServices();
   const { state } = useLive();
   // Until both reads are in, a thing that is fine cannot be told from one not read yet: no alarm before then.
   const ready = services !== null && state !== null;
-  const all = useMemo(
-    () => [...serviceToasts(services), ...networkToasts(state?.machines), ...sshToasts(state?.machines)],
-    [services, state?.machines],
-  );
-  const shown = useMemo(() => sortToasts(all), [all]);
+  const gone = useSyncExternalStore(onDismiss, dismissed, () => NONE);
+  const all = useMemo(() => {
+    const machines = (state?.machines || []).map((m: any) => ({
+      name: m.name,
+      checks: securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall"),
+    }));
+    return [...serviceToasts(services), ...checkToasts(machines)];
+  }, [services, state?.machines]);
+  const shown = useMemo(() => sortToasts(visibleToasts(all, gone)), [all, gone]);
   // One alarm per red toast this page has not sounded for yet, the ones showing at load included: those sound on the
   // first click or key, since the browser holds every sound until then.
   const heard = useRef<Set<string>>(new Set());
@@ -100,6 +138,11 @@ export function Toasts() {
             </a>
             <div className="toast-text">{t.text}</div>
           </div>
+          {t.dismissible ? (
+            <button className="btn ghost" type="button" onClick={() => dismiss(t.key, t.state)}>
+              Dismiss
+            </button>
+          ) : null}
         </div>
       ))}
     </section>

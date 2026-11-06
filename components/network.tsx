@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { type Check, securityChecks, worst } from "@/lib/checks";
 import { bytes } from "@/lib/format";
 import { MARK_LABELS, markText } from "@/lib/network";
 import type {
@@ -10,7 +11,6 @@ import type {
   NetworkConnection,
   NetworkMark,
   NetworkSocket,
-  NetworkSsh,
   ProcessInfo,
 } from "@/lib/server/network";
 import { useApi } from "./data";
@@ -148,13 +148,6 @@ function accessibleTo(
   ];
 }
 
-/** What the page says about the machine's firewall, under its table. */
-function firewallNote(fw: Firewall | null | undefined): string {
-  if (!fw) return "firewall not read, so a port listed here may still be blocked";
-  if (!fw.active) return `${fw.tool} is off: nothing is blocked`;
-  return `${fw.tool} is on (incoming: ${fw.incoming}); each port shows who it lets in`;
-}
-
 /** The networks a machine is on, as the facts of the tooltip on its name: kept off the page itself, so a screenshot
  * or a screen share does not carry the machine's addresses (James, 2026-11-06). */
 function networkFacts(n: MachineNetworks | undefined): string | undefined {
@@ -164,23 +157,6 @@ function networkFacts(n: MachineNetworks | undefined): string | undefined {
   if (n.lan.length) facts.push(["Local network", n.lan.join(", ")]);
   if (n.tailnet) facts.push(["Tailnet address", n.tailnet]);
   return facts.length ? JSON.stringify(facts) : undefined;
-}
-
-/** The two sshd settings in one line, read from `sshd -T` (what sshd really uses). Bad only while one is on. A reading
- * from the config file alone says so: a drop-in can override it, so it is no verdict. Null where ssh was never read
- * (a Mac). */
-function sshNote(ssh: NetworkSsh | null | undefined): { text: string; bad: boolean } | null {
-  if (!ssh?.source) return null;
-  const on: string[] = [];
-  if (ssh.passwordauthentication) on.push("password logins");
-  if (ssh.permitrootlogin) on.push("root login");
-  if (ssh.source !== "sshd -T")
-    return {
-      text: `could not read sshd's own settings (sudo sshd -T); the config file alone may be overridden`,
-      bad: false,
-    };
-  if (!on.length) return { text: "no password logins, and root cannot log in", bad: false };
-  return { text: `${on.join(" and ")} ${on.length > 1 ? "are" : "is"} on`, bad: true };
 }
 
 /** One mark's Seen click (collector#66): it drops that mark from the seen-list, so the row leaves Needs attention
@@ -426,16 +402,44 @@ const NetCols = () => (
   </colgroup>
 );
 
-/** One machine's block: what it is sending out and what is new about it, then every socket it listens on, with the
- * ones anyone can reach flagged first. */
+/** A dot's colour for a check, the page's own tokens. */
+const DOT: Record<string, string> = { green: "ok", amber: "warn", red: "bad", grey: "unread" };
+
+/** The machine's Security checks (James, 2026-11-06): one row per check with its dot, its label and its value; on
+ * hover, a card with what it means and the fix, in the dot's colour. */
+function Checks({ checks }: { checks: Check[] }) {
+  return (
+    <ul className="net-checks">
+      {checks.map((c) => (
+        <li
+          key={c.id}
+          className="card-tip-plain"
+          data-tip={c.about}
+          data-tip-title={c.label}
+          data-tip-facts={c.facts.length ? JSON.stringify(c.facts) : undefined}
+          data-tip-tone={c.level}
+          tabIndex={0}
+        >
+          <span className={`check-dot ${DOT[c.level]}`} aria-hidden="true" />
+          <span className="check-label">{c.label}</span>
+          <span className="check-value">{c.value}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** One machine's block: its Security checks, what it is sending out and what is new about it, then every socket it
+ * listens on, with the ones anyone can reach flagged first. */
 function Machine({ m }: { m: MachineNetwork }) {
   const sockets = m.network?.sockets || [];
   const connections = m.network?.connections || [];
   const marks = m.network?.marks || [];
   const firsts = firstOfProcess(connections);
   const open = sockets.filter((s) => s.reach === "internet").length;
-  const ssh = sshNote(m.network?.ssh);
   const facts = networkFacts(m.network?.networks);
+  const checks = securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall");
+  const verdict = worst(checks);
   const title = m.local ? `${m.name} (this machine)` : m.name;
   return (
     <section className="panel">
@@ -462,6 +466,20 @@ function Machine({ m }: { m: MachineNetwork }) {
         {m.stale ? <span className="sub">last good read; the newest one failed</span> : null}
       </PanelHead>
       {m.error ? <p className="sub net-note">Could not read this machine: {m.error}</p> : null}
+      {m.network ? (
+        <div className="net-checks-wrap">
+          <div className={`net-verdict ${DOT[verdict]}`}>
+            {verdict === "green"
+              ? "Every check passes."
+              : verdict === "red"
+                ? "A check needs a fix."
+                : verdict === "amber"
+                  ? "Some settings are weak: worth fixing, your call."
+                  : "Some checks could not be read."}
+          </div>
+          <Checks checks={checks} />
+        </div>
+      ) : null}
       {marks.map((mark) => (
         <MarkRow key={mark.id} machine={m.name} mark={mark} />
       ))}
@@ -539,16 +557,6 @@ function Machine({ m }: { m: MachineNetwork }) {
           Nothing listens here, or this machine has no ss or lsof to read: it reads empty rather than failed.
         </div>
       )}
-      <p className="sub net-note">
-        {firewallNote(m.network?.firewall)}
-        {ssh ? (
-          <>
-            {" · "}
-            <span className={ssh.bad ? "stuck" : undefined}>SSH: {ssh.text}</span>
-            <span className="sub"> (read from {m.network?.ssh?.source})</span>
-          </>
-        ) : null}
-      </p>
     </section>
   );
 }

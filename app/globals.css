@@ -1126,6 +1126,9 @@
     --tip-bg: var(--green-bg);
     border-color: var(--green-line);
   }
+  #card-tip.tone-grey {
+    --tip-bg: var(--panel-2);
+  }
   #card-tip.tone-blue {
     --tip-bg: var(--blue-bg);
     border-color: var(--blue-line);
@@ -1540,6 +1543,89 @@
   .net-table td.net-badges {
     white-space: normal;
   }
+  /* A machine's Security checks (James, 2026-11-06): a line saying where it stands, then one row per check with its
+     dot. The rows sit in two columns on a wide screen, one on a phone. */
+  .net-checks-wrap {
+    padding: 12px 16px 14px;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    gap: 10px;
+  }
+  .net-verdict {
+    font-weight: 500;
+  }
+  .net-verdict.ok {
+    color: var(--green);
+  }
+  .net-verdict.warn {
+    color: var(--amber);
+  }
+  .net-verdict.bad {
+    color: var(--red);
+  }
+  .net-verdict.unread {
+    color: var(--muted);
+  }
+  .net-checks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 2px;
+  }
+  /* One row per check: the same three columns in every row, so every label and value lines up. The row is the hover
+     target for its card. */
+  .net-checks li {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 320px) minmax(0, 1fr);
+    gap: 10px;
+    align-items: baseline;
+    padding: 3px 6px;
+    margin: 0 -6px;
+    border-radius: var(--radius);
+    cursor: help;
+  }
+  .net-checks li:hover,
+  .net-checks li:focus-visible {
+    background: var(--hover);
+    outline: none;
+  }
+  .check-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    align-self: center;
+  }
+  .check-dot.ok {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+  .check-dot.warn {
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
+  .check-dot.bad {
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red);
+  }
+  .check-dot.unread {
+    background: var(--faint);
+  }
+  .check-label {
+    color: var(--muted);
+  }
+  .check-value {
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 600px) {
+    .net-checks li {
+      grid-template-columns: 8px minmax(0, 1fr);
+    }
+    .check-value {
+      grid-column: 2;
+    }
+  }
   .net-addresses {
     font-size: 12px;
     color: var(--faint);
@@ -1645,7 +1731,7 @@
   }
   .toast {
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto 1fr auto;
     align-items: start;
     gap: 10px;
     padding: 12px 14px;
