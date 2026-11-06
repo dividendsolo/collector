@@ -1475,6 +1475,20 @@
     white-space: normal;
     max-width: 240px;
   }
+  /* The row a toast's link scrolls to (collector#67): one soft red pulse, then back to normal. */
+  .net-flash td {
+    animation: net-flash 1.6s ease-out;
+  }
+  @keyframes net-flash {
+    from {
+      background: var(--red-bg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .net-flash td {
+      animation: none;
+    }
+  }
   .net-badges .pill + .pill {
     margin-left: 6px;
   }
@@ -1484,6 +1498,73 @@
   }
   .heat {
     padding: 14px 16px 16px;
+  }
+  /* The toasts (collector#67): bottom right on every page, errors first. Each stays until its problem is resolved.
+     On a phone they span the width. */
+  .toasts {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 30;
+    display: grid;
+    gap: 8px;
+    width: min(380px, calc(100vw - 32px));
+  }
+  .toast {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
+    animation: toast-in 0.18s ease-out;
+  }
+  .toast.error {
+    border-color: var(--red-line);
+  }
+  .toast.warn {
+    border-color: var(--amber-line);
+  }
+  .toast-dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
+    border-radius: 50%;
+  }
+  .toast.error .toast-dot {
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red);
+  }
+  .toast.warn .toast-dot {
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
+  .toast-body {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+  .toast-title {
+    font-weight: 500;
+  }
+  .toast-text {
+    color: var(--muted);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .toast {
+      animation: none;
+    }
   }
   #work-stats .stat {
     align-content: start;
