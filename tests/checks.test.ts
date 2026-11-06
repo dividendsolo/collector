@@ -57,6 +57,39 @@ describe("the Mac's checks", () => {
   });
 });
 
+describe("the Mac's allow list in the check's card", () => {
+  it("splits macOS's own programs from the apps you allowed, each list in alphabetical order", () => {
+    const fw = {
+      ...MAC_FW,
+      apps: [
+        { path: "/usr/sbin/smbd", allow: true, interpreter: false },
+        { path: "/Applications/Spotify.app", allow: true, interpreter: false },
+        { path: "/usr/libexec/rapportd", allow: true, interpreter: false },
+        { path: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", allow: true, interpreter: false },
+        {
+          path: "/Library/SystemExtensions/420F/io.tailscale.ipn.macsys.network-extension.systemextension",
+          allow: true,
+          interpreter: false,
+        },
+        {
+          path: "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+          allow: true,
+          interpreter: false,
+        },
+        { path: "/usr/local/libexec/remotepairingdeviced", allow: true, interpreter: false },
+        { path: "/usr/bin/ruby", allow: false, interpreter: true },
+      ],
+    };
+    const card = securityChecks("mac", { firewall: fw }, true).find(
+      (c) => c.label === "Apps allowed to accept connections",
+    );
+    expect(card?.facts).toEqual([
+      ["macOS system", "ControlCenter, rapportd, smbd"],
+      ["Allowed by you", "Brave Browser, remotepairingdeviced, Spotify, Tailscale"],
+    ]);
+  });
+});
+
 describe("the VPS's checks", () => {
   const net: NetworkIn = {
     firewall: { tool: "ufw", active: true, incoming: "deny" },

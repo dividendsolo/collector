@@ -61,6 +61,33 @@ export interface NetworkIn {
 }
 
 const base = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
+
+/** A program macOS itself ships: under /System, /usr or /sbin (not /usr/local, where Homebrew and installers put
+ * theirs). Everything else on the allow list is an app you installed and allowed. */
+const isSystem = (p: string) => /^\/(System|usr|sbin|bin)\//.test(p) && !p.startsWith("/usr/local/");
+
+/** A program's readable name: the app bundle's name without ".app" (Brave Browser, not "Brave Browser" the binary
+ * inside it), a system extension by its bundle id's last word (tailscale, protonvpn), else the file's own name. */
+function appName(p: string): string {
+  const ext = p.match(/\/([^/]+)\.systemextension$/);
+  if (ext) {
+    const id = ext[1].split(".");
+    return (
+      id
+        .find((w) => /tailscale|protonvpn|wireguard/i.test(w))
+        ?.replace(/^protonvpn$/i, "Proton VPN")
+        .replace(/^tailscale$/i, "Tailscale") ?? id[id.length - 1]
+    );
+  }
+  const apps = [...p.matchAll(/([^/]+)\.app(?=\/|$)/g)].map((m) => m[1]);
+  return apps.length ? apps[apps.length - 1] : base(p);
+}
+
+/** The names, once each, in alphabetical order, so the list is easy to scan. */
+const names = (apps: { path: string }[]) =>
+  [...new Set(apps.map((a) => appName(a.path)))]
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .join(", ");
 const unique = <T>(xs: T[]) => xs.filter((x, i) => xs.findIndex((y) => JSON.stringify(y) === JSON.stringify(x)) === i);
 
 /** The checks for one machine, in reading order. `mac` is true for a Mac (the firewall reads apps, not ports). */
@@ -172,7 +199,8 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
         ? `${runners.join(", ")} ${runners.length > 1 ? "are" : "is"} allowed in: every dev server ${runners.length > 1 ? "they run" : "it runs"} on all addresses is open to your network.`
         : "Every app on the allow list is a single program, not a runner for any script.",
       facts: [
-        ["Allowed", allowed.map((a) => base(a.path)).join(", ") || "none"],
+        ["macOS system", names(allowed.filter((a) => isSystem(a.path))) || "none"],
+        ["Allowed by you", names(allowed.filter((a) => !isSystem(a.path))) || "none"],
         ...(runners.length
           ? ([
               [
