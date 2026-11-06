@@ -10,6 +10,8 @@
  * Pure functions here; the component (`components/toasts.tsx`) reads the services and the state.
  */
 
+import type { Check } from "./checks";
+
 export interface Toast {
   /** Which thing it is about: `service:<url>` or `network:<machine>`. */
   key: string;
@@ -20,6 +22,9 @@ export interface Toast {
   text: string;
   /** Where the details are: the Services page, or the Network page. */
   href: string;
+  /** An amber Security check the user may dismiss (James, 2026-11-06: "if they're okay with it, that's fine"). A
+   * red one, a Down service and an open port stay until fixed. */
+  dismissible?: boolean;
 }
 
 interface ServiceIn {
@@ -112,6 +117,35 @@ export function sshToasts(machines: MachineIn[] | null | undefined): Toast[] {
     });
   }
   return out;
+}
+
+/** A machine's Security checks that are not green: red ones stay until fixed, amber ones may be dismissed. Grey
+ * (not read) makes no toast: there is nothing to fix, only nothing known. The open ports and SSH are checks too, so
+ * this replaces their own toasts on the page. */
+export function checkToasts(machines: { name: string; checks: Check[] }[]): Toast[] {
+  const out: Toast[] = [];
+  for (const m of machines) {
+    for (const c of m.checks) {
+      if (c.level !== "red" && c.level !== "amber") continue;
+      out.push({
+        key: c.id,
+        state: `${c.level}:${c.value}`,
+        level: c.level === "red" ? "error" : "warn",
+        title: `${m.name}: ${c.problem ?? c.label}`,
+        // The fix is in the check's card on the Network page; a command in a toast wraps badly and reads worse.
+        text: `${c.label}: ${c.value}`,
+        href: c.id.endsWith(":internet") ? "#/network?first=internet" : "#/network",
+        dismissible: c.level === "amber",
+      });
+    }
+  }
+  return out;
+}
+
+/** The toasts to show: the dismissed amber ones left out while their state is the same. A dismissal holds for that
+ * state only, so a new value (another app on the allow list) shows again. */
+export function visibleToasts(all: Toast[], dismissed: Record<string, string>): Toast[] {
+  return all.filter((t) => !(t.dismissible && dismissed[t.key] === t.state));
 }
 
 /** How many ports are open to the internet, across every machine: the Network page's count in the sidebar. A port is

@@ -1356,8 +1356,51 @@ def parse_ufw(text):
     return out
 
 
+SOCKETFILTERFW = "/usr/libexec/ApplicationFirewall/socketfilterfw"
+# Programs that run whatever script they are given: allowing one to accept connections allows every dev server it
+# ever runs, so the Mac's Security checks flag them on the firewall's allow list.
+INTERPRETERS = re.compile(r"^(node|bun|deno|python[\d.]*|python\.app|ruby|perl|php|java)$", re.I)
+
+
+def parse_socketfilterfw(state, apps=""):
+    """The macOS application firewall from `socketfilterfw --getglobalstate --getblockall --getstealthmode
+    --getallowsigned` (`state`) and `--listapps` (`apps`) -> {active, block_all, stealth, allow_builtin, allow_signed,
+    apps: [{path, allow}]}, or None when `state` says nothing. All of it reads without a password. The Mac firewall
+    allows or blocks programs, not ports, so it changes no port's reach here: it is read for the Security checks."""
+    if not state or "Firewall" not in state:
+        return None
+    def has(pattern):
+        return bool(re.search(pattern, state, re.I))
+    out = {
+        "active": has(r"Firewall is enabled"),
+        "block_all": has(r"block all state set to enabled"),
+        "stealth": has(r"stealth mode is on"),
+        "allow_builtin": has(r"allow built-in signed software ENABLED"),
+        "allow_signed": has(r"allow downloaded signed software ENABLED"),
+        "apps": [],
+    }
+    path = None
+    for line in (apps or "").splitlines():
+        m = re.match(r"^\s*\d+\s*:\s*(.+?)\s*$", line)
+        if m:
+            path = m.group(1)
+            continue
+        m = re.search(r"\((Allow|Block) incoming connections\)", line)
+        if m and path:
+            out["apps"].append({"path": path, "allow": m.group(1) == "Allow",
+                                "interpreter": bool(INTERPRETERS.match(file_name(path) or ""))})
+            path = None
+    return out
+
+
 def firewall_read():
-    """This machine's firewall, as `parse_ufw` reads it, or None: no ufw, no sudo without a password, or not Linux."""
+    """This machine's firewall, or None when none could be read: ufw on Linux (`sudo -n ufw status verbose`; no ufw
+    or no sudo without a password reads None), the application firewall on a Mac (`socketfilterfw`, no password)."""
+    if platform.system() == "Darwin":
+        state = read_command([SOCKETFILTERFW, "--getglobalstate", "--getblockall", "--getstealthmode",
+                              "--getallowsigned"])
+        fw = parse_socketfilterfw(state or "", read_command([SOCKETFILTERFW, "--listapps"]) or "")
+        return {"tool": "macOS firewall", **fw} if fw else None
     if platform.system() != "Linux":
         return None
     fw = parse_ufw(read_command(["sudo", "-n", "ufw", "status", "verbose"]) or "")
@@ -1466,7 +1509,8 @@ def apply_firewall(row, fw, networks):
     interface is open (`Anywhere on tailscale0`), else nothing but the machine itself. A row an allow rule opens on a
     firewall that denies by default is `firewalled`. Marks `firewall`: "allows" when the firewall lets the internet in,
     "blocks" when it does not, None when no firewall was read."""
-    if fw is None or row["reach"] not in ("internet", "lan"):
+    # Only ufw decides ports: the Mac's firewall allows or blocks programs, so it leaves every port as its address says.
+    if fw is None or fw.get("tool") != "ufw" or row["reach"] not in ("internet", "lan"):
         row["firewall"] = None
         return row
     if firewall_lets_in(fw, row["proto"], row["port"]):

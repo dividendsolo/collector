@@ -354,6 +354,18 @@ sideways inside its panel. A machine's addresses are not on the page (a screensh
 them): they are in the tooltip on "addresses" beside its name. Under the table sit the firewall line and the ssh
 verdict.
 
+## Security checks (each machine's rubric)
+
+Above each machine's ports sits its Security checks (`lib/checks.ts`, `securityChecks`): one row per check with a
+dot (green good, amber a weak setting, red a real exposure, grey not read; an unread check is never green), a line
+that says where the machine stands, and a card on hover with what the check means and its fix. The Mac reads its
+application firewall with `socketfilterfw` (no password): on, block all, stealth mode, downloaded signed apps
+allowed automatically, and the allow list, where node, python3, ruby and other runners are flagged (they run any
+dev server). The Mac firewall allows programs, not ports, so it changes no port's reach. Linux reads ufw (on,
+incoming default). Both read SSH (`sshd -T` only), the tailnet devices the access rules let in, and the ports open to
+the internet. A red check raises a toast that stays until it is green; an amber one raises a toast with Dismiss,
+kept per value in localStorage (`collector.toasts`), so a new value shows again.
+
 ## The toasts (card #67)
 
 A small card bottom right on every page (`components/toasts.tsx`, mounted in `components/app.tsx`) when a service

@@ -377,6 +377,41 @@ describe("the firewall (ufw)", () => {
   });
 });
 
+describe("the Mac's firewall (socketfilterfw)", () => {
+  const STATE = [
+    "Firewall is enabled. (State = 1)",
+    "Firewall has block all state set to disabled.",
+    "Firewall stealth mode is off",
+    "Automatically allow built-in signed software ENABLED.",
+    "Automatically allow downloaded signed software ENABLED.",
+  ].join("\n");
+  const APPS = [
+    "Total number of apps = 3 ",
+    "1 : /Applications/LocalSend.app ",
+    "             (Allow incoming connections)",
+    "2 : /Users/me/.nvm/versions/node/v22.16.0/bin/node ",
+    "             (Allow incoming connections)",
+    "3 : /usr/bin/ruby ",
+    "             (Block incoming connections)",
+  ].join("\n");
+
+  it("reads its state and its allow list, and marks the programs that run any script", () => {
+    expect(drive({ fn: "macfw", state: STATE, apps: APPS })).toEqual({
+      active: true,
+      block_all: false,
+      stealth: false,
+      allow_builtin: true,
+      allow_signed: true,
+      apps: [
+        { path: "/Applications/LocalSend.app", allow: true, interpreter: false },
+        { path: "/Users/me/.nvm/versions/node/v22.16.0/bin/node", allow: true, interpreter: true },
+        { path: "/usr/bin/ruby", allow: false, interpreter: true },
+      ],
+    });
+    expect(drive({ fn: "macfw", state: "" })).toBeNull();
+  });
+});
+
 describe("the tailnet's access rules (Tailscale ACL)", () => {
   // `tailscale debug netmap`'s packet filter: who may reach this machine. A VPS that lets two devices in, and a
   // laptop the rules let nobody in (2026-11-06: altair's ports read "Tailnet", and no tailnet device could connect).
