@@ -1060,7 +1060,8 @@ def parse_lsof(text):
     """`lsof -nP -iTCP -sTCP:LISTEN` or `lsof -nP -iUDP` output -> the same rows as `parse_ss`. lsof prints the
     command and its pid at the left and the protocol and the socket at the right (`TCP *:3000 (LISTEN)`), so the
     process is the first field and the address the token after the protocol; the state lsof appends is not part
-    of it."""
+    of it. `-iUDP` lists connected sockets too (`UDP 192.0.2.5:60000->198.51.100.1:443`); they listen on nothing
+    and are skipped."""
     out = []
     for line in (text or "").splitlines():
         fields = line.split()
@@ -1069,6 +1070,8 @@ def parse_lsof(text):
         proto = next((i for i, word in enumerate(fields) if word.lower() in ("tcp", "udp")), None)
         if proto is None or proto + 1 >= len(fields):
             continue
+        if "->" in fields[proto + 1]:
+            continue  # a connected socket (`local->remote`, which `-iUDP` lists too), not a listening one
         address, port = split_address(fields[proto + 1])
         if port is None:
             continue

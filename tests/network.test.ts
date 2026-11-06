@@ -126,6 +126,9 @@ describe("reading `lsof` (macOS, which has no ss)", () => {
   const UDP = [
     "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
     "mDNSRespo  650  me    6u  IPv4    13500      0t0  UDP *:5353",
+    // Connected sockets (a browser's QUIC, a DNS lookup): lsof -iUDP lists them too, local->remote. Not listening.
+    "Google    4321  me   30u  IPv4      0x1      0t0  UDP 192.0.2.5:60000->198.51.100.1:443",
+    "Google    4321  me   31u  IPv6      0x2      0t0  UDP [2001:db8::5]:60001->[2001:db8::9]:443",
   ].join("\n");
 
   it("reads a listening TCP socket with its process and pid", () => {
@@ -136,7 +139,7 @@ describe("reading `lsof` (macOS, which has no ss)", () => {
     ]);
   });
 
-  it("reads a UDP socket too, and nothing out of an empty read", () => {
+  it("reads a listening UDP socket, skips a connected one, and reads nothing out of an empty read", () => {
     expect(drive<Socket[]>({ fn: "lsof", text: UDP })).toEqual([
       { proto: "udp", address: "*", port: 5353, process: "mDNSRespo", pid: "650" },
     ]);

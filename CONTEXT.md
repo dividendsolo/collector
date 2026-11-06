@@ -285,7 +285,9 @@ process and pid that own it. Read only, no `sudo`, nothing installed anywhere, a
 
 `collect.py`'s `network_read` is the reader. `listen_sockets` reads `ss -tulnp` on Linux and `lsof -nP -iTCP
 -sTCP:LISTEN` plus `lsof -nP -iUDP` elsewhere, both through `read_command`, so a machine with neither tool reads
-empty rather than failing. `parse_ss` and `parse_lsof` turn the two tools' own lines into the same rows — one per
+empty rather than failing. `-iUDP` also lists connected UDP sockets (`local->remote`, a browser's QUIC);
+`parse_lsof` skips any socket name with `->`, so an outbound connection never reads as an open port. `parse_ss`
+and `parse_lsof` turn the two tools' own lines into the same rows — one per
 socket, with its owner where this user may read one (`-p` shows only the user's own processes without `sudo`, so a
 root socket keeps its address and port and no name), reading past the zone `ss` appends (`203.0.113.10%eth0:68`) and
 the brackets around an IPv6 address. `mark_of` marks each socket against the machine's allow list:
