@@ -110,7 +110,7 @@ function SocketRow({ g, machine }: { g: PortGroup; machine: string }) {
   const badges = accessibleTo(g.first, machine);
   const { ports, protos } = portsText(g);
   return (
-    <tr className={g.first.reach === "internet" ? "net-open" : undefined} data-reach={g.first.reach}>
+    <tr data-reach={g.first.reach}>
       <td className="port">{ports}</td>
       <td className="net-badges">
         {badges.map((b) => (
