@@ -1,10 +1,13 @@
 import { subscribe } from "@/lib/server/board";
+import { guard } from "@/lib/server/guard";
 import { openStream } from "@/lib/server/lifecycle";
 
 export const dynamic = "force-dynamic";
 
 /** Server-sent events: the board view on connect, then on every change the 10-second board read sees. */
 export function GET(req: Request) {
+  const refusal = guard(req);
+  if (refusal) return refusal;
   const enc = new TextEncoder();
   let stop = () => {};
   const stream = new ReadableStream({
