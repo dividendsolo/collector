@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type NetworkIn, securityChecks, worst } from "@/lib/checks";
-import { checkToasts, visibleToasts } from "@/lib/toasts";
+import { checkToasts, forgetFixed, visibleToasts } from "@/lib/toasts";
 
 /**
  * A machine's Security checks (James, 2026-11-06): one row per check, a dot each. Red is a real exposure and its toast
@@ -130,5 +130,31 @@ describe("the check toasts", () => {
   it("never hides a red toast, whatever was dismissed", () => {
     const red = toasts[3];
     expect(visibleToasts([red], { [red.key]: red.state })).toEqual([red]);
+  });
+});
+
+describe("a dismissed amber toast after its check was fixed (bug, 2026-11-06)", () => {
+  // Dismiss "Stealth mode is off", turn stealth on (the check goes green), turn it off again: the same value as the
+  // dismissal, so the toast stayed hidden for good. A fix must clear the dismissal, so the next break shows.
+  const fw = (stealth: boolean) => ({ ...MAC_FW, stealth });
+  const at = (stealth: boolean) => [
+    { name: "mac", checks: securityChecks("mac", { firewall: fw(stealth), sockets: [], tailnet_acl: [] }, true) },
+  ];
+  const stealthToast = (stealth: boolean) => checkToasts(at(stealth)).find((t) => t.key.endsWith(":stealth"));
+
+  it("shows the toast again when the same setting breaks again after it was fixed", () => {
+    const off = stealthToast(false);
+    if (!off) throw new Error("no stealth toast");
+    let gone: Record<string, string> = { [off.key]: off.state };
+    gone = forgetFixed(gone, at(true));
+    expect(visibleToasts(checkToasts(at(false)), gone).map((t) => t.key)).toContain(off.key);
+  });
+
+  it("keeps a dismissal while the check is still amber, and for a check it did not read", () => {
+    const off = stealthToast(false);
+    if (!off) throw new Error("no stealth toast");
+    const gone = { [off.key]: off.state };
+    expect(forgetFixed(gone, at(false))).toEqual(gone);
+    expect(forgetFixed(gone, [])).toEqual(gone);
   });
 });
