@@ -322,13 +322,41 @@ function Checks({ checks }: { checks: Check[] }) {
   );
 }
 
+/** What a machine's verdict line says, by its worst check. */
+const VERDICT: Record<string, string> = {
+  green: "Every check passes.",
+  red: "A check needs a fix.",
+  amber: "Some settings are weak: worth fixing, your call.",
+  grey: "Some checks could not be read.",
+};
+
+/** One machine's summary at the top of the page (James, 2026-11-06): its name, where it stands, and its Security
+ * checks, each with a dot and a card on hover. The ports are in the machine's own panel below. */
+function MachineSummary({ m }: { m: MachineNetwork }) {
+  const checks = securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall");
+  const verdict = worst(checks);
+  return (
+    <section className="panel">
+      <PanelHead icon="shield" title={m.local ? `${m.name} (this machine)` : m.name}>
+        <span className={`check-dot ${DOT[verdict]}`} aria-hidden="true" />
+      </PanelHead>
+      {m.network ? (
+        <div className="net-checks-wrap">
+          <div className={`net-verdict ${DOT[verdict]}`}>{VERDICT[verdict]}</div>
+          <Checks checks={checks} />
+        </div>
+      ) : (
+        <p className="sub net-note">{m.error ? `Could not read this machine: ${m.error}` : "Not read yet."}</p>
+      )}
+    </section>
+  );
+}
+
 /** One machine's block: every port it listens on, with who can connect to each, the most exposed first. */
 function Machine({ m }: { m: MachineNetwork }) {
   const sockets = m.network?.sockets || [];
   const open = sockets.filter((s) => s.reach === "internet").length;
   const facts = networkFacts(m.network?.networks);
-  const checks = securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall");
-  const verdict = worst(checks);
   const title = m.local ? `${m.name} (this machine)` : m.name;
   return (
     <section className="panel">
@@ -350,20 +378,6 @@ function Machine({ m }: { m: MachineNetwork }) {
         {m.stale ? <span className="sub">last good read; the newest one failed</span> : null}
       </PanelHead>
       {m.error ? <p className="sub net-note">Could not read this machine: {m.error}</p> : null}
-      {m.network ? (
-        <div className="net-checks-wrap">
-          <div className={`net-verdict ${DOT[verdict]}`}>
-            {verdict === "green"
-              ? "Every check passes."
-              : verdict === "red"
-                ? "A check needs a fix."
-                : verdict === "amber"
-                  ? "Some settings are weak: worth fixing, your call."
-                  : "Some checks could not be read."}
-          </div>
-          <Checks checks={checks} />
-        </div>
-      ) : null}
       {sockets.length ? (
         <div className="wrap">
           <table className="net-table">
@@ -482,7 +496,16 @@ export function NetworkPage() {
           </div>
         </section>
       ) : (
-        machines.map((m) => <Machine key={m.name} m={m} />)
+        <>
+          <div className="pair">
+            {machines.map((m) => (
+              <MachineSummary key={m.name} m={m} />
+            ))}
+          </div>
+          {machines.map((m) => (
+            <Machine key={m.name} m={m} />
+          ))}
+        </>
       )}
     </div>
   );
