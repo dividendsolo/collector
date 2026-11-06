@@ -1178,9 +1178,13 @@ def sshd_read():
     root, so a read that fails falls back to the config file itself — read only, nothing changed."""
     if platform.system() != "Linux":
         return None
-    text = read_command(["sshd", "-T"])
-    if text:
-        return ("sshd -T", text)
+    # The effective settings, drop-ins included: `sudo -n` (never asks for a password), then plain `sshd -T` (root
+    # only, so it usually fails). The config file is the last resort, and the page names it: it misses a drop-in
+    # that overrides it (ezio, 2026-11-06: the main file said yes, sshd_config.d/00-hardening.conf said no).
+    for cmd in (["sudo", "-n", "sshd", "-T"], ["sshd", "-T"]):
+        text = read_command(cmd)
+        if text:
+            return ("sshd -T", text)
     text = read_text(SSHD_CONFIG) if os.path.exists(SSHD_CONFIG) else None
     return (SSHD_CONFIG, text) if text else None
 
@@ -1376,6 +1380,87 @@ def firewall_lets_in(fw, proto, port, iface=None):
     return False
 
 
+def tailnet_peers():
+    """Tailscale IP -> the device's name, from `tailscale status --json`, so the page names who may connect (altair,
+    Pixel 8 Pro) rather than an address. {} with no tailscale here."""
+    for exe in TAILSCALE_BINS:
+        text = read_command([exe, "status", "--json"], timeout=5)
+        if not text:
+            continue
+        try:
+            d = json.loads(text)
+        except ValueError:
+            continue
+        names = {}
+        for p in list((d.get("Peer") or {}).values()) + [d.get("Self") or {}]:
+            for ip in p.get("TailscaleIPs") or []:
+                names[ip] = p.get("HostName") or p.get("DNSName") or ip
+        return names
+    return {}
+
+
+def tailnet_acl_read():
+    """Which tailnet devices may connect to this machine, and on which ports, from the packet filter Tailscale's
+    access rules gave it (`tailscale debug netmap`): [{"ports": [[lo, hi]], "protos": [6, 17], "from": [ip]}], one per
+    rule. An empty list means no tailnet device may connect at all; None means it could not be read (no tailscale,
+    or no debug access), and the page then keeps the tailnet badge as the address gives it."""
+    for cmd in (["sudo", "-n", "tailscale", "debug", "netmap"],) + tuple(
+            [exe, "debug", "netmap"] for exe in TAILSCALE_BINS):
+        text = read_command(list(cmd), timeout=8)
+        if not text:
+            continue
+        try:
+            netmap = json.loads(text)
+        except ValueError:
+            continue
+        return parse_tailnet_acl(netmap)
+    return None
+
+
+def parse_tailnet_acl(netmap):
+    """The packet filter of a `tailscale debug netmap` -> the rules that let a tailnet device in. A rule names the
+    sources it lets in and the destinations (this machine's addresses, or `*`) and ports they may reach."""
+    if not isinstance(netmap, dict) or "PacketFilter" not in netmap:
+        return None
+    rules = []
+    for r in netmap.get("PacketFilter") or []:
+        ports = []
+        for d in r.get("Dsts") or []:
+            p = d.get("Ports") or {}
+            ports.append([int(p.get("First", 0)), int(p.get("Last", 65535))])
+        rules.append({"ports": ports, "protos": list(r.get("IPProto") or []), "from": list(r.get("Srcs") or [])})
+    return rules
+
+
+def tailnet_lets_in(acl, proto, port):
+    """The tailnet devices the access rules let reach this port, or None when the rules were not read (assume the
+    tailnet can, as the address says). An empty list: no tailnet device can connect."""
+    if acl is None:
+        return None
+    number = {"tcp": 6, "udp": 17}.get(proto)
+    out = []
+    for r in acl:
+        if r["protos"] and number not in r["protos"]:
+            continue
+        if any(lo <= port <= hi for lo, hi in r["ports"]):
+            out += [src for src in r["from"] if src not in out]
+    return out
+
+
+def apply_tailnet(row, acl):
+    """A row the tailnet could reach by its address keeps the tailnet only when the access rules let a device in:
+    altair's access rules let no device in (2026-11-06), so its ports were never open to the tailnet. Records the
+    devices allowed in `tailnet_from`."""
+    allowed = tailnet_lets_in(acl, row["proto"], row["port"])
+    row["tailnet_from"] = allowed
+    if allowed is None or allowed:
+        return row
+    if row["reach"] == "tailnet":
+        row["reach"] = "machine"
+    row["tailnet"] = False
+    return row
+
+
 def apply_firewall(row, fw, networks):
     """A row the firewall blocks from the internet keeps only what the firewall lets in: the tailnet when its
     interface is open (`Anywhere on tailscale0`), else nothing but the machine itself. A row an allow rule opens on a
@@ -1399,7 +1484,7 @@ def apply_firewall(row, fw, networks):
     return row
 
 
-def network_rows(sockets, networks, details=None, fw=None):
+def network_rows(sockets, networks, details=None, fw=None, acl=None):
     """The machine's sockets with who can connect to each, one row per port: `ss` and `lsof` print a socket bound on
     both IPv4 and IPv6 twice, and a browser opens a UDP socket per interface, which is one thing to fix, not twenty.
     The most exposed first, each group in port order."""
@@ -1419,17 +1504,20 @@ def network_rows(sockets, networks, details=None, fw=None):
             have["process"], have["pid"] = row.get("process"), row.get("pid")
     for row in rows.values():
         apply_firewall(row, fw, networks)
+        apply_tailnet(row, acl)
         row["info"] = process_info(row.get("pid"), details or {})
         if row["info"] and row["info"]["name"]:
             row["process"] = row["info"]["name"]
     return sorted(rows.values(), key=lambda r: (REACH_RANK[r["reach"]], r.get("port") or 0, r.get("proto") or ""))
 
 
-def network_section(sockets, networks, ssh_text=None, ssh_source=None, details=None, fw=None):
+def network_section(sockets, networks, ssh_text=None, ssh_source=None, details=None, fw=None, acl=None,
+                    peers=None):
     """One machine's Network section: the networks it is on, every listening port with who can connect to it, and
     the two sshd settings with where they were read — or null where the machine has nothing to say about ssh."""
     ssh = None if ssh_text is None else {"source": ssh_source, **sshd_flags(ssh_text)}
-    return {"networks": networks, "firewall": fw, "sockets": network_rows(sockets, networks, details, fw), "ssh": ssh}
+    return {"networks": networks, "firewall": fw, "tailnet_acl": acl, "tailnet_peers": peers or {},
+            "sockets": network_rows(sockets, networks, details, fw, acl), "ssh": ssh}
 
 
 def network_read():
@@ -1443,7 +1531,7 @@ def network_read():
     )
     return network_section(listen_sockets(), machine_networks(interface_addresses()),
                            ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None, details=details,
-                           fw=firewall_read())
+                           fw=firewall_read(), acl=tailnet_acl_read(), peers=tailnet_peers())
 
 
 def child_pids(links=None):

@@ -31,6 +31,7 @@ function accessibleTo(
   fw: Firewall | null | undefined,
   nets: MachineNetworks | undefined,
   ports: string = String(s.port),
+  peers?: Record<string, string>,
 ): Badge[] {
   const port = `${s.proto} ${ports}${s.process ? ` (${s.process})` : ""}`;
   const fwName = fw?.tool ?? "the firewall";
@@ -40,8 +41,16 @@ function accessibleTo(
     tone: "green",
     about: `Your own private network on Tailscale${nets?.tailnet ? `: ${machine} is ${nets.tailnet} on it` : ""}.`,
     facts: [
-      ["Who can connect", "only devices signed in to your Tailscale account, from anywhere"],
-      ["What keeps others out", "Tailscale: every connection is encrypted and needs one of your devices' keys"],
+      [
+        "Who can connect",
+        s.tailnet_from?.length
+          ? `${s.tailnet_from.map((ip) => peers?.[ip.split("/")[0]] ?? ip.split("/")[0]).join(", ")}, from anywhere: the only devices Tailscale's access rules let reach this machine`
+          : "only devices signed in to your Tailscale account, from anywhere",
+      ],
+      [
+        "What keeps others out",
+        "Tailscale: every connection is encrypted, needs one of your devices' keys, and passes its access rules",
+      ],
       ["How an attacker gets in", "a stolen Tailscale login, or a lost laptop or phone that is still signed in"],
       [
         "This port",
@@ -153,12 +162,19 @@ function networkFacts(n: MachineNetworks | undefined): string | undefined {
   return facts.length ? JSON.stringify(facts) : undefined;
 }
 
-/** The two sshd settings in one line, bad only while something is on. Null where ssh was never read (a Mac). */
+/** The two sshd settings in one line, read from `sshd -T` (what sshd really uses). Bad only while one is on. A reading
+ * from the config file alone says so: a drop-in can override it, so it is no verdict. Null where ssh was never read
+ * (a Mac). */
 function sshNote(ssh: NetworkSsh | null | undefined): { text: string; bad: boolean } | null {
   if (!ssh?.source) return null;
   const on: string[] = [];
   if (ssh.passwordauthentication) on.push("password logins");
   if (ssh.permitrootlogin) on.push("root login");
+  if (ssh.source !== "sshd -T")
+    return {
+      text: `could not read sshd's own settings (sudo sshd -T); the config file alone may be overridden`,
+      bad: false,
+    };
   if (!on.length) return { text: "no password logins, and root cannot log in", bad: false };
   return { text: `${on.join(" and ")} ${on.length > 1 ? "are" : "is"} on`, bad: true };
 }
@@ -239,19 +255,16 @@ function SocketRow({
   machine,
   fw,
   nets,
+  peers,
 }: {
   g: PortGroup;
   machine: string;
   fw: Firewall | null | undefined;
   nets: MachineNetworks | undefined;
+  peers?: Record<string, string>;
 }) {
   // The badge card names this row's ports, all of them: the row may hold several (ControlCenter's 5000 and 7000).
-  const badges = accessibleTo(
-    { ...g.first, port: g.ports.length > 1 ? (g.ports.join(", ") as never) : g.first.port },
-    machine,
-    fw,
-    nets,
-  );
+  const badges = accessibleTo(g.first, machine, fw, nets, g.ports.join(", "), peers);
   const { ports, protos } = portsText(g);
   return (
     <tr data-reach={g.first.reach}>
@@ -352,7 +365,14 @@ function Machine({ m }: { m: MachineNetwork }) {
             </thead>
             <tbody>
               {groupPorts(sockets).map((g) => (
-                <SocketRow key={g.key} g={g} machine={m.name} fw={m.network?.firewall} nets={m.network?.networks} />
+                <SocketRow
+                  key={g.key}
+                  g={g}
+                  machine={m.name}
+                  fw={m.network?.firewall}
+                  nets={m.network?.networks}
+                  peers={m.network?.tailnet_peers}
+                />
               ))}
             </tbody>
           </table>

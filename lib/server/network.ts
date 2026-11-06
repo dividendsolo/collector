@@ -30,6 +30,9 @@ export interface NetworkSocket {
   /** What the machine's firewall did with this port: "allows" the internet in, "blocks" it (the reach is what the
    * firewall lets through), or null when no firewall was read. */
   firewall?: "allows" | "blocks" | null;
+  /** The tailnet devices Tailscale's access rules let reach this port (their addresses, `100.x/32`), or null when
+   * the rules were not read. */
+  tailnet_from?: string[] | null;
 }
 
 /** The machine's firewall as collect.py read it (ufw), or null when none was read. */
@@ -57,6 +60,8 @@ export interface NetworkSsh {
 
 export interface NetworkRead {
   networks: MachineNetworks;
+  /** Tailscale IP -> device name, to name who the access rules let in. */
+  tailnet_peers?: Record<string, string>;
   firewall?: Firewall | null;
   sockets: NetworkSocket[];
   ssh: NetworkSsh | null;

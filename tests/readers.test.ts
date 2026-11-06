@@ -477,12 +477,17 @@ describe("warnings", () => {
     const network = {
       networks: { lan: [], internet: ["203.0.113.5"], tailnet: null },
       sockets: [port(5432, "internet"), port(5353, "internet", "udp"), port(8080, "machine"), port(49375, "tailnet")],
-      ssh: { source: "/etc/ssh/sshd_config", passwordauthentication: true, permitrootlogin: true },
+      ssh: { source: "sshd -T", passwordauthentication: true, permitrootlogin: true },
     };
     expect(netWarnings([{ name: "vps", network }]).map((x) => [x.level, x.text])).toEqual([
       ["error", "2 ports on vps are open to anyone on the internet: tcp 5432, udp 5353"],
       ["error", "SSH on vps: password authentication is on"],
       ["error", "SSH on vps: root login is on"],
+    ]);
+    // Read from the config file alone, a drop-in may override it: no warning (ezio, 2026-11-06).
+    const fromFile = { ...network, ssh: { ...network.ssh, source: "/etc/ssh/sshd_config" } };
+    expect(netWarnings([{ name: "vps", network: fromFile }]).map((x) => x.text)).toEqual([
+      "2 ports on vps are open to anyone on the internet: tcp 5432, udp 5353",
     ]);
   });
   it("warns about the internet's ports only, never the local network's (collector#65)", () => {

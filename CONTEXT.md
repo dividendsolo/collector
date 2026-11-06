@@ -332,8 +332,16 @@ The page groups the ports one process listens on with the same reach into one ro
 When the ports of a row have different protocols, each port carries its own (`22/tcp, 5353/udp`).
 
 `sshd_read` and `sshd_flags` read the two settings that should not be on — `passwordauthentication yes` and
-`permitrootlogin yes` — from `sshd -T` when that answers (it normally needs root), else from
-`/etc/ssh/sshd_config`; a directive that is only commented out is not set, and a Mac is not asked at all.
+`permitrootlogin yes` — from `sudo -n sshd -T`, the settings sshd really uses with every drop-in applied. Only that
+reading raises a warning or a red toast: the config file alone (the last resort) can be overridden by a drop-in, so
+the page says it could not read sshd's own settings instead (ezio, 2026-11-06: the main file said yes,
+`sshd_config.d/00-hardening.conf` said no). A Mac is not asked at all.
+
+The tailnet: `tailnet_acl_read` reads Tailscale's access rules for this machine (`tailscale debug netmap`'s packet
+filter, with `sudo -n` on Linux) and `tailnet_peers` names the devices. A port keeps its Tailnet badge only where a
+rule lets a device reach it, and the Tailnet card names those devices; an empty filter means no tailnet device can
+connect (altair, 2026-11-06), and the badge goes. Rules that could not be read leave the badge as the address gives
+it.
 
 One machine's section is `{networks, sockets, ssh}` on its snapshot; `lib/server/network.ts`'s `network()` turns the
 machines read into `/api/network` — `{at, machines: [{name, local, read_at, stale, error, network}]}` — from the same

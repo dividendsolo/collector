@@ -38,6 +38,7 @@ interface Port {
   tailnet: boolean;
   info?: unknown;
   firewall?: string | null;
+  tailnet_from?: string[] | null;
 }
 
 // A machine on a home network (private addresses only) with a tailnet, and a VPS with a public address.
@@ -376,6 +377,54 @@ describe("the firewall (ufw)", () => {
   });
 });
 
+describe("the tailnet's access rules (Tailscale ACL)", () => {
+  // `tailscale debug netmap`'s packet filter: who may reach this machine. A VPS that lets two devices in, and a
+  // laptop the rules let nobody in (2026-11-06: altair's ports read "Tailnet", and no tailnet device could connect).
+  const vpsNetmap = {
+    PacketFilter: [
+      {
+        Srcs: ["100.64.0.9/32", "100.64.0.20/32"],
+        Dsts: [{ Net: "100.64.0.10/32", Ports: { First: 0, Last: 65535 } }],
+        IPProto: [6, 17, 1, 58],
+      },
+    ],
+  };
+  const sockets: Socket[] = [
+    { proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "7" },
+    { proto: "tcp", address: "100.64.0.10", port: 49375, process: "tailscaled", pid: "8" },
+  ];
+
+  it("reads the devices each rule lets in, and an empty filter as no device at all", () => {
+    expect(drive({ fn: "acl", netmap: vpsNetmap })).toEqual([
+      { ports: [[0, 65535]], protos: [6, 17, 1, 58], from: ["100.64.0.9/32", "100.64.0.20/32"] },
+    ]);
+    expect(drive({ fn: "acl", netmap: { PacketFilter: [] } })).toEqual([]);
+    expect(drive({ fn: "acl", netmap: {} })).toBeNull();
+  });
+
+  it("keeps the tailnet on a port the rules open, naming who, and takes it off where they let nobody in", () => {
+    const acl = drive({ fn: "acl", netmap: vpsNetmap });
+    const open = drive<{ sockets: Port[] }>({ fn: "section", networks: HOME, sockets, acl });
+    expect(open.sockets.map((s) => [s.port, s.reach, s.tailnet, s.tailnet_from])).toEqual([
+      [22, "lan", true, ["100.64.0.9/32", "100.64.0.20/32"]],
+      [49375, "tailnet", false, ["100.64.0.9/32", "100.64.0.20/32"]],
+    ]);
+    const shut = drive<{ sockets: Port[] }>({ fn: "section", networks: HOME, sockets, acl: [] });
+    expect(shut.sockets.map((s) => [s.port, s.reach, s.tailnet])).toEqual([
+      [22, "lan", false],
+      [49375, "machine", false],
+    ]);
+  });
+
+  it("leaves the tailnet as the address says when the rules could not be read", () => {
+    const out = drive<{ sockets: Port[] }>({ fn: "section", networks: HOME, sockets });
+    expect(out.sockets.map((s) => [s.port, s.reach, s.tailnet, s.tailnet_from])).toEqual([
+      [22, "lan", true, null],
+      [49375, "tailnet", false, null],
+    ]);
+  });
+});
+
 describe("the sshd settings that should not be on", () => {
   it("reads `sshd -T`, whose keys are lower case, and flags only what is really on", () => {
     const out = drive<{ passwordauthentication: boolean; permitrootlogin: boolean }>({
@@ -430,6 +479,7 @@ describe("the section one machine reads", () => {
         tailnet: true,
         info: null,
         firewall: null,
+        tailnet_from: null,
       },
       {
         proto: "udp",
@@ -441,6 +491,7 @@ describe("the section one machine reads", () => {
         tailnet: true,
         info: null,
         firewall: null,
+        tailnet_from: null,
       },
       {
         proto: "tcp",
@@ -452,6 +503,7 @@ describe("the section one machine reads", () => {
         tailnet: false,
         info: null,
         firewall: null,
+        tailnet_from: null,
       },
       {
         proto: "tcp",
@@ -463,6 +515,7 @@ describe("the section one machine reads", () => {
         tailnet: false,
         info: null,
         firewall: null,
+        tailnet_from: null,
       },
     ]);
   });

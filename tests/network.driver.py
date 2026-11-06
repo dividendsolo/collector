@@ -43,11 +43,14 @@ def main():
         out = collect.parse_ufw(case["text"])
     elif fn == "lets_in":
         out = collect.firewall_lets_in(case["fw"], case["proto"], case["port"], case.get("iface"))
+    elif fn == "acl":
+        out = collect.parse_tailnet_acl(case["netmap"])
     elif fn == "section":
         out = collect.network_section(
             case["sockets"], case["networks"], ssh_text=case.get("ssh_text"), ssh_source=case.get("ssh_source"),
             details=collect.ps_details(case["ps"]) if case.get("ps") else None,
             fw=collect.parse_ufw(case["ufw"]) if case.get("ufw") else None,
+            acl=case.get("acl"),
         )
     else:
         raise SystemExit(f"unknown fn: {fn}")

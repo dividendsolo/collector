@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { internetPortCount, networkToasts, newAlarms, serviceToasts, sortToasts } from "@/lib/toasts";
+import { internetPortCount, networkToasts, newAlarms, serviceToasts, sortToasts, sshToasts } from "@/lib/toasts";
 
 /**
  * The toasts (collector#67). James, 2026-11-06: "a little toast notification that will pop up if one of our services
@@ -69,6 +69,20 @@ describe("a network toast", () => {
   it("is gone once no port on the machine is open to the internet", () => {
     expect(networkToasts([vps([["tcp", 22, "internet"]])])).toHaveLength(1);
     expect(networkToasts([vps([["tcp", 22, "machine"]])])).toEqual([]);
+  });
+});
+
+describe("an SSH toast", () => {
+  const ssh = (source: string, pw: boolean, root: boolean) => ({
+    name: "vps",
+    network: { sockets: [], ssh: { source, passwordauthentication: pw, permitrootlogin: root } },
+  });
+  it("shows when sshd really allows passwords or root, and never from the config file alone", () => {
+    expect(sshToasts([ssh("sshd -T", true, true)])).toMatchObject([
+      { key: "ssh:vps", level: "error", title: "SSH on vps allows password logins and root login" },
+    ]);
+    expect(sshToasts([ssh("sshd -T", false, false)])).toEqual([]);
+    expect(sshToasts([ssh("/etc/ssh/sshd_config", true, true)])).toEqual([]);
   });
 });
 

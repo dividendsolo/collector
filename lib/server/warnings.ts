@@ -138,9 +138,13 @@ export function warnings(w: WarningInputs): Warning[] {
       });
     }
     // The two sshd settings that should not be on, read on the same machine read (collector#65).
-    if (m.network?.ssh?.passwordauthentication)
+    // Only from `sshd -T`, the settings sshd really uses: the config file alone can be overridden by a drop-in
+    // (ezio, 2026-11-06: the file said yes, sshd_config.d/00-hardening.conf said no, and this row was false).
+    const ssh = m.network?.ssh;
+    if (ssh?.source === "sshd -T" && ssh.passwordauthentication)
       out.push({ level: "error", text: `SSH on ${m.name}: password authentication is on` });
-    if (m.network?.ssh?.permitrootlogin) out.push({ level: "error", text: `SSH on ${m.name}: root login is on` });
+    if (ssh?.source === "sshd -T" && ssh.permitrootlogin)
+      out.push({ level: "error", text: `SSH on ${m.name}: root login is on` });
     const starts: number[] = Array.isArray(m.work_starts_10m) ? m.work_starts_10m : [];
     const limit = work.max_starts_60s ?? 5;
     // collect.py reports the starts as epoch seconds.
