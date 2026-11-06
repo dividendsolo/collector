@@ -1,8 +1,9 @@
 import { snapshot } from "./machines";
 
-/** Who can connect to a listening port (collector#65), the most exposed first: anyone on the internet, the machines
- * on the machine's local network, the machines on its tailnet, the machine alone. */
-export type Reach = "internet" | "lan" | "tailnet" | "machine";
+/** Who can connect to a listening port (collector#65), the most exposed first: anyone on the internet; the internet
+ * through a port the firewall opens on purpose (`firewalled`, no warning); the machines on the machine's local
+ * network; the machines on its tailnet; the machine alone. */
+export type Reach = "internet" | "firewalled" | "lan" | "tailnet" | "machine";
 
 /** One listening port of a machine, as `collect.py` read it: its IPv4 and IPv6 sockets are one row, with every address
  * it is bound on. `tailnet` is true when the machine's tailnet can connect to it as well (a port on every address). */
@@ -26,6 +27,19 @@ export interface NetworkSocket {
   pid: string | null;
   reach: Reach;
   tailnet: boolean;
+  /** What the machine's firewall did with this port: "allows" the internet in, "blocks" it (the reach is what the
+   * firewall lets through), or null when no firewall was read. */
+  firewall?: "allows" | "blocks" | null;
+  /** The tailnet devices Tailscale's access rules let reach this port (their addresses, `100.x/32`), or null when
+   * the rules were not read. */
+  tailnet_from?: string[] | null;
+}
+
+/** The machine's firewall as collect.py read it (ufw), or null when none was read. */
+export interface Firewall {
+  tool: string;
+  active: boolean;
+  incoming: string;
 }
 
 /** The networks a machine is on, read from its own addresses: the private ones (a home Wi-Fi), its public addresses
@@ -85,6 +99,9 @@ export interface NetworkSsh {
 
 export interface NetworkRead {
   networks: MachineNetworks;
+  /** Tailscale IP -> device name, to name who the access rules let in. */
+  tailnet_peers?: Record<string, string>;
+  firewall?: Firewall | null;
   sockets: NetworkSocket[];
   ssh: NetworkSsh | null;
   /** Every established connection this machine has, with its remote end and its bytes (collector#66). */

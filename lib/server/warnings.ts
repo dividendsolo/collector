@@ -139,9 +139,13 @@ export function warnings(w: WarningInputs): Warning[] {
       });
     }
     // The two sshd settings that should not be on, read on the same machine read (collector#65).
-    if (m.network?.ssh?.passwordauthentication)
+    // Only from `sshd -T`, the settings sshd really uses: the config file alone can be overridden by a drop-in
+    // (ezio, 2026-11-06: the file said yes, sshd_config.d/00-hardening.conf said no, and this row was false).
+    const ssh = m.network?.ssh;
+    if (ssh?.source === "sshd -T" && ssh.passwordauthentication)
       out.push({ level: "error", text: `SSH on ${m.name}: password authentication is on` });
-    if (m.network?.ssh?.permitrootlogin) out.push({ level: "error", text: `SSH on ${m.name}: root login is on` });
+    if (ssh?.source === "sshd -T" && ssh.permitrootlogin)
+      out.push({ level: "error", text: `SSH on ${m.name}: root login is on` });
     // What the machine is sending out (collector#66): a process never seen there, a destination a known process has
     // not been seen reaching, an upload over `network.uploadWarnMB` since the last read, or a knock on a listening
     // port from another device on the local network. The seen-list keeps each one until Seen drops it, so the row

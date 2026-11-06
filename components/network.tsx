@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { bytes } from "@/lib/format";
 import { MARK_LABELS, markText } from "@/lib/network";
 import type {
+  Firewall,
   MachineNetwork,
   MachineNetworks,
   NetworkConnection,
@@ -15,32 +16,169 @@ import type {
 import { useApi } from "./data";
 import { Icon, PanelHead, Pill, SkelRows } from "./ui";
 
-/** Who can connect to a port, one badge per group: red for the internet, green for the tailnet, grey for the local
- * network and the machine alone. A port on every address carries the tailnet as a badge of its own. */
-function accessibleTo(s: NetworkSocket, machine: string): { cls: string; text: string }[] {
-  const tailnet = { cls: "net-tailnet", text: "Tailnet" };
-  if (s.reach === "internet") return [{ cls: "failed", text: "Internet" }, ...(s.tailnet ? [tailnet] : [])];
-  if (s.reach === "lan") return [{ cls: "net-lan", text: "Local network" }, ...(s.tailnet ? [tailnet] : [])];
+/** One "Accessible to" badge: its colour, its word, and the card it opens on hover: a one-line definition, then who
+ * can connect, what keeps others out, how an attacker gets in, and this port (James, 2026-11-06). */
+interface Badge {
+  cls: string;
+  text: string;
+  tone: "red" | "blue" | "amber" | "green" | "grey";
+  about: string;
+  facts: [string, string][];
+}
+
+/** Who can connect to a port, one badge per group: red for the internet, blue for a port the firewall opens on
+ * purpose (Firewalled), amber for the local network, green for the tailnet, grey for the machine alone. A port on
+ * every address carries the tailnet as a badge of its own. */
+function accessibleTo(
+  s: NetworkSocket,
+  machine: string,
+  fw: Firewall | null | undefined,
+  nets: MachineNetworks | undefined,
+  ports: string = String(s.port),
+  peers?: Record<string, string>,
+): Badge[] {
+  const port = `${s.proto} ${ports}${s.process ? ` (${s.process})` : ""}`;
+  const fwName = fw?.tool ?? "the firewall";
+  const tailnet: Badge = {
+    cls: "net-tailnet",
+    text: "Tailnet",
+    tone: "green",
+    about: `Your own private network on Tailscale${nets?.tailnet ? `: ${machine} is ${nets.tailnet} on it` : ""}.`,
+    facts: [
+      [
+        "Who can connect",
+        s.tailnet_from?.length
+          ? `${s.tailnet_from.map((ip) => peers?.[ip.split("/")[0]] ?? ip.split("/")[0]).join(", ")}, from anywhere: the only devices Tailscale's access rules let reach this machine`
+          : "only devices signed in to your Tailscale account, from anywhere",
+      ],
+      [
+        "What keeps others out",
+        "Tailscale: every connection is encrypted, needs one of your devices' keys, and passes its access rules",
+      ],
+      ["How an attacker gets in", "a stolen Tailscale login, or a lost laptop or phone that is still signed in"],
+      [
+        "This port",
+        s.firewall === "blocks" ? `${port}: listens on every address, but ${fwName} lets only the tailnet in` : port,
+      ],
+    ],
+  };
+  const plus = s.tailnet ? [tailnet] : [];
+  if (s.reach === "internet")
+    return [
+      {
+        cls: "failed",
+        text: "Internet",
+        tone: "red",
+        about: `Anyone in the world who can reach ${machine}'s public address${nets?.internet.length ? ` (${nets.internet[0]})` : ""}.`,
+        facts: [
+          ["Who can connect", "anyone on the internet"],
+          [
+            "What keeps others out",
+            fw
+              ? `nothing: ${fwName} is ${fw.active ? "on but lets everything in by default" : "off"}`
+              : "unknown: the firewall was not read, so it may still block this port",
+          ],
+          ["How an attacker gets in", "scans the internet for open ports and connects straight to this one"],
+          ["This port", port],
+          ["What to do", "close it, or bind the program to 127.0.0.1 or the tailnet address"],
+        ],
+      },
+      ...plus,
+    ];
+  if (s.reach === "firewalled")
+    return [
+      {
+        cls: "net-firewalled",
+        text: "Firewalled",
+        tone: "blue",
+        about: `${fwName} blocks every connection from the internet unless a rule lets it in, and a rule lets this port in.`,
+        facts: [
+          ["Who can connect", "anyone on the internet, on this port only"],
+          ["What keeps others out", `${fwName}: every other port is closed to the internet`],
+          ["How an attacker gets in", "through this open port, if the program behind it has a flaw"],
+          ["This port", port],
+          ["Note", "opened on purpose is not the same as safe: the program is meant to face the world"],
+        ],
+      },
+      ...plus,
+    ];
+  if (s.reach === "lan")
+    return [
+      {
+        cls: "warning",
+        text: "Local network",
+        tone: "amber",
+        about: `Devices on the same Wi-Fi or wired network as ${machine}${nets?.lan.length ? ` (${nets.lan[0]})` : ""}.`,
+        facts: [
+          ["Who can connect", "phones, TVs, smart plugs and guests on your Wi-Fi"],
+          [
+            "What keeps others out",
+            "your router, in two ways: its Wi-Fi password keeps out people nearby, and it drops every connection " +
+              "that comes from the internet",
+          ],
+          [
+            "How an attacker gets in",
+            "a leaked or weak Wi-Fi password, a guest you gave the password to, or a hacked device already on " +
+              "your network",
+          ],
+          ["This port", port],
+        ],
+      },
+      ...plus,
+    ];
   if (s.reach === "tailnet") return [tailnet];
-  return [{ cls: "", text: `Only ${machine}` }];
+  return [
+    {
+      cls: "",
+      text: `Only ${machine}`,
+      tone: "grey",
+      about: `Programs running on ${machine} itself, and nothing else.`,
+      facts: [
+        ["Who can connect", `only programs on ${machine}`],
+        [
+          "What keeps others out",
+          s.firewall === "blocks"
+            ? `${fwName}: it blocks this port from every network`
+            : "the loopback address (127.0.0.1 or ::1): no other machine can reach it",
+        ],
+        ["How an attacker gets in", `only with a program already running on ${machine}`],
+        ["This port", port],
+      ],
+    },
+  ];
 }
 
-/** The networks a machine is on, in one line: what "local network" and "internet" mean for it. */
-function networksNote(n: MachineNetworks | undefined): string {
-  if (!n) return "";
-  const parts: string[] = [];
-  if (n.internet.length) parts.push(`public address ${n.internet.join(", ")}`);
-  if (n.lan.length) parts.push(`local network ${n.lan.join(", ")}`);
-  if (n.tailnet) parts.push(`tailnet address ${n.tailnet}`);
-  return parts.join(" · ");
+/** What the page says about the machine's firewall, under its table. */
+function firewallNote(fw: Firewall | null | undefined): string {
+  if (!fw) return "firewall not read, so a port listed here may still be blocked";
+  if (!fw.active) return `${fw.tool} is off: nothing is blocked`;
+  return `${fw.tool} is on (incoming: ${fw.incoming}); each port shows who it lets in`;
 }
 
-/** The two sshd settings in one line, bad only while something is on. Null where ssh was never read (a Mac). */
+/** The networks a machine is on, as the facts of the tooltip on its name: kept off the page itself, so a screenshot
+ * or a screen share does not carry the machine's addresses (James, 2026-11-06). */
+function networkFacts(n: MachineNetworks | undefined): string | undefined {
+  if (!n) return undefined;
+  const facts: [string, string][] = [];
+  if (n.internet.length) facts.push(["Public address", n.internet.join(", ")]);
+  if (n.lan.length) facts.push(["Local network", n.lan.join(", ")]);
+  if (n.tailnet) facts.push(["Tailnet address", n.tailnet]);
+  return facts.length ? JSON.stringify(facts) : undefined;
+}
+
+/** The two sshd settings in one line, read from `sshd -T` (what sshd really uses). Bad only while one is on. A reading
+ * from the config file alone says so: a drop-in can override it, so it is no verdict. Null where ssh was never read
+ * (a Mac). */
 function sshNote(ssh: NetworkSsh | null | undefined): { text: string; bad: boolean } | null {
   if (!ssh?.source) return null;
   const on: string[] = [];
   if (ssh.passwordauthentication) on.push("password logins");
   if (ssh.permitrootlogin) on.push("root login");
+  if (ssh.source !== "sshd -T")
+    return {
+      text: `could not read sshd's own settings (sudo sshd -T); the config file alone may be overridden`,
+      bad: false,
+    };
   if (!on.length) return { text: "no password logins, and root cannot log in", bad: false };
   return { text: `${on.join(" and ")} ${on.length > 1 ? "are" : "is"} on`, bad: true };
 }
@@ -215,17 +353,38 @@ function processFacts(info: ProcessInfo | null | undefined): string | undefined 
   return JSON.stringify(facts.filter((f): f is [string, string] => !!f[1]));
 }
 
-function SocketRow({ g, machine }: { g: PortGroup; machine: string }) {
-  const badges = accessibleTo(g.first, machine);
+function SocketRow({
+  g,
+  machine,
+  fw,
+  nets,
+  peers,
+}: {
+  g: PortGroup;
+  machine: string;
+  fw: Firewall | null | undefined;
+  nets: MachineNetworks | undefined;
+  peers?: Record<string, string>;
+}) {
+  // The badge card names this row's ports, all of them: the row may hold several (ControlCenter's 5000 and 7000).
+  const badges = accessibleTo(g.first, machine, fw, nets, g.ports.join(", "), peers);
   const { ports, protos } = portsText(g);
   return (
     <tr data-reach={g.first.reach}>
       <td className="port">{ports}</td>
       <td className="net-badges">
         {badges.map((b) => (
-          <Pill key={b.text} cls={b.cls}>
-            {b.text}
-          </Pill>
+          <span
+            key={b.text}
+            className="card-tip-plain"
+            data-tip={b.about}
+            data-tip-title={b.text}
+            data-tip-facts={JSON.stringify(b.facts)}
+            data-tip-tone={b.tone}
+            tabIndex={0}
+          >
+            <Pill cls={b.cls}>{b.text}</Pill>
+          </span>
         ))}
       </td>
       <td className="sub">{protos}</td>
@@ -255,6 +414,18 @@ function SocketRow({ g, machine }: { g: PortGroup; machine: string }) {
   );
 }
 
+/** The five columns at the same widths in every machine's table, so "Accessible to" lines up from one panel to the
+ * next whatever a machine's longest port list is (James, 2026-11-06). The port list wraps inside its own column. */
+const NetCols = () => (
+  <colgroup>
+    <col style={{ width: "26%" }} />
+    <col style={{ width: "22%" }} />
+    <col style={{ width: "8%" }} />
+    <col style={{ width: "18%" }} />
+    <col style={{ width: "26%" }} />
+  </colgroup>
+);
+
 /** One machine's block: what it is sending out and what is new about it, then every socket it listens on, with the
  * ones anyone can reach flagged first. */
 function Machine({ m }: { m: MachineNetwork }) {
@@ -264,10 +435,22 @@ function Machine({ m }: { m: MachineNetwork }) {
   const firsts = firstOfProcess(connections);
   const open = sockets.filter((s) => s.reach === "internet").length;
   const ssh = sshNote(m.network?.ssh);
-  const nets = networksNote(m.network?.networks);
+  const facts = networkFacts(m.network?.networks);
+  const title = m.local ? `${m.name} (this machine)` : m.name;
   return (
     <section className="panel">
-      <PanelHead icon="shield" title={m.local ? `${m.name} (this machine)` : m.name}>
+      <PanelHead icon="shield" title={title}>
+        {facts ? (
+          <span
+            className="card-tip net-addresses"
+            data-tip="The networks this machine is on. Hidden from the page so a screenshot does not carry them."
+            data-tip-title={`${m.name}'s addresses`}
+            data-tip-facts={facts}
+            tabIndex={0}
+          >
+            addresses
+          </span>
+        ) : null}
         <span className={`count${open ? " hot" : ""}`} title={open ? `${open} ports open to the internet` : undefined}>
           {open || sockets.length}
         </span>
@@ -326,6 +509,7 @@ function Machine({ m }: { m: MachineNetwork }) {
       {sockets.length ? (
         <div className="wrap">
           <table className="net-table">
+            <NetCols />
             <thead>
               <tr>
                 <th>Port</th>
@@ -337,7 +521,14 @@ function Machine({ m }: { m: MachineNetwork }) {
             </thead>
             <tbody>
               {groupPorts(sockets).map((g) => (
-                <SocketRow key={g.key} g={g} machine={m.name} />
+                <SocketRow
+                  key={g.key}
+                  g={g}
+                  machine={m.name}
+                  fw={m.network?.firewall}
+                  nets={m.network?.networks}
+                  peers={m.network?.tailnet_peers}
+                />
               ))}
             </tbody>
           </table>
@@ -349,8 +540,7 @@ function Machine({ m }: { m: MachineNetwork }) {
         </div>
       )}
       <p className="sub net-note">
-        {nets || "No network address read"}
-        {" · the firewall is not read, so it may still block a port listed here"}
+        {firewallNote(m.network?.firewall)}
         {ssh ? (
           <>
             {" · "}

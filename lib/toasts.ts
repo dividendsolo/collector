@@ -37,7 +37,10 @@ interface PortIn {
 
 interface MachineIn {
   name: string;
-  network?: { sockets?: PortIn[] } | null;
+  network?: {
+    sockets?: PortIn[];
+    ssh?: { source: string | null; passwordauthentication: boolean; permitrootlogin: boolean } | null;
+  } | null;
 }
 
 /** A service that is Slow or Down: one toast, its state the status and the error. */
@@ -82,6 +85,30 @@ export function networkToasts(machines: MachineIn[] | null | undefined): Toast[]
       title: `${ports.length === 1 ? "1 port" : `${ports.length} ports`} on ${m.name} open to the internet`,
       text: `${shown}${rest ? `, and ${rest} more` : ""}`,
       href: "#/network?first=internet",
+    });
+  }
+  return out;
+}
+
+/** A machine whose sshd really lets passwords or root in: one red toast. Read from `sshd -T` (the settings sshd
+ * uses, drop-ins included); a reading from the config file alone can be overridden by a drop-in, so it makes no
+ * toast (ezio, 2026-11-06: the file said yes, the drop-in said no). */
+export function sshToasts(machines: MachineIn[] | null | undefined): Toast[] {
+  const out: Toast[] = [];
+  for (const m of machines || []) {
+    const ssh = m.network?.ssh;
+    if (ssh?.source !== "sshd -T") continue;
+    const on: string[] = [];
+    if (ssh.passwordauthentication) on.push("password logins");
+    if (ssh.permitrootlogin) on.push("root login");
+    if (!on.length) continue;
+    out.push({
+      key: `ssh:${m.name}`,
+      state: on.join(","),
+      level: "error",
+      title: `SSH on ${m.name} allows ${on.join(" and ")}`,
+      text: "Set PasswordAuthentication no and PermitRootLogin no in sshd's config, then reload sshd.",
+      href: "#/network",
     });
   }
   return out;

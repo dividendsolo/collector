@@ -988,9 +988,10 @@ PRIVATE_RANGES = tuple(ipaddress.ip_network(n) for n in (
 # Interfaces that are not a network other machines are on: loopback, the tailnet's tunnel (its addresses are read
 # by range), and the bridges Docker, VMs and the like make inside the machine.
 VIRTUAL_INTERFACES = re.compile(r"^(lo|tailscale|utun|docker|br-|veth|virbr|vmnet|bridge|awdl|llw|anpi|ap\d|gif|stf)")
-# Who can connect to a socket, the most exposed first: anyone on the internet, the machines on this machine's
-# local network, the machines on its tailnet, this machine alone.
-REACH_RANK = {"internet": 0, "lan": 1, "tailnet": 2, "machine": 3}
+# Who can connect to a socket, the most exposed first: anyone on the internet, the internet through a port the
+# firewall opens on purpose, the machines on this machine's local network, the machines on its tailnet, this machine
+# alone.
+REACH_RANK = {"internet": 0, "firewalled": 1, "lan": 2, "tailnet": 3, "machine": 4}
 
 
 def in_tailnet(ip):
@@ -1163,7 +1164,9 @@ def listen_sockets():
     `lsof -nP -iUDP` where there is no ss (a Mac, and any other Unix). [] when the machine has no tool to read —
     the section then reads empty, the way every other read here does without its tool."""
     if platform.system() == "Linux":
-        return parse_ss(read_command(["ss", "-tulnp"]) or "")
+        # `sudo -n` never asks for a password: where it needs one it fails at once, and plain `ss` still reads every
+        # socket, only without another user's process names.
+        return parse_ss(read_command(["sudo", "-n", "ss", "-tulnp"]) or read_command(["ss", "-tulnp"]) or "")
     return parse_lsof(read_command([LSOF, "-nP", "-iTCP", "-sTCP:LISTEN"]) or "") + parse_lsof(
         read_command([LSOF, "-nP", "-iUDP"]) or ""
     )
@@ -1175,9 +1178,13 @@ def sshd_read():
     root, so a read that fails falls back to the config file itself — read only, nothing changed."""
     if platform.system() != "Linux":
         return None
-    text = read_command(["sshd", "-T"])
-    if text:
-        return ("sshd -T", text)
+    # The effective settings, drop-ins included: `sudo -n` (never asks for a password), then plain `sshd -T` (root
+    # only, so it usually fails). The config file is the last resort, and the page names it: it misses a drop-in
+    # that overrides it (ezio, 2026-11-06: the main file said yes, sshd_config.d/00-hardening.conf said no).
+    for cmd in (["sudo", "-n", "sshd", "-T"], ["sshd", "-T"]):
+        text = read_command(cmd)
+        if text:
+            return ("sshd -T", text)
     text = read_text(SSHD_CONFIG) if os.path.exists(SSHD_CONFIG) else None
     return (SSHD_CONFIG, text) if text else None
 
@@ -1298,7 +1305,186 @@ def process_info(pid, details):
             "started_by": started_by, "user": d["user"], "path": d.get("command") or d["path"]}
 
 
-def network_rows(sockets, networks, details=None):
+# The firewall (collector#65): ufw on Linux. A port bound on every address is only as open as the firewall lets it be,
+# so a port the firewall blocks from the internet is not marked open to the internet. Read with `sudo -n ufw status
+# verbose` (ufw needs root; `-n` fails at once rather than ask for a password), and read only. A machine with no ufw,
+# or no sudo without a password, reads `None`: its ports keep the reach their address gives them, and the page says
+# the firewall was not read.
+UFW_RULE = re.compile(
+    r"^(?P<to>.+?)\s+(?P<action>ALLOW|DENY|REJECT|LIMIT)(?:\s+(?P<dir>IN|OUT|FWD))?\s+(?P<frm>.+?)\s*$")
+
+
+def parse_ufw(text):
+    """`ufw status verbose` -> {active, incoming, rules}, or None when it says nothing a firewall would. `incoming` is
+    the default for incoming traffic ("deny", "reject" or "allow"); each rule is {action, proto, ports, iface, any}:
+    `ports` the port numbers it names (a range is its two ends inclusive), `iface` the interface an `on <iface>` rule
+    is bound to, `any` true when it names no port. Only incoming ALLOW and LIMIT rules from anywhere decide reach;
+    a rule from one address is a hole for that address alone, and this reader leaves it out (it widens nothing for
+    the internet as a whole)."""
+    if not text or "Status:" not in text:
+        return None
+    active = bool(re.search(r"^Status:\s*active", text, re.M))
+    m = re.search(r"^Default:\s*(\w+)\s*\(incoming\)", text, re.M)
+    out = {"active": active, "incoming": (m.group(1).lower() if m else "deny"), "rules": []}
+    for line in text.splitlines():
+        r = UFW_RULE.match(line.strip())
+        if not r or r.group("to") in ("To", "--"):
+            continue
+        if (r.group("dir") or "IN") != "IN" or r.group("action") not in ("ALLOW", "LIMIT"):
+            continue
+        frm = r.group("frm").replace("(v6)", "").strip()
+        if frm not in ("Anywhere", "Anywhere on any"):
+            continue
+        to = r.group("to").replace("(v6)", "").strip()
+        iface = None
+        on = re.search(r"\bon\s+(\S+)", to)
+        if on:
+            iface = on.group(1)
+            to = to[: on.start()].strip()
+        rule = {"action": r.group("action").lower(), "proto": None, "ports": [], "iface": iface, "any": False}
+        if to in ("Anywhere", ""):
+            rule["any"] = True
+        else:
+            spec, _, proto = to.partition("/")
+            rule["proto"] = proto.lower() or None
+            for part in spec.split(","):
+                lo, _, hi = part.partition(":")
+                if lo.isdigit():
+                    rule["ports"].append([int(lo), int(hi) if hi.isdigit() else int(lo)])
+        if rule["any"] or rule["ports"]:
+            out["rules"].append(rule)
+    return out
+
+
+def firewall_read():
+    """This machine's firewall, as `parse_ufw` reads it, or None: no ufw, no sudo without a password, or not Linux."""
+    if platform.system() != "Linux":
+        return None
+    fw = parse_ufw(read_command(["sudo", "-n", "ufw", "status", "verbose"]) or "")
+    return {"tool": "ufw", **fw} if fw else None
+
+
+def firewall_lets_in(fw, proto, port, iface=None):
+    """True when the firewall lets a connection from anywhere reach this port, on `iface` if given (an `on <iface>`
+    rule opens that interface only). An inactive firewall, or one whose incoming default is allow, lets everything
+    in."""
+    if not fw or not fw.get("active") or fw.get("incoming") == "allow":
+        return True
+    for rule in fw.get("rules", []):
+        if rule.get("iface") and rule["iface"] != iface:
+            continue
+        if rule.get("proto") and rule["proto"] != proto:
+            continue
+        if rule.get("any") or any(lo <= port <= hi for lo, hi in rule.get("ports", [])):
+            return True
+    return False
+
+
+def tailnet_peers():
+    """Tailscale IP -> the device's name, from `tailscale status --json`, so the page names who may connect (altair,
+    Pixel 8 Pro) rather than an address. {} with no tailscale here."""
+    for exe in TAILSCALE_BINS:
+        text = read_command([exe, "status", "--json"], timeout=5)
+        if not text:
+            continue
+        try:
+            d = json.loads(text)
+        except ValueError:
+            continue
+        names = {}
+        for p in list((d.get("Peer") or {}).values()) + [d.get("Self") or {}]:
+            for ip in p.get("TailscaleIPs") or []:
+                names[ip] = p.get("HostName") or p.get("DNSName") or ip
+        return names
+    return {}
+
+
+def tailnet_acl_read():
+    """Which tailnet devices may connect to this machine, and on which ports, from the packet filter Tailscale's
+    access rules gave it (`tailscale debug netmap`): [{"ports": [[lo, hi]], "protos": [6, 17], "from": [ip]}], one per
+    rule. An empty list means no tailnet device may connect at all; None means it could not be read (no tailscale,
+    or no debug access), and the page then keeps the tailnet badge as the address gives it."""
+    for cmd in (["sudo", "-n", "tailscale", "debug", "netmap"],) + tuple(
+            [exe, "debug", "netmap"] for exe in TAILSCALE_BINS):
+        text = read_command(list(cmd), timeout=8)
+        if not text:
+            continue
+        try:
+            netmap = json.loads(text)
+        except ValueError:
+            continue
+        return parse_tailnet_acl(netmap)
+    return None
+
+
+def parse_tailnet_acl(netmap):
+    """The packet filter of a `tailscale debug netmap` -> the rules that let a tailnet device in. A rule names the
+    sources it lets in and the destinations (this machine's addresses, or `*`) and ports they may reach."""
+    if not isinstance(netmap, dict) or "PacketFilter" not in netmap:
+        return None
+    rules = []
+    for r in netmap.get("PacketFilter") or []:
+        ports = []
+        for d in r.get("Dsts") or []:
+            p = d.get("Ports") or {}
+            ports.append([int(p.get("First", 0)), int(p.get("Last", 65535))])
+        rules.append({"ports": ports, "protos": list(r.get("IPProto") or []), "from": list(r.get("Srcs") or [])})
+    return rules
+
+
+def tailnet_lets_in(acl, proto, port):
+    """The tailnet devices the access rules let reach this port, or None when the rules were not read (assume the
+    tailnet can, as the address says). An empty list: no tailnet device can connect."""
+    if acl is None:
+        return None
+    number = {"tcp": 6, "udp": 17}.get(proto)
+    out = []
+    for r in acl:
+        if r["protos"] and number not in r["protos"]:
+            continue
+        if any(lo <= port <= hi for lo, hi in r["ports"]):
+            out += [src for src in r["from"] if src not in out]
+    return out
+
+
+def apply_tailnet(row, acl):
+    """A row the tailnet could reach by its address keeps the tailnet only when the access rules let a device in:
+    altair's access rules let no device in (2026-11-06), so its ports were never open to the tailnet. Records the
+    devices allowed in `tailnet_from`."""
+    allowed = tailnet_lets_in(acl, row["proto"], row["port"])
+    row["tailnet_from"] = allowed
+    if allowed is None or allowed:
+        return row
+    if row["reach"] == "tailnet":
+        row["reach"] = "machine"
+    row["tailnet"] = False
+    return row
+
+
+def apply_firewall(row, fw, networks):
+    """A row the firewall blocks from the internet keeps only what the firewall lets in: the tailnet when its
+    interface is open (`Anywhere on tailscale0`), else nothing but the machine itself. A row an allow rule opens on a
+    firewall that denies by default is `firewalled`. Marks `firewall`: "allows" when the firewall lets the internet in,
+    "blocks" when it does not, None when no firewall was read."""
+    if fw is None or row["reach"] not in ("internet", "lan"):
+        row["firewall"] = None
+        return row
+    if firewall_lets_in(fw, row["proto"], row["port"]):
+        row["firewall"] = "allows"
+        # An active firewall that denies by default and opens this port with a rule of its own: open on purpose
+        # (Tailscale's 41641/udp). Still reachable from the internet, but a choice someone made, not a leftover, so it
+        # is `firewalled` rather than `internet` and raises no warning (James, 2026-11-06).
+        if fw.get("active") and fw.get("incoming") != "allow" and row["reach"] == "internet":
+            row["reach"] = "firewalled"
+        return row
+    row["firewall"] = "blocks"
+    tail = bool(networks.get("tailnet")) and firewall_lets_in(fw, row["proto"], row["port"], iface="tailscale0")
+    row["reach"] = "tailnet" if tail and row.get("tailnet") else "machine"
+    row["tailnet"] = False
+    return row
+
+
+def network_rows(sockets, networks, details=None, fw=None, acl=None):
     """The machine's sockets with who can connect to each, one row per port: `ss` and `lsof` print a socket bound on
     both IPv4 and IPv6 twice, and a browser opens a UDP socket per interface, which is one thing to fix, not twenty.
     The most exposed first, each group in port order."""
@@ -1317,20 +1503,23 @@ def network_rows(sockets, networks, details=None):
         if not have["process"] and row.get("process"):
             have["process"], have["pid"] = row.get("process"), row.get("pid")
     for row in rows.values():
+        apply_firewall(row, fw, networks)
+        apply_tailnet(row, acl)
         row["info"] = process_info(row.get("pid"), details or {})
         if row["info"] and row["info"]["name"]:
             row["process"] = row["info"]["name"]
     return sorted(rows.values(), key=lambda r: (REACH_RANK[r["reach"]], r.get("port") or 0, r.get("proto") or ""))
 
 
-def network_section(sockets, networks, ssh_text=None, ssh_source=None, details=None, connections=None,
-                    upload_mb=None):
+def network_section(sockets, networks, ssh_text=None, ssh_source=None, details=None, fw=None, acl=None,
+                    peers=None, connections=None, upload_mb=None):
     """One machine's Network section: the networks it is on, every listening port with who can connect to it, the
     two sshd settings with where they were read — or null where the machine has nothing to say about ssh — and, since
     collector#66, the connections it has going out and the megabytes a process may send between two reads before the
     page marks it."""
     ssh = None if ssh_text is None else {"source": ssh_source, **sshd_flags(ssh_text)}
-    return {"networks": networks, "sockets": network_rows(sockets, networks, details), "ssh": ssh,
+    return {"networks": networks, "firewall": fw, "tailnet_acl": acl, "tailnet_peers": peers or {},
+            "sockets": network_rows(sockets, networks, details, fw, acl), "ssh": ssh,
             "connections": [] if connections is None else connections,
             "upload_warn_mb": network_upload_mb() if upload_mb is None else upload_mb}
 
@@ -1347,6 +1536,7 @@ def network_read():
     sockets = listen_sockets()
     return network_section(sockets, machine_networks(interface_addresses()),
                            ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None, details=details,
+                           fw=firewall_read(), acl=tailnet_acl_read(), peers=tailnet_peers(),
                            connections=connections_read(sockets=sockets, details=details))
 
 

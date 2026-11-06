@@ -309,8 +309,17 @@ VMs) are no network another machine is on. `reach_of` then says who can connect 
 - **machine**: a loopback address (127.0.0.0/8, ::1).
 
 A port on every address also carries `tailnet: true` when the machine has a Tailscale address, and the page gives it
-a second badge, "Tailnet". The firewall is not read (ufw, the macOS application firewall), so a port open to the internet may
-still be blocked there; the page says so under each machine. There is no allow list: a port is not safe because a
+a second badge, "Tailnet".
+
+The firewall: on Linux `firewall_read` reads `sudo -n ufw status verbose` (`-n` fails at once rather than ask for a
+password; no ufw or no passwordless sudo reads null, and the page says the firewall was not read). `parse_ufw` keeps
+the default for incoming traffic and the incoming ALLOW and LIMIT rules from anywhere (a rule for one address opens
+nothing for the internet as a whole). `apply_firewall` then corrects each port bound beyond the machine: one the
+firewall blocks keeps only what it lets in (the tailnet when `Anywhere on tailscale0` is allowed, else the machine
+alone); one a rule opens on a firewall that denies by default is **firewalled** (blue): reachable from the internet,
+but by a rule someone wrote, so no warning, no toast and no count. A port open to the internet with the firewall off,
+or allowing by default, stays **internet** (red). `sudo -n ss -tulnp` reads the owner of every socket, root's
+included. The macOS firewall is not read yet.  There is no allow list: a port is not safe because a
 list names it, so a port meant to be public still shows as open to the internet.
 
 `network_rows` merges the sockets into one row per port and who can reach it: `ss` and `lsof` print a socket bound on
@@ -327,17 +336,27 @@ The page groups the ports one process listens on with the same reach into one ro
 When the ports of a row have different protocols, each port carries its own (`22/tcp, 5353/udp`).
 
 `sshd_read` and `sshd_flags` read the two settings that should not be on — `passwordauthentication yes` and
-`permitrootlogin yes` — from `sshd -T` when that answers (it normally needs root), else from
-`/etc/ssh/sshd_config`; a directive that is only commented out is not set, and a Mac is not asked at all.
+`permitrootlogin yes` — from `sudo -n sshd -T`, the settings sshd really uses with every drop-in applied. Only that
+reading raises a warning or a red toast: the config file alone (the last resort) can be overridden by a drop-in, so
+the page says it could not read sshd's own settings instead (ezio, 2026-11-06: the main file said yes,
+`sshd_config.d/00-hardening.conf` said no). A Mac is not asked at all.
+
+The tailnet: `tailnet_acl_read` reads Tailscale's access rules for this machine (`tailscale debug netmap`'s packet
+filter, with `sudo -n` on Linux) and `tailnet_peers` names the devices. A port keeps its Tailnet badge only where a
+rule lets a device reach it, and the Tailnet card names those devices; an empty filter means no tailnet device can
+connect (altair, 2026-11-06), and the badge goes. Rules that could not be read leave the badge as the address gives
+it.
 
 One machine's section is `{networks, sockets, ssh}` on its snapshot; `lib/server/network.ts`'s `network()` turns the
 machines read into `/api/network` — `{at, machines: [{name, local, read_at, stale, error, network}]}` — from the same
 10-second read the rest of the page uses, so it costs no extra ssh. `exposedSockets` is the view the warnings use: the
 ports open to the internet.
 
-The page draws the most exposed ports first. A machine's panel head counts the ports open to the internet,
-and says when it is showing a last good read; under the table sit the networks the machine is on, the note that the
-firewall is not read, and the ssh verdict with where it was read from.
+The page draws the most exposed ports first. Every machine's table has the same fixed column widths, so "Accessible
+to" lines up from one panel to the next; a long port list wraps in its own column, and under 900px the table scrolls
+sideways inside its panel. A machine's addresses are not on the page (a screenshot or a screen share would carry
+them): they are in the tooltip on "addresses" beside its name. Under the table sit the firewall line and the ssh
+verdict.
 
 ### What goes out, and what is new about it (collector#66)
 

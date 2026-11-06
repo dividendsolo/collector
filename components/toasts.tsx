@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { networkToasts, newAlarms, serviceToasts, sortToasts } from "@/lib/toasts";
+import { networkToasts, newAlarms, serviceToasts, sortToasts, sshToasts } from "@/lib/toasts";
 import { useLive } from "./data";
 import { SCROLL_EVENT } from "./network";
 import { useServices } from "./services";
@@ -64,7 +64,7 @@ export function Toasts() {
   // Until both reads are in, a thing that is fine cannot be told from one not read yet: no alarm before then.
   const ready = services !== null && state !== null;
   const all = useMemo(
-    () => [...serviceToasts(services), ...networkToasts(state?.machines)],
+    () => [...serviceToasts(services), ...networkToasts(state?.machines), ...sshToasts(state?.machines)],
     [services, state?.machines],
   );
   const shown = useMemo(() => sortToasts(all), [all]);
