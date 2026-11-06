@@ -1085,13 +1085,14 @@
     box-shadow: var(--glow);
   }
   #card-tip {
+    --tip-bg: transparent;
     position: fixed;
     z-index: 20;
     max-width: 480px;
     padding: 12px 14px;
     display: grid;
     gap: 6px;
-    background: var(--panel-2);
+    background: linear-gradient(var(--tip-bg), var(--tip-bg)), var(--panel-2);
     border: 1px solid var(--line-2);
     border-radius: var(--radius);
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
@@ -1111,6 +1112,30 @@
     color: var(--muted);
   }
   /* Labelled facts under a tooltip's text (the Network page's process): one per line, set apart from the text. */
+  /* A tooltip that wears its badge's colour (the Network page's Accessible to badges), the way the Card flow page's
+     tooltips wear their status's: the same tint and edge as the badge, over a solid panel. */
+  #card-tip.tone-red {
+    --tip-bg: var(--red-bg);
+    border-color: var(--red-line);
+  }
+  #card-tip.tone-amber {
+    --tip-bg: var(--amber-bg);
+    border-color: var(--amber-line);
+  }
+  #card-tip.tone-green {
+    --tip-bg: var(--green-bg);
+    border-color: var(--green-line);
+  }
+  #card-tip.tone-blue {
+    --tip-bg: var(--blue-bg);
+    border-color: var(--blue-line);
+  }
+  #card-tip.tone-red .tip-facts,
+  #card-tip.tone-amber .tip-facts,
+  #card-tip.tone-green .tip-facts,
+  #card-tip.tone-blue .tip-facts {
+    border-top-color: color-mix(in oklch, var(--text) 18%, transparent);
+  }
   #card-tip .tip-facts {
     display: grid;
     gap: 4px;

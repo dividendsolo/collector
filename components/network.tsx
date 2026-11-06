@@ -12,25 +12,42 @@ import type {
 import { useApi } from "./data";
 import { Icon, PanelHead, Pill, SkelRows } from "./ui";
 
-/** One "Accessible to" badge: its colour, its word, and what it means on hover. */
+/** One "Accessible to" badge: its colour, its word, and the card it opens on hover: a one-line definition, then who
+ * can connect, what keeps others out, how an attacker gets in, and this port (James, 2026-11-06). */
 interface Badge {
   cls: string;
   text: string;
-  tip: string;
+  tone: "red" | "blue" | "amber" | "green" | "grey";
+  about: string;
+  facts: [string, string][];
 }
 
 /** Who can connect to a port, one badge per group: red for the internet, blue for a port the firewall opens on
  * purpose (Firewalled), amber for the local network, green for the tailnet, grey for the machine alone. A port on
- * every address carries the tailnet as a badge of its own. Each badge says on hover what it means for this port
- * (James, 2026-11-06: "we can explain what firewall means and ... what this port is actually allowing in"). */
-function accessibleTo(s: NetworkSocket, machine: string, fw: Firewall | null | undefined): Badge[] {
-  const port = `${s.proto} ${s.port}`;
+ * every address carries the tailnet as a badge of its own. */
+function accessibleTo(
+  s: NetworkSocket,
+  machine: string,
+  fw: Firewall | null | undefined,
+  nets: MachineNetworks | undefined,
+  ports: string = String(s.port),
+): Badge[] {
+  const port = `${s.proto} ${ports}${s.process ? ` (${s.process})` : ""}`;
+  const fwName = fw?.tool ?? "the firewall";
   const tailnet: Badge = {
     cls: "net-tailnet",
     text: "Tailnet",
-    tip:
-      "Your own devices on Tailscale can connect, from anywhere: they reach this machine over an encrypted network " +
-      "only devices signed in to your Tailscale account are on. Nobody else can.",
+    tone: "green",
+    about: `Your own private network on Tailscale${nets?.tailnet ? `: ${machine} is ${nets.tailnet} on it` : ""}.`,
+    facts: [
+      ["Who can connect", "only devices signed in to your Tailscale account, from anywhere"],
+      ["What keeps others out", "Tailscale: every connection is encrypted and needs one of your devices' keys"],
+      ["How an attacker gets in", "a stolen Tailscale login, or a lost laptop or phone that is still signed in"],
+      [
+        "This port",
+        s.firewall === "blocks" ? `${port}: listens on every address, but ${fwName} lets only the tailnet in` : port,
+      ],
+    ],
   };
   const plus = s.tailnet ? [tailnet] : [];
   if (s.reach === "internet")
@@ -38,12 +55,20 @@ function accessibleTo(s: NetworkSocket, machine: string, fw: Firewall | null | u
       {
         cls: "failed",
         text: "Internet",
-        tip:
-          `Anyone on the internet can try to connect to ${port}. ` +
-          (fw
-            ? `${fw.tool} is ${fw.active ? "on but lets everything in by default" : "off"}, so nothing stops them. `
-            : "The firewall was not read, so it may still block this port. ") +
-          "Close it, or bind the program to 127.0.0.1 or the tailnet address, unless the world is meant to reach it.",
+        tone: "red",
+        about: `Anyone in the world who can reach ${machine}'s public address${nets?.internet.length ? ` (${nets.internet[0]})` : ""}.`,
+        facts: [
+          ["Who can connect", "anyone on the internet"],
+          [
+            "What keeps others out",
+            fw
+              ? `nothing: ${fwName} is ${fw.active ? "on but lets everything in by default" : "off"}`
+              : "unknown: the firewall was not read, so it may still block this port",
+          ],
+          ["How an attacker gets in", "scans the internet for open ports and connects straight to this one"],
+          ["This port", port],
+          ["What to do", "close it, or bind the program to 127.0.0.1 or the tailnet address"],
+        ],
       },
       ...plus,
     ];
@@ -52,10 +77,15 @@ function accessibleTo(s: NetworkSocket, machine: string, fw: Firewall | null | u
       {
         cls: "net-firewalled",
         text: "Firewalled",
-        tip:
-          `The firewall (${fw?.tool ?? "ufw"}) blocks every connection from the internet unless a rule lets it in, ` +
-          `and one rule lets ${port} in. Anyone on the internet can reach this port, on purpose: someone opened it. ` +
-          "Opened on purpose is not the same as safe: check the program behind it is meant to face the world.",
+        tone: "blue",
+        about: `${fwName} blocks every connection from the internet unless a rule lets it in, and a rule lets this port in.`,
+        facts: [
+          ["Who can connect", "anyone on the internet, on this port only"],
+          ["What keeps others out", `${fwName}: every other port is closed to the internet`],
+          ["How an attacker gets in", "through this open port, if the program behind it has a flaw"],
+          ["This port", port],
+          ["Note", "opened on purpose is not the same as safe: the program is meant to face the world"],
+        ],
       },
       ...plus,
     ];
@@ -64,32 +94,35 @@ function accessibleTo(s: NetworkSocket, machine: string, fw: Firewall | null | u
       {
         cls: "warning",
         text: "Local network",
-        tip:
-          `Any device on ${machine}'s local network can connect to ${port}: phones, TVs, smart plugs and guests on ` +
-          "the same Wi-Fi. The router keeps the internet out.",
+        tone: "amber",
+        about: `Devices on the same Wi-Fi or wired network as ${machine}${nets?.lan.length ? ` (${nets.lan[0]})` : ""}.`,
+        facts: [
+          ["Who can connect", "phones, TVs, smart plugs and guests on your Wi-Fi"],
+          ["What keeps others out", "your router: it drops connections that come from the internet"],
+          ["How an attacker gets in", "a hacked device on your network, a guest, or a weak Wi-Fi password"],
+          ["This port", port],
+        ],
       },
       ...plus,
     ];
-  if (s.reach === "tailnet")
-    return [
-      {
-        ...tailnet,
-        tip:
-          s.firewall === "blocks"
-            ? `${tailnet.tip} The program listens on every address, but the firewall blocks ${port} from the ` +
-              "internet and lets only the tailnet in."
-            : tailnet.tip,
-      },
-    ];
+  if (s.reach === "tailnet") return [tailnet];
   return [
     {
       cls: "",
       text: `Only ${machine}`,
-      tip:
-        s.firewall === "blocks"
-          ? `Only programs on ${machine} can connect: the firewall blocks ${port} from every network.`
-          : `Only programs on ${machine} itself can connect: ${port} is bound to a loopback address (127.0.0.1 or ` +
-            "::1), which no other machine can reach.",
+      tone: "grey",
+      about: `Programs running on ${machine} itself, and nothing else.`,
+      facts: [
+        ["Who can connect", `only programs on ${machine}`],
+        [
+          "What keeps others out",
+          s.firewall === "blocks"
+            ? `${fwName}: it blocks this port from every network`
+            : "the loopback address (127.0.0.1 or ::1): no other machine can reach it",
+        ],
+        ["How an attacker gets in", `only with a program already running on ${machine}`],
+        ["This port", port],
+      ],
     },
   ];
 }
@@ -192,15 +225,39 @@ function processFacts(info: ProcessInfo | null | undefined): string | undefined 
   return JSON.stringify(facts.filter((f): f is [string, string] => !!f[1]));
 }
 
-function SocketRow({ g, machine, fw }: { g: PortGroup; machine: string; fw: Firewall | null | undefined }) {
-  const badges = accessibleTo(g.first, machine, fw);
+function SocketRow({
+  g,
+  machine,
+  fw,
+  nets,
+}: {
+  g: PortGroup;
+  machine: string;
+  fw: Firewall | null | undefined;
+  nets: MachineNetworks | undefined;
+}) {
+  // The badge card names this row's ports, all of them: the row may hold several (ControlCenter's 5000 and 7000).
+  const badges = accessibleTo(
+    { ...g.first, port: g.ports.length > 1 ? (g.ports.join(", ") as never) : g.first.port },
+    machine,
+    fw,
+    nets,
+  );
   const { ports, protos } = portsText(g);
   return (
     <tr data-reach={g.first.reach}>
       <td className="port">{ports}</td>
       <td className="net-badges">
         {badges.map((b) => (
-          <span key={b.text} className="card-tip-plain" data-tip={b.tip} data-tip-title={b.text} tabIndex={0}>
+          <span
+            key={b.text}
+            className="card-tip-plain"
+            data-tip={b.about}
+            data-tip-title={b.text}
+            data-tip-facts={JSON.stringify(b.facts)}
+            data-tip-tone={b.tone}
+            tabIndex={0}
+          >
             <Pill cls={b.cls}>{b.text}</Pill>
           </span>
         ))}
@@ -261,7 +318,7 @@ function Machine({ m }: { m: MachineNetwork }) {
             </thead>
             <tbody>
               {groupPorts(sockets).map((g) => (
-                <SocketRow key={g.key} g={g} machine={m.name} fw={m.network?.firewall} />
+                <SocketRow key={g.key} g={g} machine={m.name} fw={m.network?.firewall} nets={m.network?.networks} />
               ))}
             </tbody>
           </table>
