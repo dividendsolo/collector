@@ -64,7 +64,7 @@ describe("the VPS's checks", () => {
     tailnet_acl: [{ ports: [[0, 65535]], protos: [6, 17], from: ["100.64.0.9/32"] }],
     tailnet_peers: { "100.64.0.9": "laptop" },
     sockets: [
-      { proto: "udp", port: 41641, reach: "firewalled" },
+      { proto: "udp", port: 41641, reach: "firewalled", process: "tailscaled" },
       { proto: "tcp", port: 22, reach: "tailnet" },
     ],
   };
@@ -77,6 +77,15 @@ describe("the VPS's checks", () => {
       "Tailnet devices that can connect": ["green", "laptop"],
       "Ports open to the internet": ["green", "0, and 1 firewalled: udp 41641"],
     });
+  });
+
+  it("says why Tailscale's firewalled port is open, and gives no reason for a port it does not know", () => {
+    const card = securityChecks("vps", net, false).find((c) => c.label === "Ports open to the internet");
+    expect(card?.facts).toEqual([["Why udp 41641 is open", expect.stringContaining("Tailscale (WireGuard)")]]);
+    const unknown = { ...net, sockets: [{ proto: "tcp", port: 8443, reach: "firewalled", process: "mystery" }] };
+    expect(securityChecks("vps", unknown, false).find((c) => c.label === "Ports open to the internet")?.facts).toEqual(
+      [],
+    );
   });
 
   it("is red for an open port, password login, or a firewall that lets everything in", () => {

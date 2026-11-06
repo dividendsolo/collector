@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { type Check, securityChecks, worst } from "@/lib/checks";
+import { type Check, securityChecks, WHY_OPEN, worst } from "@/lib/checks";
 import type { Firewall, MachineNetwork, MachineNetworks, NetworkSocket, ProcessInfo } from "@/lib/server/network";
 import { useApi } from "./data";
 import { Icon, PanelHead, Pill, SkelRows } from "./ui";
@@ -87,7 +87,9 @@ function accessibleTo(
           ["What keeps others out", `${fwName}: every other port is closed to the internet`],
           ["How an attacker gets in", "through this open port, if the program behind it has a flaw"],
           ["This port", port],
-          ["Note", "opened on purpose is not the same as safe: the program is meant to face the world"],
+          s.process && WHY_OPEN[s.process]
+            ? ["Why it is open", WHY_OPEN[s.process]]
+            : ["Note", "opened on purpose is not the same as safe: check the program is meant to face the world"],
         ],
       },
       ...plus,
