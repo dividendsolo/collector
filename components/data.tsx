@@ -2,6 +2,7 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import useSWR from "swr";
+import { downText, updating } from "@/lib/updating";
 
 const fetcher = async (url: string) => {
   const r = await fetch(url, { cache: "no-store" });
@@ -51,8 +52,9 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setUpdated(`Updated ${new Date(d.at * 1000).toLocaleTimeString()}`);
       setLiveClass("live");
     } catch (e) {
-      setUpdated(`Could not reach the Collector server: ${(e as Error).message}`);
-      setLiveClass("live down");
+      // During an update the server is away on purpose: that is a restart, not an outage.
+      setUpdated(downText(e));
+      setLiveClass(updating() ? "live busy" : "live down");
     }
   }, []);
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Update } from "@/lib/update";
+import { clearUpdating, downText, markUpdating } from "@/lib/updating";
 
 /** The server's answer to `GET /api/update`, or null when it did not answer. */
 const askServer = async (): Promise<Update | null> => {
@@ -40,13 +41,25 @@ export function UpdateButton() {
     };
   }, []);
 
+  // The note for a server that stays away: the version poll reloads the page when it is back on the new build.
+  const giveUpLater = useCallback(() => {
+    window.setTimeout(async () => {
+      setState(await askServer());
+      setSaid("The Collector server has not come back on the new build. Reload this page.");
+      setBusy(false);
+    }, 60_000);
+  }, []);
+
   const click = useCallback(async () => {
     setBusy(true);
     setSaid("");
+    // Before the POST: the server can restart before it answers, and that failed answer is the update working.
+    markUpdating();
     try {
       const r = await fetch("/api/update", { method: "POST" });
       const answer = (await r.json()) as { ok: boolean; why?: string };
       if (!answer.ok) {
+        clearUpdating(); // the server refused the update: a failed read now is a real outage again
         setSaid(answer.why || `The Collector server answered ${r.status}.`);
         setBusy(false);
         return;
@@ -55,16 +68,17 @@ export function UpdateButton() {
       // looking idle for the seconds the server takes to restart (James, 2026-11-06).
       // The restart is coming, so the page reloads from the version poll and not from here: a reload landing in the
       // second the server is away would show the browser's own error page. This is the note for when it stays away.
-      window.setTimeout(async () => {
-        setState(await askServer());
-        setSaid("The Collector server has not come back on the new build. Reload this page.");
-        setBusy(false);
-      }, 60_000);
+      giveUpLater();
     } catch (e) {
-      setSaid(`Could not reach the Collector server: ${(e as Error).message}`);
-      setBusy(false);
+      // The POST lost its answer to the restart: the version poll reloads the page on the new build, and the
+      // 60-second note above still covers a server that never comes back.
+      const text = downText(e);
+      if (text.startsWith("Could not reach")) {
+        setSaid(text);
+        setBusy(false);
+      } else giveUpLater();
     }
-  }, []);
+  }, [giveUpLater]);
 
   if (!state?.ready) return null;
   return (
