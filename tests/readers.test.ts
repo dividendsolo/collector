@@ -381,6 +381,19 @@ describe("warnings", () => {
     expect(w.some((x) => x.text.startsWith("The same script (x.py) starts from 2 jobs on m1"))).toBe(true);
     expect(machines[0].jobs[0]).toMatchObject({ machine: "m1", what: "Does A" });
   });
+  it("raises the GitHub REST limit in Needs attention, as it does GraphQL", () => {
+    const w = warnings({
+      machines: [],
+      github: { core: { used: 5000, limit: 5000, reset: 0 }, graphql: { used: 10, limit: 5000, reset: 0 } },
+      cfg: {},
+      services: [],
+      domains: [],
+      ticketsError: null,
+      x: null,
+      ai: [],
+    } as never);
+    expect(w.map((x) => [x.level, x.text])).toContainEqual(["error", "GitHub REST limit nearly gone: 0 of 5000 left"]);
+  });
   it("raises open incidents only for vendors marked attention", () => {
     const inc = (name: string) => ({
       name,

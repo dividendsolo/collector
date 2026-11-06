@@ -2,9 +2,16 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { securityChecks } from "@/lib/checks";
-import { checkToasts, forgetFixed, newAlarms, serviceToasts, sortToasts, visibleToasts } from "@/lib/toasts";
+import {
+  checkToasts,
+  forgetFixed,
+  githubToasts,
+  newAlarms,
+  serviceToasts,
+  sortToasts,
+  visibleToasts,
+} from "@/lib/toasts";
 import { useLive } from "./data";
-import { SCROLL_EVENT } from "./network";
 import { useServices } from "./services";
 
 /** The alarm for a red toast: two short falling tones, made in the browser (no sound file). A browser plays no sound
@@ -106,7 +113,10 @@ export function Toasts() {
       })),
     [state?.machines],
   );
-  const all = useMemo(() => [...serviceToasts(services), ...checkToasts(machines)], [services, machines]);
+  const all = useMemo(
+    () => [...githubToasts(state?.github), ...serviceToasts(services), ...checkToasts(machines)],
+    [state?.github, services, machines],
+  );
   // A fixed check forgets its dismissal, so the next time it breaks the toast shows again.
   useEffect(() => {
     if (!state) return;
@@ -132,19 +142,7 @@ export function Toasts() {
         <div key={t.key} className={`toast ${t.level}`} role={t.level === "error" ? "alert" : "status"}>
           <span className="toast-dot" />
           <div className="toast-body">
-            <a
-              className="toast-title plain"
-              href={t.href}
-              onClick={(e) => {
-                // Already on the page the link opens: the address would not change, so tell the page to scroll.
-                const [page, query] = t.href.split("?");
-                if (location.hash.split("?")[0] !== page || !query) return;
-                e.preventDefault();
-                dispatchEvent(
-                  new CustomEvent(SCROLL_EVENT, { detail: new URLSearchParams(query).get("first") || "internet" }),
-                );
-              }}
-            >
+            <a className="toast-title plain" href={t.href}>
               {t.title}
             </a>
             <div className="toast-text">{t.text}</div>

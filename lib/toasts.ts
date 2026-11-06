@@ -11,6 +11,7 @@
  */
 
 import type { Check } from "./checks";
+import { jumpHref } from "./jump";
 
 export interface Toast {
   /** Which thing it is about: `service:<url>` or `network:<machine>`. */
@@ -60,7 +61,7 @@ export function serviceToasts(services: ServiceIn[] | null | undefined): Toast[]
       level: s.status === "down" ? "error" : "warn",
       title: `${s.name} is ${word}`,
       text: s.error ? s.error : s.url.replace(/^https?:\/\//, ""),
-      href: "#/services",
+      href: jumpHref("services", `service:${s.url}`),
     });
   }
   return out;
@@ -89,7 +90,7 @@ export function networkToasts(machines: MachineIn[] | null | undefined): Toast[]
       level: "error",
       title: `${ports.length === 1 ? "1 port" : `${ports.length} ports`} on ${m.name} open to the internet`,
       text: `${shown}${rest ? `, and ${rest} more` : ""}`,
-      href: "#/network?first=internet",
+      href: jumpHref("network", `ports:${m.name}:internet`),
     });
   }
   return out;
@@ -113,7 +114,7 @@ export function sshToasts(machines: MachineIn[] | null | undefined): Toast[] {
       level: "error",
       title: `SSH on ${m.name} allows ${on.join(" and ")}`,
       text: "Set PasswordAuthentication no and PermitRootLogin no in sshd's config, then reload sshd.",
-      href: "#/network",
+      href: jumpHref("network", `check:${m.name}:ssh`),
     });
   }
   return out;
@@ -134,7 +135,7 @@ export function checkToasts(machines: { name: string; checks: Check[] }[]): Toas
         title: `${m.name}: ${c.problem ?? c.label}`,
         // The fix is in the check's card on the Network page; a command in a toast wraps badly and reads worse.
         text: `${c.label}: ${c.value}`,
-        href: c.id.endsWith(":internet") ? "#/network?first=internet" : "#/network",
+        href: jumpHref("network", c.id.endsWith(":internet") ? `ports:${m.name}:internet` : c.id),
         dismissible: c.level === "amber",
       });
     }
@@ -183,4 +184,44 @@ export function sortToasts(all: Toast[]): Toast[] {
  * already showing makes no sound twice; a warning (Slow) makes none. */
 export function newAlarms(shown: Toast[], heard: Set<string>): Toast[] {
   return shown.filter((t) => t.level === "error" && !heard.has(`${t.key}|${t.state}`));
+}
+
+interface LimitIn {
+  used: number;
+  limit: number;
+  reset: number;
+}
+
+const GITHUB_LOW = 500;
+const GITHUB_NAMES = { core: "REST", graphql: "GraphQL" } as const;
+
+const resetTime = (s: number) => new Date(s * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+/** A GitHub API limit (REST or GraphQL) with under 500 calls left: one amber toast with Dismiss, since nobody can fix
+ * it but wait for the reset (James, 2026-11-06: "there's really nothing you can do") that names what is left and when it
+ * that names what is left and when it resets, linked to the GitHub limits panel on the APIs page. Its state is `low`,
+ * then `out` at zero, so a dismissed toast shows again when the limit runs out (James, 2026-11-06, after REST hit 0
+ * and only the APIs page said so: "that should be a notification in the toast"). */
+export function githubToasts(
+  github: { error?: string | null; core?: LimitIn; graphql?: LimitIn } | null | undefined,
+  time: (reset: number) => string = resetTime,
+): Toast[] {
+  if (!github || github.error) return [];
+  const out: Toast[] = [];
+  for (const k of ["core", "graphql"] as const) {
+    const l = github[k];
+    if (!l) continue;
+    const left = Math.max(0, l.limit - l.used);
+    if (left >= GITHUB_LOW) continue;
+    out.push({
+      key: `github:${k}`,
+      state: left === 0 ? "out" : "low",
+      level: "warn",
+      title: `GitHub ${GITHUB_NAMES[k]} limit ${left === 0 ? "used up" : "nearly gone"}`,
+      text: `${left.toLocaleString("en-US")} of ${l.limit.toLocaleString("en-US")} left. Resets ${time(l.reset)}.`,
+      href: jumpHref("apis", "github-limit"),
+      dismissible: true,
+    });
+  }
+  return out;
 }

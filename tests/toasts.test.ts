@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { internetPortCount, networkToasts, newAlarms, serviceToasts, sortToasts, sshToasts } from "@/lib/toasts";
+import {
+  githubToasts,
+  internetPortCount,
+  networkToasts,
+  newAlarms,
+  serviceToasts,
+  sortToasts,
+  sshToasts,
+} from "@/lib/toasts";
 
 /**
  * The toasts (collector#67). James, 2026-11-06: "a little toast notification that will pop up if one of our services
@@ -23,7 +31,12 @@ describe("a service toast", () => {
   it("shows for a service that turns Slow or Down, with the error, and none for one Online", () => {
     expect(serviceToasts([svc("online")])).toEqual([]);
     const [down] = serviceToasts([svc("down", "502")]);
-    expect(down).toMatchObject({ level: "error", title: "Situation is Down", text: "502", href: "#/services" });
+    expect(down).toMatchObject({
+      level: "error",
+      title: "Situation is Down",
+      text: "502",
+      href: "#/services?to=service%3Ahttps%3A%2F%2Fsituation.example.com",
+    });
     const [slow] = serviceToasts([svc("slow")]);
     expect(slow).toMatchObject({ level: "warn", title: "Situation is Slow", text: "situation.example.com" });
   });
@@ -53,7 +66,7 @@ describe("a network toast", () => {
       level: "error",
       title: "2 ports on vps open to the internet",
       text: "tcp 22, udp 5353",
-      href: "#/network?first=internet",
+      href: "#/network?to=ports%3Avps%3Ainternet",
     });
     expect(networkToasts([vps([["tcp", 5000, "lan"]])])).toEqual([]);
     expect(networkToasts([{ name: "laptop" }])).toEqual([]);
@@ -126,11 +139,47 @@ describe("the stack", () => {
 describe("the page change that scrolls to the top (collector#67 bug)", () => {
   // James, 2026-11-06: the toast's link opened the Network page but did not scroll to the port. Repro (headless
   // Chrome, scrollY per frame): the page reached the row, then glided back to 0. The Shell scrolled to the top on
-  // every change of the hash, and the Network page taking `?first=internet` off the address is a change of the hash.
+  // every change of the hash, and the Network page taking `?to=<id>` off the address is a change of the hash.
   it("is the same page with or without a query, so taking the query off scrolls nothing", async () => {
     const { pageOf } = await import("@/components/app");
-    expect(pageOf("#/network?first=internet")).toBe(pageOf("#/network"));
+    expect(pageOf("#/network?to=ports%3Avps%3Ainternet")).toBe(pageOf("#/network"));
     expect(pageOf("#/network")).not.toBe(pageOf("#/"));
     expect(pageOf("#/cron/ezio/abc")).toBe("cron/ezio/abc");
+  });
+});
+
+describe("githubToasts", () => {
+  // James, 2026-11-06, after the REST limit hit 0 and only the APIs page said so: "that should be a notification in
+  // the toast."
+  const at = (s: number) => `t${s}`;
+  const limit = (core: number, graphql = 0) => ({
+    core: { used: core, limit: 5000, reset: 100 },
+    graphql: { used: graphql, limit: 5000, reset: 200 },
+  });
+  it("raises an amber toast with Dismiss when the REST limit is used up, linked to its panel on the APIs page", () => {
+    expect(githubToasts(limit(5000), at)).toEqual([
+      {
+        key: "github:core",
+        state: "out",
+        level: "warn",
+        title: "GitHub REST limit used up",
+        text: "0 of 5,000 left. Resets t100.",
+        href: "#/apis?to=github-limit",
+        dismissible: true,
+      },
+    ]);
+  });
+  it("raises it when under 500 are left, for REST and GraphQL alike", () => {
+    const t = githubToasts(limit(4600, 4700), at);
+    expect(t.map((x) => [x.key, x.state, x.title])).toEqual([
+      ["github:core", "low", "GitHub REST limit nearly gone"],
+      ["github:graphql", "low", "GitHub GraphQL limit nearly gone"],
+    ]);
+    expect(t[0].text).toBe("400 of 5,000 left. Resets t100.");
+  });
+  it("raises nothing with 500 or more left, or with no reading", () => {
+    expect(githubToasts(limit(4500, 0), at)).toEqual([]);
+    expect(githubToasts({ error: "gh failed" }, at)).toEqual([]);
+    expect(githubToasts(undefined, at)).toEqual([]);
   });
 });
