@@ -39,10 +39,15 @@ def main():
         out = collect.ps_details(case["text"], case.get("args"))
     elif fn == "info":
         out = collect.process_info(case["pid"], collect.ps_details(case["ps"], case.get("args")))
+    elif fn == "ufw":
+        out = collect.parse_ufw(case["text"])
+    elif fn == "lets_in":
+        out = collect.firewall_lets_in(case["fw"], case["proto"], case["port"], case.get("iface"))
     elif fn == "section":
         out = collect.network_section(
             case["sockets"], case["networks"], ssh_text=case.get("ssh_text"), ssh_source=case.get("ssh_source"),
             details=collect.ps_details(case["ps"]) if case.get("ps") else None,
+            fw=collect.parse_ufw(case["ufw"]) if case.get("ufw") else None,
         )
     else:
         raise SystemExit(f"unknown fn: {fn}")

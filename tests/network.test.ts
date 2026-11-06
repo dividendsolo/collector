@@ -34,9 +34,10 @@ interface Port {
   addresses: string[];
   process: string | null;
   pid: string | null;
-  reach: "internet" | "lan" | "tailnet" | "machine";
+  reach: "internet" | "firewalled" | "lan" | "tailnet" | "machine";
   tailnet: boolean;
   info?: unknown;
+  firewall?: string | null;
 }
 
 // A machine on a home network (private addresses only) with a tailnet, and a VPS with a public address.
@@ -270,6 +271,111 @@ describe("the process behind a port (its tooltip)", () => {
   });
 });
 
+describe("the firewall (ufw)", () => {
+  // `sudo ufw status verbose` on a VPS that denies incoming and opens the tailnet's interface and Tailscale's port.
+  const UFW = [
+    "Status: active",
+    "Logging: on (low)",
+    "Default: deny (incoming), allow (outgoing), deny (routed)",
+    "New profiles: skip",
+    "",
+    "To                         Action      From",
+    "--                         ------      ----",
+    "Anywhere on tailscale0     ALLOW IN    Anywhere",
+    "41641/udp                  ALLOW IN    Anywhere",
+    "80,443/tcp                 ALLOW IN    Anywhere",
+    "6000:6010/tcp              ALLOW IN    Anywhere",
+    "5432/tcp                   ALLOW IN    198.51.100.7",
+    "25/tcp                     DENY IN     Anywhere",
+    "Anywhere (v6) on tailscale0 ALLOW IN    Anywhere (v6)",
+    "41641/udp (v6)             ALLOW IN    Anywhere (v6)",
+  ].join("\n");
+
+  it("reads the default and the rules that let anyone in, and leaves out a rule for one address and a deny", () => {
+    const fw = drive<{ active: boolean; incoming: string; rules: unknown[] }>({ fn: "ufw", text: UFW });
+    expect(fw.active).toBe(true);
+    expect(fw.incoming).toBe("deny");
+    expect(fw.rules).toEqual([
+      { action: "allow", proto: null, ports: [], iface: "tailscale0", any: true },
+      { action: "allow", proto: "udp", ports: [[41641, 41641]], iface: null, any: false },
+      {
+        action: "allow",
+        proto: "tcp",
+        ports: [
+          [80, 80],
+          [443, 443],
+        ],
+        iface: null,
+        any: false,
+      },
+      { action: "allow", proto: "tcp", ports: [[6000, 6010]], iface: null, any: false },
+      { action: "allow", proto: null, ports: [], iface: "tailscale0", any: true },
+      { action: "allow", proto: "udp", ports: [[41641, 41641]], iface: null, any: false },
+    ]);
+    expect(drive({ fn: "ufw", text: "" })).toBeNull();
+    expect(drive({ fn: "ufw", text: "Status: inactive\n" })).toMatchObject({ active: false });
+  });
+
+  it("lets in what a rule names, on its interface only, and everything when it is off or allows by default", () => {
+    const fw = drive({ fn: "ufw", text: UFW });
+    const lets = (proto: string, port: number, iface?: string) =>
+      drive<boolean>({ fn: "lets_in", fw, proto, port, iface });
+    expect(lets("udp", 41641)).toBe(true);
+    expect(lets("tcp", 443)).toBe(true);
+    expect(lets("tcp", 6005)).toBe(true);
+    expect(lets("udp", 443)).toBe(false);
+    expect(lets("tcp", 22)).toBe(false);
+    expect(lets("tcp", 5432)).toBe(false);
+    expect(lets("tcp", 22, "tailscale0")).toBe(true);
+    expect(drive({ fn: "lets_in", fw: { active: false, incoming: "deny", rules: [] }, proto: "tcp", port: 22 })).toBe(
+      true,
+    );
+    expect(drive({ fn: "lets_in", fw: { active: true, incoming: "allow", rules: [] }, proto: "tcp", port: 22 })).toBe(
+      true,
+    );
+  });
+
+  it("marks a port the firewall blocks with what it lets through: the tailnet, or the machine alone", () => {
+    const out = drive<{ firewall: unknown; sockets: Port[] }>({
+      fn: "section",
+      networks: VPS,
+      ufw: UFW,
+      sockets: [
+        { proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "7" },
+        { proto: "tcp", address: "0.0.0.0", port: 443, process: "proxy", pid: "8" },
+        { proto: "udp", address: "0.0.0.0", port: 41641, process: "tailscaled", pid: "9" },
+        { proto: "udp", address: "203.0.113.5", port: 68, process: null, pid: null },
+        { proto: "tcp", address: "127.0.0.1", port: 5432, process: "postgres", pid: "10" },
+      ],
+    });
+    expect(out.sockets.map((s) => [s.proto, s.port, s.reach, s.tailnet, s.firewall])).toEqual([
+      ["tcp", 443, "firewalled", true, "allows"],
+      ["udp", 41641, "firewalled", true, "allows"],
+      ["tcp", 22, "tailnet", false, "blocks"],
+      ["udp", 68, "machine", false, "blocks"],
+      ["tcp", 5432, "machine", false, null],
+    ]);
+  });
+
+  it("leaves a port open to the internet when the firewall is off or lets everything in: nothing chose it", () => {
+    const port = [{ proto: "tcp", address: "0.0.0.0", port: 3000, process: "bun", pid: "7" }];
+    for (const ufw of ["Status: inactive\n", UFW.replace("deny (incoming)", "allow (incoming)")]) {
+      const out = drive<{ sockets: Port[] }>({ fn: "section", networks: VPS, ufw, sockets: port });
+      expect(out.sockets.map((s) => [s.reach, s.firewall])).toEqual([["internet", "allows"]]);
+    }
+  });
+
+  it("leaves every port as its address says when no firewall was read", () => {
+    const out = drive<{ firewall: unknown; sockets: Port[] }>({
+      fn: "section",
+      networks: VPS,
+      sockets: [{ proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "7" }],
+    });
+    expect(out.firewall).toBeNull();
+    expect(out.sockets.map((s) => [s.reach, s.firewall])).toEqual([["internet", null]]);
+  });
+});
+
 describe("the sshd settings that should not be on", () => {
   it("reads `sshd -T`, whose keys are lower case, and flags only what is really on", () => {
     const out = drive<{ passwordauthentication: boolean; permitrootlogin: boolean }>({
@@ -323,6 +429,7 @@ describe("the section one machine reads", () => {
         reach: "internet",
         tailnet: true,
         info: null,
+        firewall: null,
       },
       {
         proto: "udp",
@@ -333,6 +440,7 @@ describe("the section one machine reads", () => {
         reach: "internet",
         tailnet: true,
         info: null,
+        firewall: null,
       },
       {
         proto: "tcp",
@@ -343,6 +451,7 @@ describe("the section one machine reads", () => {
         reach: "tailnet",
         tailnet: false,
         info: null,
+        firewall: null,
       },
       {
         proto: "tcp",
@@ -353,6 +462,7 @@ describe("the section one machine reads", () => {
         reach: "machine",
         tailnet: false,
         info: null,
+        firewall: null,
       },
     ]);
   });

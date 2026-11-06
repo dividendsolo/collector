@@ -45,6 +45,7 @@ describe("a network toast", () => {
         ["tcp", 5000, "lan"],
         ["tcp", 11434, "tailnet"],
         ["tcp", 5432, "machine"],
+        ["udp", 41641, "firewalled"],
       ]),
     ]);
     expect(t).toMatchObject({

@@ -1,18 +1,33 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { MachineNetwork, MachineNetworks, NetworkSocket, NetworkSsh, ProcessInfo } from "@/lib/server/network";
+import type {
+  Firewall,
+  MachineNetwork,
+  MachineNetworks,
+  NetworkSocket,
+  NetworkSsh,
+  ProcessInfo,
+} from "@/lib/server/network";
 import { useApi } from "./data";
 import { Icon, PanelHead, Pill, SkelRows } from "./ui";
 
-/** Who can connect to a port, one badge per group: red for the internet, green for the tailnet, grey for the local
- * network and the machine alone. A port on every address carries the tailnet as a badge of its own. */
+/** Who can connect to a port, one badge per group: red for the internet, blue for a port the firewall opens on
+ * purpose (Firewalled), amber for the local network, green for the tailnet, grey for the machine alone. A port on every address carries the tailnet as a badge of its own. */
 function accessibleTo(s: NetworkSocket, machine: string): { cls: string; text: string }[] {
   const tailnet = { cls: "net-tailnet", text: "Tailnet" };
   if (s.reach === "internet") return [{ cls: "failed", text: "Internet" }, ...(s.tailnet ? [tailnet] : [])];
-  if (s.reach === "lan") return [{ cls: "net-lan", text: "Local network" }, ...(s.tailnet ? [tailnet] : [])];
+  if (s.reach === "firewalled") return [{ cls: "net-firewalled", text: "Firewalled" }, ...(s.tailnet ? [tailnet] : [])];
+  if (s.reach === "lan") return [{ cls: "warning", text: "Local network" }, ...(s.tailnet ? [tailnet] : [])];
   if (s.reach === "tailnet") return [tailnet];
   return [{ cls: "", text: `Only ${machine}` }];
+}
+
+/** What the page says about the machine's firewall, under its table. */
+function firewallNote(fw: Firewall | null | undefined): string {
+  if (!fw) return "firewall not read, so a port listed here may still be blocked";
+  if (!fw.active) return `${fw.tool} is off: nothing is blocked`;
+  return `${fw.tool} is on (incoming: ${fw.incoming}); each port shows who it lets in`;
 }
 
 /** The networks a machine is on, in one line: what "local network" and "internet" mean for it. */
@@ -188,7 +203,8 @@ function Machine({ m }: { m: MachineNetwork }) {
       )}
       <p className="sub net-note">
         {nets || "No network address read"}
-        {" · the firewall is not read, so it may still block a port listed here"}
+        {" · "}
+        {firewallNote(m.network?.firewall)}
         {ssh ? (
           <>
             {" · "}

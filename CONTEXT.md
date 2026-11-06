@@ -305,8 +305,17 @@ VMs) are no network another machine is on. `reach_of` then says who can connect 
 - **machine**: a loopback address (127.0.0.0/8, ::1).
 
 A port on every address also carries `tailnet: true` when the machine has a Tailscale address, and the page gives it
-a second badge, "Tailnet". The firewall is not read (ufw, the macOS application firewall), so a port open to the internet may
-still be blocked there; the page says so under each machine. There is no allow list: a port is not safe because a
+a second badge, "Tailnet".
+
+The firewall: on Linux `firewall_read` reads `sudo -n ufw status verbose` (`-n` fails at once rather than ask for a
+password; no ufw or no passwordless sudo reads null, and the page says the firewall was not read). `parse_ufw` keeps
+the default for incoming traffic and the incoming ALLOW and LIMIT rules from anywhere (a rule for one address opens
+nothing for the internet as a whole). `apply_firewall` then corrects each port bound beyond the machine: one the
+firewall blocks keeps only what it lets in (the tailnet when `Anywhere on tailscale0` is allowed, else the machine
+alone); one a rule opens on a firewall that denies by default is **firewalled** (blue): reachable from the internet,
+but by a rule someone wrote, so no warning, no toast and no count. A port open to the internet with the firewall off,
+or allowing by default, stays **internet** (red). `sudo -n ss -tulnp` reads the owner of every socket, root's
+included. The macOS firewall is not read yet.  There is no allow list: a port is not safe because a
 list names it, so a port meant to be public still shows as open to the internet.
 
 `network_rows` merges the sockets into one row per port and who can reach it: `ss` and `lsof` print a socket bound on

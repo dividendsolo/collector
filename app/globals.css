@@ -1486,7 +1486,7 @@
     background: var(--amber-bg);
     border-color: var(--amber-line);
   }
-  /* The Network page's badges: the tailnet in green, the local network greyed out. */
+  /* The Network page's badges: the tailnet in green (the local network wears the amber warning pill). */
   .pill.net-tailnet {
     color: var(--green);
     background: var(--green-bg);
@@ -1494,9 +1494,6 @@
   }
   .pill.net-tailnet .dot {
     background: var(--green);
-  }
-  .pill.net-lan {
-    color: var(--faint);
   }
   /* Each machine's table sizes to its own rows: the port list wraps inside its cell, so one machine with a long list
      (twenty UDP ports with no process name) cannot widen the column and push every other cell to the right. */
@@ -1522,6 +1519,15 @@
     .net-flash td {
       animation: none;
     }
+  }
+  /* A port the firewall opens on purpose (collector#65): reachable from the internet, but by a rule, so blue, not red. */
+  .pill.net-firewalled {
+    color: var(--blue-2);
+    background: var(--blue-bg);
+    border-color: var(--blue-line);
+  }
+  .pill.net-firewalled .dot {
+    background: var(--blue);
   }
   .net-badges .pill + .pill {
     margin-left: 6px;
