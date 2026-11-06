@@ -1529,8 +1529,16 @@
   .pill.net-firewalled .dot {
     background: var(--blue);
   }
-  .net-badges .pill + .pill {
+  .net-badges .card-tip-plain + .card-tip-plain {
     margin-left: 6px;
+  }
+  .net-badges .card-tip-plain {
+    cursor: help;
+    border-radius: 999px;
+  }
+  .net-badges .card-tip-plain:focus-visible {
+    outline: none;
+    box-shadow: var(--glow);
   }
   .net-note {
     margin: 0;
