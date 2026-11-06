@@ -579,5 +579,28 @@ The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `
 The board poll costs 1 GraphQL point per read, about 360 an hour while a page is open, and the page sizes in
 `lib/server/board.ts` are what keep the query under 100 connection requests. Keep it at 1.
 
+## A route answers this page only (card #69)
+
+Collector listens on loopback, which keeps other machines out but not the browser James already has open. A page from
+any site can post to it: `/api/update`, `/api/hermes` and `/api/tailscale` take no body, so a form post needs no
+preflight, and one applied a staged update and restarted the server. No `Host` check meant a page whose own name
+resolves to 127.0.0.1 (DNS rebinding) could read the GET routes too. The input audit of 2026-11-06 (agent-stack#291)
+found both; `lib/server/guard.ts` is the fix.
+
+`guard(req)` answers `null` to let a request through, or the 403 to return instead, and every route in
+`app/api/**/route.ts` calls it first (`guard(req) ?? json(...)`, or the refusal at the top of a longer handler). It
+reads the method itself, so one function covers both rules:
+
+- the `Host` — or, for a `Request` that carries none, the URL it goes to — must be a loopback name (`localhost`,
+  `*.localhost`, any 127/8 address, `::1`) on every route: a browser sends the name it was given, and Collector is
+  only ever reached at one of those;
+- anything but `GET`/`HEAD` must come from this page: `Sec-Fetch-Site: same-origin`, or, where the browser sends no
+  such header, an `Origin` whose host is this one. No such header at all is not a browser: a shell or an agent is
+  answered as before, the way `/api/network/seen` already did (its own copy of that check is gone).
+
+`tests/request-guard.test.ts` holds the behaviour — a cross-site `POST /api/update` is 403 while the page's own click
+and a curl get the click's own answer, and a foreign `Host` is 403 on a GET route — and the rules that every route
+file calls the guard and that the five state-changing routes are the list, so a new one has to be guarded on purpose.
+
 `config.json` and `.env` are gitignored and stay that way: the repo is public and `config.json` holds real host
 names, job names and board ids.

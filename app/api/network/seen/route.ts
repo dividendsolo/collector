@@ -1,3 +1,4 @@
+import { guard } from "@/lib/server/guard";
 import { json } from "@/lib/server/respond";
 import { clearMark } from "@/lib/server/seen";
 
@@ -12,11 +13,14 @@ export const dynamic = "force-dynamic";
  * shell or an agent.
  *
  * A post with no body needs no preflight, so any web page could send one to this machine: one from another site is
- * refused, or a page could clear a mark and hide a new process or a large upload. The browser names where a request
- * comes from (`Sec-Fetch-Site`, and `Origin` on older ones); a shell or an agent sends neither and is answered. */
+ * refused, or a page could clear a mark and hide a new process or a large upload. That refusal is the shared guard's
+ * now (`lib/server/guard.ts`, collector#69), the same one every other route calls: the browser names where the
+ * request comes from (`Sec-Fetch-Site`, and `Origin` on older ones); a shell or an agent sends neither and is
+ * answered. */
 export async function POST(req: Request) {
+  const refusal = guard(req);
+  if (refusal) return refusal;
   const url = new URL(req.url);
-  if (fromAnotherSite(req, url)) return json({ why: "a Seen click comes from this page only" }, 403);
   let machine = url.searchParams.get("machine");
   let id = url.searchParams.get("id");
   if ((!machine || !id) && req.headers.get("content-type") === "application/json") {
@@ -27,19 +31,4 @@ export async function POST(req: Request) {
   if (!machine || !id) return json({ why: "machine and id are required" }, 400);
   const { cleared, marks } = await clearMark(machine, id);
   return json({ machine, id, cleared, marks });
-}
-
-/** True when a browser says the request comes from a page of another site: `Sec-Fetch-Site` other than same-origin
- * or none (typed in the address bar), or, where the browser sends no such header, an `Origin` whose host is not this
- * one. */
-function fromAnotherSite(req: Request, url: URL): boolean {
-  const site = req.headers.get("sec-fetch-site");
-  if (site) return site !== "same-origin" && site !== "none";
-  const origin = req.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== (req.headers.get("host") || url.host);
-  } catch {
-    return true;
-  }
 }

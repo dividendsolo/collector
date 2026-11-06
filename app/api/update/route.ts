@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { guard } from "@/lib/server/guard";
 import { ROOT } from "@/lib/server/paths";
 import { json } from "@/lib/server/respond";
 import { bunPath, clickAction, updateState } from "@/lib/update";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
  * The page's Update button (card #41): the build this server process serves, the finished one the rebuild job staged
  * beside it, and whether a click is worth offering. Two small files read per ask, no caching.
  */
-export const GET = () => json(updateState(ROOT));
+export const GET = (req: Request) => guard(req) ?? json(updateState(ROOT));
 
 /**
  * The click. The swap and the restart go to a script of its own, detached, so this answer reaches the page before the
@@ -18,7 +19,9 @@ export const GET = () => json(updateState(ROOT));
  * version poll). The script is TypeScript, so it needs Bun — resolved here rather than taken from
  * `process.execPath`, which is node when the plist's `bun run start` hands off to `next start`.
  */
-export function POST() {
+export function POST(req: Request) {
+  const refusal = guard(req);
+  if (refusal) return refusal;
   const click = clickAction(updateState(ROOT));
   if (!click.ok) return json(click, 409);
   const bun = bunPath();
