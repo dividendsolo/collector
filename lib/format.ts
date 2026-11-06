@@ -81,14 +81,41 @@ export function schedule(raw: string | null | undefined, zone?: string, firstZon
   return raw;
 }
 
-export type JobStatus = "OK" | "Failed" | "Warning" | "Paused" | "Done";
-export function status(j: { enabled?: boolean; state?: string; last_status?: string | null }): JobStatus {
+export type JobStatus = "OK" | "Failed" | "Warning" | "Acknowledged" | "Paused" | "Done";
+type JobLike = {
+  enabled?: boolean;
+  state?: string;
+  last_status?: string | null;
+  machine?: string;
+  name?: string;
+  last_run_at?: string | null;
+};
+
+/** The acknowledgement key of a job's last run: machine, job and that run's time. The Needs attention row uses the
+ * same key, so one Acknowledge covers the row, the sidebar's Cron Jobs icon and the Cron Jobs page. */
+export const ackKey = (j: JobLike) => `${j.machine ?? ""}|${j.name ?? ""}|${j.last_run_at ?? ""}`;
+
+/** A job's status. With `acks`, a failed or warning run that was acknowledged reads Acknowledged until the job runs
+ * again (James, 2026-11-06). */
+export function status(j: JobLike, acks: string[] = []): JobStatus {
   if (!j.enabled) return j.state === "completed" ? "Done" : "Paused";
   if (!j.last_status || j.last_status.startsWith("ok")) return "OK";
+  if (acks.includes(ackKey(j))) return "Acknowledged";
   if (j.last_status === "delivery_failed") return "Warning";
   return "Failed";
 }
-export const STATUS_RANK: Record<JobStatus, number> = { Failed: 0, Warning: 1, OK: 2, Paused: 3, Done: 4 };
+export const STATUS_RANK: Record<JobStatus, number> = {
+  Failed: 0,
+  Warning: 1,
+  Acknowledged: 2,
+  OK: 3,
+  Paused: 4,
+  Done: 5,
+};
+
+/** The jobs the sidebar's Cron Jobs icon counts: failed or warning, and not acknowledged. */
+export const failingJobs = <T extends JobLike>(jobs: T[], acks: string[]): T[] =>
+  jobs.filter((j) => ["Failed", "Warning"].includes(status(j, acks)));
 
 /** A job whose scheduler keeps no run history at all: a plain crontab line, which records nothing about how its
  * runs went. Its row says so rather than reading as a failure (collect.py marks it `history: false`). */

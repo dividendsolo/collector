@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { status } from "@/lib/format";
+import { failingJobs } from "@/lib/format";
 import { internetPortCount } from "@/lib/toasts";
 import { acked, useAcks } from "./acks";
 import { AgentPage, AgentsPage } from "./agents";
@@ -94,9 +94,12 @@ function useTags(): Record<string, { text: string; hot: boolean }> {
   const vendors = useVendors();
   const acks = useAcks();
   const w: any[] = (state?.warnings || []).filter((x: any) => !acked(x, acks));
+  // An acknowledged failed run leaves the count until the job runs again (James, 2026-11-06).
   const failing = state
-    ? state.machines.flatMap((m: any) => m.jobs || []).filter((j: any) => ["Failed", "Warning"].includes(status(j)))
-        .length
+    ? failingJobs(
+        state.machines.flatMap((m: any) => m.jobs || []),
+        acks,
+      ).length
     : 0;
   const hit = (vendors || []).filter(vendorHit);
   const open = internetPortCount(state?.machines);

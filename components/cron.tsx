@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { ago, duration, historyless, lastResult, STATUS_RANK, schedule, status } from "@/lib/format";
+import { useAcks } from "./acks";
 import { useLive } from "./data";
 import { PanelHead, SkelRows } from "./ui";
 
@@ -24,17 +25,20 @@ const StatusPill = ({ s }: { s: string }) => (
 
 export function CronPage() {
   const { state } = useLive();
+  const acks = useAcks();
   const zones = useZones();
   const [filter, setFilter] = useState("all");
   const names: string[] = (state?.machines || []).map((m: any) => m.name);
   const rows = state
     ? state.machines
         .flatMap((m: any) => m.jobs || [])
-        .map((j: any) => ({ ...j, s: status(j) }))
+        .map((j: any) => ({ ...j, s: status(j, acks) }))
         .filter(
           (j: any) =>
             filter === "all" ||
-            (filter === "problems" ? STATUS_RANK[j.s as keyof typeof STATUS_RANK] < 2 : j.machine === filter),
+            (filter === "problems"
+              ? STATUS_RANK[j.s as keyof typeof STATUS_RANK] < STATUS_RANK.OK
+              : j.machine === filter),
         )
         .sort(
           (a: any, b: any) =>
@@ -101,6 +105,7 @@ export function CronPage() {
                     <td>
                       {lastResult(j)}
                       {j.last_error ? <div className="err">{j.last_error.slice(0, 120)}</div> : null}
+                      {j.s === "Acknowledged" ? <div className="sub">Waiting for the next run.</div> : null}
                     </td>
                   </tr>
                 ))
@@ -139,6 +144,7 @@ function When({ iso }: { iso?: string | null }) {
 /** One cron job's own page: #/cron/<machine>/<job id>. */
 export function JobPage({ machine, id }: { machine: string; id: string }) {
   const { state } = useLive();
+  const acks = useAcks();
   const zones = useZones();
   const m = state?.machines.find((x: any) => x.name === machine);
   const j = (m?.jobs || []).find((x: any) => x.id === id);
@@ -163,7 +169,7 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
       </div>
     );
   const n = (x: unknown) => (x ?? "—") as React.ReactNode;
-  const s = j ? status(j) : "";
+  const s = j ? status(j, acks) : "";
   const chars = j ? (j.agent ? j.prompt_chars : j.script_chars) : 0;
   // Hermes sends a job's output to "local" (a file on the machine) when the job names no target. Many jobs send their
   // own email (email-brief.py, Resend); the prompt or the script says so.
