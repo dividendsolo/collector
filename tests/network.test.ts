@@ -775,6 +775,20 @@ describe("reading `lsof -nP -iTCP -sTCP:ESTABLISHED` (macOS, which has no ss)", 
     ]);
   });
 
+  it("keeps one row per socket when a process holds it on two file descriptors (ssh on fd 4 and fd 5)", () => {
+    const twoFds = [
+      "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
+      "ssh       3327  me    4u  IPv4      0x5      0t0  TCP 192.0.2.5:55185->198.51.100.7:22 (ESTABLISHED)",
+      "ssh       3327  me    5u  IPv4      0x5      0t0  TCP 192.0.2.5:55185->198.51.100.7:22 (ESTABLISHED)",
+      "ssh       3327  me    6u  IPv4      0x6      0t0  TCP 192.0.2.5:55186->198.51.100.7:22 (ESTABLISHED)",
+    ].join("\n");
+    const rows = drive<Connection[]>({ fn: "lsof_est", text: twoFds });
+    expect(rows.map((r) => `${r.local_port}->${r.address}:${r.port} ${r.pid}`)).toEqual([
+      "55185->198.51.100.7:22 3327",
+      "55186->198.51.100.7:22 3327",
+    ]);
+  });
+
   it("reads nothing out of an empty read, and out of anything that is not a socket row", () => {
     expect(drive<Connection[]>({ fn: "lsof_est", text: "" })).toEqual([]);
     expect(drive<Connection[]>({ fn: "lsof_est", text: "COMMAND PID USER FD TYPE\n" })).toEqual([]);

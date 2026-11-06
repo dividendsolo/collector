@@ -1653,8 +1653,11 @@ def parse_lsof_established(text):
     """`lsof -nP -iTCP -sTCP:ESTABLISHED` output -> the same rows as `parse_ss_established`, less the bytes: lsof
     counts none. The socket reads `local->remote` (`192.0.2.5:51234->198.51.100.1:443`), and the state lsof appends
     is not part of either end. A row that is not a connected socket is skipped. lsof cuts COMMAND to nine letters
-    (and writes a space as `\\x20`), so the name here is a stand-in until `ps` gives the full one."""
+    (and writes a space as `\\x20`), so the name here is a stand-in until `ps` gives the full one. lsof prints one
+    line per file descriptor, and a process may hold one socket on two (ssh on fd 4 and fd 5), so a socket already
+    read (same proto, both ends, pid) is read once."""
     out = []
+    seen = set()
     for line in (text or "").splitlines():
         fields = line.split()
         if len(fields) < 3 or not fields[1].isdigit():
@@ -1667,6 +1670,10 @@ def parse_lsof_established(text):
         address, port = split_address(remote)
         if port is None:
             continue
+        key = (fields[proto].lower(), local_address, local_port, address, port, fields[1])
+        if key in seen:
+            continue  # the same socket on another file descriptor
+        seen.add(key)
         out.append({"proto": fields[proto].lower(), "address": address, "port": port,
                     "local_address": local_address, "local_port": local_port,
                     "process": fields[0].replace("\\x20", " ").strip() or None, "pid": fields[1],
