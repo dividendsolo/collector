@@ -414,6 +414,27 @@ warning's action is a URL, not a body`). `app/api/network/seen/route.ts` is the 
 takes the same two values from a JSON body too, for a shell or an agent. The route answers `{machine, id, cleared,
 marks}` — the list that machine now carries.
 
+## The toasts (card #67)
+
+A small card bottom right on every page (`components/toasts.tsx`, mounted in `components/app.tsx`) when a service
+turns Slow or Down, or a machine has ports open to the internet, so nobody has to scroll to the Service health panel
+or open the Network page to learn it. Down and the open ports are red, Slow is amber; errors stack first. The title
+links to the page with the details.
+
+`lib/toasts.ts` holds the rules as pure functions. A toast has no Dismiss: it stays while its problem lasts and goes
+away by itself when the problem is resolved (James, 2026-11-06). Each toast has a `key` (`service:<url>`,
+`network:<machine>`) and a `state` (the status and error, or the sorted list of open ports).
+
+A red toast this page has not sounded for yet (a key and state it has not seen) plays a short two-tone alarm made
+with Web Audio; Slow makes no sound, and one problem sounds once. A browser plays no sound before the first click or
+key on the page, so the red toasts showing at load sound on that first click or key; after it, a new one sounds at
+once. The network toast's link (`#/network?first=internet`) scrolls
+the Network page smoothly to the first port open to the internet and flashes that row once; the route ignores the
+query, and the page takes it off the address so a refresh does not scroll again.
+
+The sidebar's Network item counts the ports open to the internet across every machine (`internetPortCount`), the
+same number the toast and Needs attention name.
+
 ## The Sponsor button (card #52)
 
 Collector stays free and open source, and its own revenue starts with GitHub Sponsors. The button on the repo

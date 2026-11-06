@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { status } from "@/lib/format";
+import { internetPortCount } from "@/lib/toasts";
 import { acked, useAcks } from "./acks";
 import { AgentPage, AgentsPage } from "./agents";
 import { CardTip } from "./card-tip";
@@ -14,6 +15,7 @@ import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, ve
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
 import { useRunning } from "./running";
 import { ServicesPage, ServicesWatcher } from "./services";
+import { Toasts } from "./toasts";
 import { Icon, type IconName, Sprite } from "./ui";
 import { UpdateButton } from "./update";
 
@@ -25,7 +27,7 @@ const NAV: { page: string; href: string; icon: IconName; label: string; tag?: st
   { page: "projects", href: "#/projects", icon: "layers", label: "Projects", sep: true },
   { page: "domains", href: "#/domains", icon: "globe", label: "Domains" },
   { page: "services", href: "#/services", icon: "server", label: "Services" },
-  { page: "network", href: "#/network", icon: "shield", label: "Network" },
+  { page: "network", href: "#/network", icon: "shield", label: "Network", tag: "network" },
   { page: "apis", href: "#/apis", icon: "activity", label: "APIs", tag: "apis" },
   { page: "subscriptions", href: "#/subscriptions", icon: "receipt", label: "Subscriptions" },
   { page: "proposals", href: "#/proposals", icon: "brief", label: "Proposals" },
@@ -58,9 +60,15 @@ const useHash = () =>
     () => "",
   );
 
+/** The page a hash opens, without its query: `#/network?first=internet` and `#/network` are one page. The Shell
+ * scrolls to the top when this changes, so a page that takes a query off its own address is not sent back up
+ * (collector#67: the toast's link scrolled to the port, then back to the top). */
+export const pageOf = (hash: string) => hash.replace(/^#\/?/, "").split("?", 1)[0];
+
 /** Pages: the hash picks one (#/cron); the sidebar and the top bar follow it. */
 export function route(hash: string) {
-  let name = hash.replace(/^#\/?/, "") || "dashboard";
+  // A page may carry a query after its name (`#/network?first=internet`): the page reads it, the route ignores it.
+  let name = hash.replace(/^#\/?/, "").split("?", 1)[0] || "dashboard";
   if (name === "running") name = "agents"; // the old address of the Agents page
   const repo = name.match(/^projects\/([\w.-]+\/[\w.-]+)$/);
   const agent = name.match(/^agents\/([\w.-]+)\/([\w.-]+)$/);
@@ -76,7 +84,8 @@ export function route(hash: string) {
   };
 }
 
-/** The sidebar's counts: Needs attention, running agents, P0s waiting (red), failing jobs (red), vendor incidents. */
+/** The sidebar's counts: Needs attention, running agents, P0s waiting (red), failing jobs (red), ports open to the
+ * internet (red), vendor incidents. */
 function useTags(): Record<string, { text: string; hot: boolean }> {
   const { state } = useLive();
   const running = useRunning();
@@ -89,11 +98,13 @@ function useTags(): Record<string, { text: string; hot: boolean }> {
         .length
     : 0;
   const hit = (vendors || []).filter(vendorHit);
+  const open = internetPortCount(state?.machines);
   return {
     attention: { text: w.length ? String(w.length) : "", hot: w.length > 0 && w.some((x) => x.level === "error") },
     running: { text: running?.length ? String(running.length) : "", hot: false },
     work: { text: waiting?.p0 ? String(waiting.p0) : "", hot: Boolean(waiting?.p0) },
     cron: { text: failing ? String(failing) : "", hot: failing > 0 },
+    network: { text: open ? String(open) : "", hot: open > 0 },
     apis: {
       text: hit.length ? String(hit.length) : "",
       hot: hit.some((v) => v.state === "major" || v.state === "critical"),
@@ -208,10 +219,13 @@ function Shell() {
   const r = route(hash);
   // Scroll to the top on every page change. Braces matter: scrollTo returns a promise in current Chrome, and React
   // would call it as the cleanup.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the hash is the trigger
+  // A query on the same page (`?first=internet`) is no page change: the top is only for a new page.
+  const at = pageOf(hash);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the page is the trigger
   useEffect(() => {
-    scrollTo(0, 0);
-  }, [hash]);
+    // Instant: a new page starts at its top, and a page that then glides somewhere (the toast's link) glides from there.
+    scrollTo({ top: 0, behavior: "instant" });
+  }, [at]);
   return (
     <div className="app">
       <Sidebar lit={r.lit} />
@@ -232,6 +246,7 @@ export function App() {
       <ServicesWatcher />
       <Shell />
       <CardTip />
+      <Toasts />
     </LiveProvider>
   );
 }

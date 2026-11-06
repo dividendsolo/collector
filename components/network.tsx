@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { bytes } from "@/lib/format";
 import { MARK_LABELS, markText } from "@/lib/network";
 import type {
@@ -219,7 +219,7 @@ function SocketRow({ g, machine }: { g: PortGroup; machine: string }) {
   const badges = accessibleTo(g.first, machine);
   const { ports, protos } = portsText(g);
   return (
-    <tr className={g.first.reach === "internet" ? "net-open" : undefined}>
+    <tr className={g.first.reach === "internet" ? "net-open" : undefined} data-reach={g.first.reach}>
       <td className="port">{ports}</td>
       <td className="net-badges">
         {badges.map((b) => (
@@ -363,6 +363,53 @@ function Machine({ m }: { m: MachineNetwork }) {
   );
 }
 
+/** The event a toast's link sends (collector#67) when the Network page is already open: the address does not change
+ * then, so the page is told to scroll instead. */
+export const SCROLL_EVENT = "collector-network-first";
+
+/** Scroll smoothly to the first row with this reach, and flash it once so the eye lands there. False when the rows
+ * are not drawn yet. */
+function scrollToFirst(reach: string): boolean {
+  const row = document.querySelector<HTMLElement>(`tr[data-reach="${CSS.escape(reach)}"]`);
+  if (!row) return false;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  row.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "center" });
+  row.classList.remove("net-flash");
+  void row.offsetWidth; // restart the flash when the same row is picked twice
+  row.classList.add("net-flash");
+  return true;
+}
+
+/** A toast's link scrolls to the first port open to the internet: `#/network?first=internet` when it opens the page
+ * (the query is taken off once the rows are drawn, so a refresh does not scroll again), and SCROLL_EVENT on every
+ * click while the page is already open. */
+function useFirstRow(ready: boolean) {
+  const pending = useRef<string | null>(null);
+  useEffect(() => {
+    const reach = new URLSearchParams(location.hash.split("?")[1] || "").get("first");
+    if (reach) {
+      pending.current = reach;
+      history.replaceState(null, "", "#/network");
+    }
+    const go = (e: Event) => {
+      const r = (e as CustomEvent<string>).detail || "internet";
+      if (!scrollToFirst(r)) pending.current = r;
+    };
+    addEventListener(SCROLL_EVENT, go);
+    return () => removeEventListener(SCROLL_EVENT, go);
+  }, []);
+  useEffect(() => {
+    if (!ready || !pending.current) return;
+    const reach = pending.current;
+    // One frame later: React runs this page's effect before the Shell's, and the Shell scrolls a new page to the top.
+    // Scrolling now would be undone at once (collector#67, the toast's link landed back at the top).
+    const id = requestAnimationFrame(() => {
+      if (scrollToFirst(reach)) pending.current = null;
+    });
+    return () => cancelAnimationFrame(id);
+  });
+}
+
 /** The Network page (collector#65, collector#66): what each machine listens on and who can reach it, what it is
  * connected out to, and what is new about that — a process never seen there, a new destination, a large upload, or a
  * knock on a listening port from another device on the local network. Read only: nothing here blocks, opens or
@@ -371,6 +418,7 @@ function Machine({ m }: { m: MachineNetwork }) {
 export function NetworkPage() {
   const { data } = useApi<{ at: number; machines: MachineNetwork[] }>("/api/network", 15_000);
   const machines = data?.machines || [];
+  useFirstRow(Boolean(data));
   return (
     <div className="page">
       <div className="page-head">
