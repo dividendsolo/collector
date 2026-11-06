@@ -123,10 +123,21 @@ export function Sprite() {
   );
 }
 
-export function PanelHead({ icon, title, children }: { icon: IconName; title: string; children?: ReactNode }) {
+export function PanelHead({
+  icon,
+  title,
+  children,
+  iconClass,
+}: {
+  icon: IconName;
+  title: string;
+  children?: ReactNode;
+  /** A class on the icon, for a panel whose icon carries a status colour (the Network page's machine summaries). */
+  iconClass?: string;
+}) {
   return (
     <div className="panel-head">
-      <Icon name={icon} />
+      <Icon name={icon} className={iconClass ? `i ${iconClass}` : undefined} />
       <h2>{title}</h2>
       {children}
     </div>

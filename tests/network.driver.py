@@ -59,6 +59,8 @@ def main():
         out = collect.parse_ufw(case["text"])
     elif fn == "lets_in":
         out = collect.firewall_lets_in(case["fw"], case["proto"], case["port"], case.get("iface"))
+    elif fn == "os":
+        out = collect.os_name(os_release=case.get("os_release"), sw_vers=case.get("sw_vers"))
     elif fn == "macfw":
         out = collect.parse_socketfilterfw(case["state"], case.get("apps", ""))
     elif fn == "acl":

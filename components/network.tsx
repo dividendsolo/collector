@@ -439,15 +439,20 @@ const VERDICT: Record<string, string> = {
   grey: "Some checks could not be read.",
 };
 
-/** One machine's summary at the top of the page (James, 2026-11-06): its name, where it stands, and its Security
- * checks, each with a dot and a card on hover. The ports are in the machine's own panel below. */
+/** One machine's summary at the top of the page (James, 2026-11-06): its name, its shield in the colour of its worst
+ * check (red if any is red, else amber if any is amber, else green), its operating system at the right, and its
+ * Security checks, each with a dot and a card on hover. The ports are in the machine's own panel below. */
 function MachineSummary({ m }: { m: MachineNetwork }) {
   const checks = securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall");
   const verdict = worst(checks);
   return (
     <section className="panel">
-      <PanelHead icon="shield" title={m.local ? `${m.name} (this machine)` : m.name}>
-        <span className={`check-dot ${DOT[verdict]}`} aria-hidden="true" />
+      <PanelHead
+        icon="shield"
+        iconClass={`net-shield ${DOT[verdict]}`}
+        title={m.local ? `${m.name} (this machine)` : m.name}
+      >
+        {m.network?.os ? <span className="net-os">{m.network.os}</span> : null}
       </PanelHead>
       {m.network ? (
         <div className="net-checks-wrap">
