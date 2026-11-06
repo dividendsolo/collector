@@ -971,6 +971,7 @@
     border: 1px solid var(--line-2);
     border-radius: 999px;
     padding: 0 7px;
+    white-space: nowrap;
   }
   .count.hot {
     color: var(--red);

@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -981,5 +982,13 @@ describe("the operating system", () => {
       drive({ fn: "os", os_release: 'NAME="Ubuntu"\nPRETTY_NAME="Ubuntu 26.04.1 LTS"\nVERSION_ID="26.04"\n' }),
     ).toBe("Ubuntu 26.04.1 LTS");
     expect(drive({ fn: "os" })).toBeNull();
+  });
+});
+
+describe("the machine panel's count pills (collector#66)", () => {
+  it('keep their number and word on one line, so "7 new" does not stack "7" over "new" at 425px', () => {
+    const css = fs.readFileSync(path.join(ROOT, "app", "globals.css"), "utf8");
+    const rule = css.match(/\n\s*\.count\s*\{([^}]*)\}/);
+    expect(rule?.[1]).toMatch(/white-space:\s*nowrap/);
   });
 });
