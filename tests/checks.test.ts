@@ -57,6 +57,39 @@ describe("the Mac's checks", () => {
   });
 });
 
+describe("the Mac's allow list in the check's card", () => {
+  it("splits macOS's own programs from the apps you allowed, each list in alphabetical order", () => {
+    const fw = {
+      ...MAC_FW,
+      apps: [
+        { path: "/usr/sbin/smbd", allow: true, interpreter: false },
+        { path: "/Applications/Spotify.app", allow: true, interpreter: false },
+        { path: "/usr/libexec/rapportd", allow: true, interpreter: false },
+        { path: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", allow: true, interpreter: false },
+        {
+          path: "/Library/SystemExtensions/420F/io.tailscale.ipn.macsys.network-extension.systemextension",
+          allow: true,
+          interpreter: false,
+        },
+        {
+          path: "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+          allow: true,
+          interpreter: false,
+        },
+        { path: "/usr/local/libexec/remotepairingdeviced", allow: true, interpreter: false },
+        { path: "/usr/bin/ruby", allow: false, interpreter: true },
+      ],
+    };
+    const card = securityChecks("mac", { firewall: fw }, true).find(
+      (c) => c.label === "Apps allowed to accept connections",
+    );
+    expect(card?.facts).toEqual([
+      ["macOS system", "ControlCenter, rapportd, smbd"],
+      ["Allowed by you", "Brave Browser, remotepairingdeviced, Spotify, Tailscale"],
+    ]);
+  });
+});
+
 describe("the VPS's checks", () => {
   const net: NetworkIn = {
     firewall: { tool: "ufw", active: true, incoming: "deny" },
@@ -64,7 +97,7 @@ describe("the VPS's checks", () => {
     tailnet_acl: [{ ports: [[0, 65535]], protos: [6, 17], from: ["100.64.0.9/32"] }],
     tailnet_peers: { "100.64.0.9": "laptop" },
     sockets: [
-      { proto: "udp", port: 41641, reach: "firewalled" },
+      { proto: "udp", port: 41641, reach: "firewalled", process: "tailscaled" },
       { proto: "tcp", port: 22, reach: "tailnet" },
     ],
   };
@@ -77,6 +110,15 @@ describe("the VPS's checks", () => {
       "Tailnet devices that can connect": ["green", "laptop"],
       "Ports open to the internet": ["green", "0, and 1 firewalled: udp 41641"],
     });
+  });
+
+  it("says why Tailscale's firewalled port is open, and gives no reason for a port it does not know", () => {
+    const card = securityChecks("vps", net, false).find((c) => c.label === "Ports open to the internet");
+    expect(card?.facts).toEqual([["Why udp 41641 is open", expect.stringContaining("Tailscale (WireGuard)")]]);
+    const unknown = { ...net, sockets: [{ proto: "tcp", port: 8443, reach: "firewalled", process: "mystery" }] };
+    expect(securityChecks("vps", unknown, false).find((c) => c.label === "Ports open to the internet")?.facts).toEqual(
+      [],
+    );
   });
 
   it("is red for an open port, password login, or a firewall that lets everything in", () => {

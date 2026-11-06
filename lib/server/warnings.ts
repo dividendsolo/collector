@@ -20,6 +20,8 @@ export interface Warning {
   action?: { label: string; post: string };
   /** A failed job's row can be acknowledged until its next run: `key` names that run, `next` is when the next one is. */
   ack?: { key: string; next: string | null };
+  /** When the row first showed up, epoch seconds (state.ts adds it from first-seen.ts). */
+  since?: number;
 }
 
 const START_TAILSCALE = { label: "Start Tailscale", post: "/api/tailscale" };

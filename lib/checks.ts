@@ -11,6 +11,16 @@
 
 export type Level = "green" | "amber" | "red" | "grey";
 
+/** Why a known program's firewalled port is safe to leave open, by the program's name (James, 2026-11-06: "explain
+ * why it's okay that that one port is open"). A firewalled port with no entry here gets no reason: opened on purpose
+ * is not the same as safe, and the card says so. */
+export const WHY_OPEN: Record<string, string> = {
+  tailscaled:
+    "Tailscale (WireGuard) uses this port to connect your devices to each other directly. It answers only packets " +
+    "signed with one of your devices' keys and ignores everything else, so to a scanner it looks closed. Closing it " +
+    "still works, but your devices then reach this machine through Tailscale's relays, which is slower, and no safer.",
+};
+
 export interface Check {
   /** Stable per machine and check: the toast's key. */
   id: string;
@@ -51,7 +61,34 @@ export interface NetworkIn {
 }
 
 const base = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
-const unique = <T>(xs: T[]) => [...new Set(xs)];
+
+/** A program macOS itself ships: under /System, /usr or /sbin (not /usr/local, where Homebrew and installers put
+ * theirs). Everything else on the allow list is an app you installed and allowed. */
+const isSystem = (p: string) => /^\/(System|usr|sbin|bin)\//.test(p) && !p.startsWith("/usr/local/");
+
+/** A program's readable name: the app bundle's name without ".app" (Brave Browser, not "Brave Browser" the binary
+ * inside it), a system extension by its bundle id's last word (tailscale, protonvpn), else the file's own name. */
+function appName(p: string): string {
+  const ext = p.match(/\/([^/]+)\.systemextension$/);
+  if (ext) {
+    const id = ext[1].split(".");
+    return (
+      id
+        .find((w) => /tailscale|protonvpn|wireguard/i.test(w))
+        ?.replace(/^protonvpn$/i, "Proton VPN")
+        .replace(/^tailscale$/i, "Tailscale") ?? id[id.length - 1]
+    );
+  }
+  const apps = [...p.matchAll(/([^/]+)\.app(?=\/|$)/g)].map((m) => m[1]);
+  return apps.length ? apps[apps.length - 1] : base(p);
+}
+
+/** The names, once each, in alphabetical order, so the list is easy to scan. */
+const names = (apps: { path: string }[]) =>
+  [...new Set(apps.map((a) => appName(a.path)))]
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+    .join(", ");
+const unique = <T>(xs: T[]) => xs.filter((x, i) => xs.findIndex((y) => JSON.stringify(y) === JSON.stringify(x)) === i);
 
 /** The checks for one machine, in reading order. `mac` is true for a Mac (the firewall reads apps, not ports). */
 export function securityChecks(machine: string, net: NetworkIn | null | undefined, mac: boolean): Check[] {
@@ -162,7 +199,8 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
         ? `${runners.join(", ")} ${runners.length > 1 ? "are" : "is"} allowed in: every dev server ${runners.length > 1 ? "they run" : "it runs"} on all addresses is open to your network.`
         : "Every app on the allow list is a single program, not a runner for any script.",
       facts: [
-        ["Allowed", allowed.map((a) => base(a.path)).join(", ") || "none"],
+        ["macOS system", names(allowed.filter((a) => isSystem(a.path))) || "none"],
+        ["Allowed by you", names(allowed.filter((a) => !isSystem(a.path))) || "none"],
         ...(runners.length
           ? ([
               [
@@ -218,7 +256,13 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
   // The internet.
   const ports = net?.sockets || [];
   const open = unique(ports.filter((s) => s.reach === "internet").map((s) => `${s.proto} ${s.port}`));
-  const walled = unique(ports.filter((s) => s.reach === "firewalled").map((s) => `${s.proto} ${s.port}`));
+  const walledRows = ports.filter((s) => s.reach === "firewalled");
+  const walled = unique(walledRows.map((s) => `${s.proto} ${s.port}`));
+  const why = unique(
+    walledRows
+      .filter((s) => s.process && WHY_OPEN[s.process])
+      .map((s) => [`Why ${s.proto} ${s.port} is open`, WHY_OPEN[s.process as string]] as [string, string]),
+  );
   out.push({
     id: id("internet"),
     label: "Ports open to the internet",
@@ -234,7 +278,7 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
       : walled.length
         ? "No port is open to the internet by accident. The firewalled ones are opened on purpose by a firewall rule."
         : "No port on this machine can be reached from the internet.",
-    facts: open.length ? [["Fix", "close each, or bind it to 127.0.0.1 or the tailnet address"]] : [],
+    facts: open.length ? [["Fix", "close each, or bind it to 127.0.0.1 or the tailnet address"]] : why,
   });
 
   return out;

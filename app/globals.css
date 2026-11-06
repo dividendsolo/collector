@@ -1021,6 +1021,43 @@
   .alert .act .why {
     color: var(--red);
   }
+  /* How long ago the row first showed up: always the last column. It takes the right edge itself when no
+     .aside or .act did, and a fixed width keeps the ages lined up down the list. */
+  .alert .since {
+    margin-left: auto;
+    min-width: 72px;
+    text-align: right;
+    font: 500 12px / 20px var(--mono);
+    color: var(--faint);
+    white-space: nowrap;
+  }
+  .alert .aside ~ .since,
+  .alert .act ~ .since {
+    margin-left: 0;
+  }
+  /* A phone has no room for a right column: the text takes the line, and the button and age wrap under it,
+     lined up with the text. The text breaks a long SHA instead of pushing the panel wider. */
+  @media (max-width: 600px) {
+    .alert {
+      flex-wrap: wrap;
+    }
+    .alert > span:not(.n):not(.aside):not(.act):not(.since),
+    .alert > a {
+      flex: 1 1 calc(100% - 60px);
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .alert .act,
+    .alert .since {
+      margin-top: 0;
+      margin-left: 44px;
+      min-width: 0;
+      text-align: left;
+    }
+    .alert .act ~ .since {
+      margin-left: auto;
+    }
+  }
   .alert.error .i {
     color: var(--red);
   }
@@ -1547,7 +1584,6 @@
      dot. The rows sit in two columns on a wide screen, one on a phone. */
   .net-checks-wrap {
     padding: 12px 16px 14px;
-    border-bottom: 1px solid var(--line);
     display: grid;
     gap: 10px;
   }
@@ -1577,7 +1613,7 @@
      target for its card. */
   .net-checks li {
     display: grid;
-    grid-template-columns: 8px minmax(0, 320px) minmax(0, 1fr);
+    grid-template-columns: 8px minmax(0, 1.1fr) minmax(0, 1fr);
     gap: 10px;
     align-items: baseline;
     padding: 3px 6px;
@@ -1620,10 +1656,10 @@
   }
   @media (max-width: 600px) {
     .net-checks li {
-      grid-template-columns: 8px minmax(0, 1fr);
+      grid-template-columns: 8px minmax(0, 1fr) auto;
     }
     .check-value {
-      grid-column: 2;
+      text-align: right;
     }
   }
   .net-addresses {

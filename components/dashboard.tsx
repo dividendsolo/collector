@@ -47,6 +47,15 @@ function nextRun(iso: string): string {
   return `${day}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 }
 
+/** How long ago a Needs attention row first showed up, the last column on the row (James, 2026-11-06). */
+function Since({ at }: { at?: number }) {
+  return at ? (
+    <span className="since" title={new Date(at * 1000).toLocaleString()}>
+      {ago(at * 1000)}
+    </span>
+  ) : null;
+}
+
 function NeedsAttention() {
   const { state } = useLive();
   // A one-click fix the server confirmed (Tailscale is running again): its rows hide at once and stay hidden until
@@ -95,6 +104,7 @@ function NeedsAttention() {
                   </button>
                 </span>
               ) : null}
+              <Since at={x.since} />
             </div>
           ))
         ) : (
@@ -119,6 +129,7 @@ function NeedsAttention() {
                     Undo
                   </button>
                 </span>
+                <Since at={x.since} />
               </div>
             ))
           : null}
