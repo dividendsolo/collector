@@ -245,6 +245,15 @@ describe("what gets marked (collector#66)", () => {
     expect(ids(out.marks)).toContain("inbound:7000/fd00::257");
   });
 
+  it("lets the ceiling drop only knocks: a new process waits for Seen even through a knock flood", () => {
+    const knocks = Array.from({ length: 600 }, (_, i) =>
+      conn({ inbound: true, local_port: 7000, address: `fd00::${i.toString(16)}`, process: "AirPlay" }),
+    );
+    const out = fold([conn({ process: "nc", pid: "999" }), ...knocks]);
+    expect(ids(out.marks)).toContain("process:nc");
+    expect(out.marks.filter((m) => m.kind === "inbound").length).toBeLessThanOrEqual(seen.MAX_MARKS_CEILING);
+  });
+
   it("keeps a mark until it is seen, even after the machine stops sending it", () => {
     const marked = fold([conn({ process: "nc" })]);
     expect(ids(seen.foldRead(marked, [], { now: 1030 }).marks)).toEqual(["process:nc"]);

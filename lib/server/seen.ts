@@ -290,21 +290,24 @@ export function foldRead(
 
 /**
  * The marks to keep: every one but the oldest destination marks past `MAX_DEST_MARKS`. The card says a mark shows
- * until Seen, so a process, upload or knock mark is never dropped (collector#66's second review: a burst of
+ * until Seen, so a process or upload mark is never dropped (collector#66's second review: a burst of
  * destination marks pushed them out within minutes); the destination marks are the many and the least telling. The
- * one exception is `MAX_MARKS_CEILING`, which only a flood reaches.
+ * other cap is `MAX_MARKS_CEILING` on the knock marks, which only a flood reaches (a device knocking from address after
+ * address). Process and upload marks are one per process name, so they are bounded already and never dropped.
  */
 export function capDestinations(marks: NetworkMark[]): NetworkMark[] {
-  let extra = marks.filter((m) => m.kind === "destination").length - MAX_DEST_MARKS;
-  const kept =
-    extra <= 0
-      ? marks
-      : marks.filter((m) => {
-          if (m.kind !== "destination" || extra <= 0) return true;
-          extra--;
-          return false;
-        });
-  return kept.slice(-MAX_MARKS_CEILING);
+  return dropOldest(dropOldest(marks, "destination", MAX_DEST_MARKS), "inbound", MAX_MARKS_CEILING);
+}
+
+/** The marks with the oldest of one kind dropped until at most `max` of that kind are left; the rest keep their order. */
+function dropOldest(marks: NetworkMark[], kind: NetworkMark["kind"], max: number): NetworkMark[] {
+  let extra = marks.filter((m) => m.kind === kind).length - max;
+  if (extra <= 0) return marks;
+  return marks.filter((m) => {
+    if (m.kind !== kind || extra <= 0) return true;
+    extra--;
+    return false;
+  });
 }
 
 /** Reverse DNS for one address: its first name, without the trailing dot, or "" (asked, and there is none). */
