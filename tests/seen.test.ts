@@ -92,8 +92,8 @@ describe("what gets marked (collector#66)", () => {
 
   it("marks a new destination for a process it already knows", () => {
     expect(fold([conn({ host: "downloads.example.com" })]).marks).toEqual([]);
-    expect(ids(fold([conn({ host: "news.example.com", address: "203.0.113.9" })]).marks)).toEqual([
-      "destination:curl:news.example.com",
+    expect(ids(fold([conn({ host: "news.example.org", address: "203.0.113.9" })]).marks)).toEqual([
+      "destination:curl:example.org",
     ]);
     // An address with no name is a destination too.
     expect(ids(fold([conn({ host: null, address: "203.0.113.9" })]).marks)).toEqual(["destination:curl:203.0.113.9"]);
@@ -114,6 +114,60 @@ describe("what gets marked (collector#66)", () => {
     expect(ids(seen.foldRead({ ...vars, bytes: {} }, [conn({ bytes_sent: 60_000_000 })], { now: 1010 }).marks)).toEqual(
       ["upload:curl"],
     );
+  });
+
+  it("does not call another name of a site the process already reaches somewhere new", () => {
+    // A load balancer or CDN hands out a new name per address: github.com's `lb-140-82-112-3-iad` after its
+    // `lb-140-82-114-3-iad` is the same site (collector#66's review, one quiet minute on a VPS).
+    const known = seen.foldRead(undefined, [conn({ process: "git", host: "lb-1-iad.example.com" })], { now: 1000 });
+    const again = seen.foldRead(
+      known,
+      [conn({ process: "git", host: "lb-2-iad.example.com", address: "203.0.113.9" })],
+      {
+        now: 1010,
+      },
+    );
+    expect(again.marks).toEqual([]);
+    // A name sold under a country's second level is its own site: example.co.uk is not shop.co.uk.
+    expect(seen.domainOf("cdn.example.co.uk")).toBe("example.co.uk");
+    expect(seen.domainOf("lb-140-82-112-3-iad.github.com")).toBe("github.com");
+    expect(seen.domainOf("203.0.113.9")).toBe("203.0.113.9");
+    expect(seen.domainOf("2001:db8::9")).toBe("2001:db8::9");
+  });
+
+  it("never marks this machine talking to itself as a destination or a new process", () => {
+    const out = fold([
+      conn({ address: "::1", port: 4319, host: null }),
+      conn({ process: "next-server", pid: "50", address: "127.0.0.1", port: 40030, host: null }),
+      conn({ process: "node", pid: "51", address: "::ffff:127.0.0.1", port: 5432, host: null }),
+    ]);
+    expect(out.marks).toEqual([]);
+    expect(out.processes["next-server"]).toBeUndefined();
+  });
+
+  it("counts a Mac's per-process bytes once, however many connections the process has open", () => {
+    // nettop's total for pid 1234 rides on each of its five connections: 12 MB sent, not 60.
+    const mac = (n: number, sent: number) =>
+      Array.from({ length: n }, (_, i) =>
+        conn({ address: `198.51.100.${i + 1}`, bytes_sent: sent, bytes_scope: "process" }),
+      );
+    const vars = { ...first(), bytes: { curl: 0 } };
+    const five = seen.foldRead(vars, mac(5, 12_000_000), { now: 1010 });
+    expect(five.marks.filter((m) => m.kind === "upload")).toEqual([]);
+    expect(five.bytes).toEqual({ curl: 12_000_000 });
+    // Its connection count changing between two reads does not raise a false upload either.
+    const fewer = seen.foldRead(five, mac(1, 13_000_000), { now: 1020 });
+    const more = seen.foldRead(fewer, mac(8, 14_000_000), { now: 1030 });
+    expect(more.marks.filter((m) => m.kind === "upload")).toEqual([]);
+    expect(more.bytes).toEqual({ curl: 14_000_000 });
+    // Two processes of one name (two pids) each count once.
+    const twoPids = seen.foldRead(
+      vars,
+      [...mac(3, 30_000_000), ...mac(2, 30_000_000).map((c) => ({ ...c, pid: "5678" }))],
+      { now: 1010 },
+    );
+    expect(twoPids.bytes).toEqual({ curl: 60_000_000 });
+    expect(ids(twoPids.marks)).toContain("upload:curl");
   });
 
   it("takes the threshold from config.json's network.uploadWarnMB", () => {

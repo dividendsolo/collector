@@ -107,6 +107,39 @@ export function writeSeen(state: SeenState) {
  * the address. */
 const destOf = (c: NetworkConnection) => c.host || c.address || null;
 
+/** This machine itself: 127.0.0.0/8, ::1, and the IPv4-mapped form of a loopback address. */
+export function isLoopback(address: string | null | undefined): boolean {
+  const a = (address || "").replace(/^\[|\]$/g, "").toLowerCase();
+  return a === "::1" || /^(::ffff:)?127\./.test(a);
+}
+
+/** Second-level labels a registry sells names under (`example.co.uk`), so the site is the last three labels. */
+const SHARED_SUFFIXES = new Set(["co", "com", "net", "org", "ac", "gov", "edu", "ne", "or"]);
+
+/**
+ * The site a host name belongs to: its last two labels (`github.com` for `lb-140-82-112-3-iad.github.com`), or three
+ * under a two-letter country code sold by second level (`example.co.uk`). An address is its own site. A new
+ * load-balancer or CDN name of a site a process already reaches is not somewhere new (collector#66: one quiet minute
+ * marked `lb-140-82-112-3-iad.github.com` after `lb-140-82-114-3-iad.github.com`).
+ */
+export function domainOf(dest: string): string {
+  const d = dest.toLowerCase().replace(/\.$/, "");
+  if (/^[0-9.]+$/.test(d) || d.includes(":")) return d;
+  const labels = d.split(".");
+  if (labels.length <= 2) return d;
+  const tld = labels[labels.length - 1];
+  const second = labels[labels.length - 2];
+  const keep = tld.length === 2 && SHARED_SUFFIXES.has(second) ? 3 : 2;
+  return labels.slice(-keep).join(".");
+}
+
+/** True when a process has been seen reaching this destination, or another name of the same site. */
+function knownDest(seen: string[], dest: string): boolean {
+  if (seen.includes(dest)) return true;
+  const site = domainOf(dest);
+  return seen.some((s) => domainOf(s) === site);
+}
+
 /** "host:port" or "address:port", the way a mark names where a connection went. */
 export function destText(m: { host?: string | null; address?: string | null; port?: number | null }): string {
   const where = m.host || m.address || "";
@@ -152,6 +185,10 @@ export function foldRead(
     marks.push(mark);
   };
 
+  // A Mac counts bytes per process, not per socket (`bytes_scope` "process"): every connection of the process carries
+  // the same total, so it is counted once per pid, however many connections that process has open. A socket's own
+  // bytes (`ss` on Linux) add up across the process's sockets.
+  const counted = new Set<string>();
   for (const c of rows || []) {
     const dest = destOf(c);
     if (c.inbound) {
@@ -171,6 +208,9 @@ export function foldRead(
       inbound.add(key);
       continue;
     }
+    // This machine talking to itself is never a destination (collect.py leaves those out; a read from before it did
+    // must not mark them either).
+    if (isLoopback(c.address)) continue;
     const name = c.process;
     if (!name) continue; // A socket of another user's process: no name to say a process is new by.
     const seen = processes[name];
@@ -187,9 +227,9 @@ export function foldRead(
           bytes: null,
           at: opts.now,
         });
-      else if (dest && !seen.includes(dest) && !(c.address && seen.includes(c.address)))
+      else if (dest && !knownDest(seen, dest) && !(c.address && seen.includes(c.address)))
         add({
-          id: `destination:${name}:${dest}`,
+          id: `destination:${name}:${domainOf(dest)}`,
           kind: "destination",
           process: name,
           pid: c.pid ?? null,
@@ -203,7 +243,14 @@ export function foldRead(
     processes[name] = [...new Set([...(seen || []), dest, c.address].filter((x): x is string => !!x))].slice(
       -MAX_DESTS,
     );
-    if (typeof c.bytes_sent === "number") bytes[name] = (bytes[name] || 0) + c.bytes_sent;
+    if (typeof c.bytes_sent === "number") {
+      if (c.bytes_scope === "process") {
+        const key = `${name}/${c.pid ?? ""}`;
+        if (counted.has(key)) continue;
+        counted.add(key);
+      }
+      bytes[name] = (bytes[name] || 0) + c.bytes_sent;
+    }
   }
 
   // What each process sent since the last read: an upload is the jump over the threshold, not the total. A process

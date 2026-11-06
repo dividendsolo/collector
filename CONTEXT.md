@@ -276,7 +276,7 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
-## The Network page: every open port, and what each machine sends out (cards #65, #66)
+## The Network page: every open port, who can connect to it, and what each machine sends out (cards #65, #66)
 
 Slices 1 and 2 of the same check: what is open, and what goes out. The Network page (`#/network`) shows one block
 per machine Collector already reads. Read only, no `sudo`, nothing installed anywhere, and no port scanned from
@@ -284,55 +284,84 @@ outside: `collect.py` asks each machine what it listens on and what it is connec
 
 ### What is open (collector#65)
 
-Each machine's block lists every listening TCP and UDP socket it reports: protocol, address, port, and the process
-and pid that own it, where this user may read one.
+Each machine's block lists every listening TCP and UDP port: the port, who it is accessible to, the protocol, the
+addresses it is bound on, and the process and pid that own it.
 
 `collect.py`'s `network_read` is the reader. `listen_sockets` reads `ss -tulnp` on Linux and `lsof -nP -iTCP
 -sTCP:LISTEN` plus `lsof -nP -iUDP` elsewhere, both through `read_command`, so a machine with neither tool reads
 empty rather than failing. `-iUDP` also lists connected UDP sockets (`local->remote`, a browser's QUIC);
 `parse_lsof` skips any socket name with `->`, so an outbound connection never reads as an open port. `parse_ss`
-and `parse_lsof` turn the two tools' own lines into the same rows — one per
-socket, with its owner where this user may read one (`-p` shows only the user's own processes without `sudo`, so a
-root socket keeps its address and port and no name), reading past the zone `ss` appends (`203.0.113.10%eth0:68`) and
-the brackets around an IPv6 address. `mark_of` marks each socket against the machine's allow list:
+and `parse_lsof` turn the two tools' own lines into the same rows — one per socket, with its owner where this user
+may read one (`-p` shows only the user's own processes without `sudo`, so a root socket keeps its address and port
+and no name), reading past the zone `ss` appends (`203.0.113.10%eth0:68`) and the brackets around an IPv6 address.
 
-- **open** (red on the page, and named in the machine's one error row in Needs attention): bound beyond this machine
-  — a wildcard, a public address or a LAN one — and not on the machine's allow list. That is the whole rule: the
-  card's own examples are the reason the default list is short, and an address that cannot be placed reads as
-  reachable, since the flag is the safe direction.
-- **allowed**: the port is on the machine's allow list — `network.allow` in config.json, default `[22, 80, 443]`,
-  sent to each machine in `lib/server/machines.ts`'s `REMOTE_KEYS`.
-- **local**: a loopback address (127.0.0.0/8, ::1), a Tailscale one (100.64.0.0/10, fd7a:115c:a1e0::/48) or a
-  link-local one. Never flagged.
+`interface_addresses` reads the machine's own addresses (`ip -o addr show` on Linux, `ifconfig` on a Mac), and
+`machine_networks` sorts them into `{lan, internet, tailnet}`: the private networks it is on (RFC 1918, `fc00::/7`),
+its public addresses, and its Tailscale address. Loopback, link-local and the bridges inside the machine (Docker,
+VMs) are no network another machine is on. `reach_of` then says who can connect to each socket:
+
+- **internet** (red, and named in the machine's one error row in Needs attention): bound on a public address, or on
+  every address (`*`, `0.0.0.0`, `::`) of a machine with a public address. An address that cannot be placed, and a
+  wildcard on a machine whose addresses were not read, read as the internet: the flag is the safe direction.
+- **lan** (grey, and no warning): bound on a private or link-local address, or on every
+  address of a machine with only private ones — a Mac on a home network. Its router keeps the internet out.
+- **tailnet** (green): bound on a Tailscale address (100.64.0.0/10, fd7a:115c:a1e0::/48).
+- **machine**: a loopback address (127.0.0.0/8, ::1).
+
+A port on every address also carries `tailnet: true` when the machine has a Tailscale address, and the page gives it
+a second badge, "Tailnet". The firewall is not read (ufw, the macOS application firewall), so a port open to the internet may
+still be blocked there; the page says so under each machine. There is no allow list: a port is not safe because a
+list names it, so a port meant to be public still shows as open to the internet.
+
+`network_rows` merges the sockets into one row per port and who can reach it: `ss` and `lsof` print a socket bound on
+IPv4 and IPv6 twice, and a browser opens a UDP socket per interface. The row keeps every address it is bound on.
+
+Hovering a process name shows a tooltip (the shared `data-tip` one, with `data-tip-lines` to keep one fact per
+line). `ps_details` reads `ps -axo pid=,ppid=,user=,etime=,comm=` once per read (and `ps -axo pid=,args=` on Linux,
+whose `comm` is cut to 15 letters), and `process_info` gives each port's process its full name (lsof cuts a name to
+nine letters, `ControlCe`), what it is when `KNOWN_PROGRAMS` names it, how long it has run, what started it (its
+parent's name; pid 1 is launchd or systemd), its user and its path or command. A program not in `KNOWN_PROGRAMS`
+shows its facts alone. A socket with no process (another user's, which `ss` shows without one) has no tooltip.
+
+The page groups the ports one process listens on with the same reach into one row: `5000, 7000` for ControlCenter.
+When the ports of a row have different protocols, each port carries its own (`22/tcp, 5353/udp`).
 
 `sshd_read` and `sshd_flags` read the two settings that should not be on — `passwordauthentication yes` and
 `permitrootlogin yes` — from `sshd -T` when that answers (it normally needs root), else from
 `/etc/ssh/sshd_config`; a directive that is only commented out is not set, and a Mac is not asked at all.
 
-One machine's section is `{allow, sockets, ssh}` on its snapshot; `lib/server/network.ts`'s `network()` turns the
+One machine's section is `{networks, sockets, ssh}` on its snapshot; `lib/server/network.ts`'s `network()` turns the
 machines read into `/api/network` — `{at, machines: [{name, local, read_at, stale, error, network}]}` — from the same
-10-second read the rest of the page uses, so it costs no extra ssh. `openSockets` is the one-row-per-port view the
-warnings use: a socket bound on both an IPv4 and an IPv6 address is one thing to fix, not two.
+10-second read the rest of the page uses, so it costs no extra ssh. `exposedSockets` is the view the warnings use: the
+ports open to the internet.
 
-The page draws the sockets open to everyone first, then the expected-public ones, then the local ones. A machine's
-panel head counts them (red, with the number open) and says when it is showing a last good read; under the table sits
-the allow list and the ssh verdict, with where it was read from.
+The page draws the most exposed ports first. A machine's panel head counts the ports open to the internet,
+and says when it is showing a last good read; under the table sit the networks the machine is on, the note that the
+firewall is not read, and the ssh verdict with where it was read from.
 
 ### What goes out, and what is new about it (collector#66)
 
 `collect.py`'s second reader is `connections_read`, and each connection row carries the remote end, the local end,
-the process and pid that own it, and the bytes the OS counted on that socket. `established_sockets` picks the
-platform's tools through `read_command`: `ss -tnpi` on Linux, whose indented info line under a socket holds
-`bytes_sent` and `bytes_received` (`parse_ss_established` skips every state but `ESTAB`, so a `TIME-WAIT` is not a
-connection); on a Mac, `lsof -nP -iTCP -sTCP:ESTABLISHED` for the ends joined to `nettop -P -L 1 -n -J
-bytes_in,bytes_out` for the bytes, keyed by process name, which is how Apple's own counter is labelled. Neither tool
-means no rows, not a failure. No content is read, ever: who connects where, and how much.
+the process and pid that own it, and the bytes the OS counted. `established_sockets` picks the platform's tools
+through `read_command`: `ss -tnpi` on Linux, whose indented info line under a socket holds `bytes_sent` and
+`bytes_received` for that socket (`bytes_scope: "socket"`; `parse_ss_established` skips every state but `ESTAB`, so a
+`TIME-WAIT` is not a connection); on a Mac, `lsof -nP -iTCP -sTCP:ESTABLISHED` for the ends, and `nettop -P -L 1 -n
+-J bytes_in,bytes_out` for the bytes. Real nettop prints a header `,bytes_in,bytes_out,` and then one
+`name.pid,<in>,<out>,` row per process, with no clock column; the pid is what follows the name's last dot
+(`python3.14.5696`), and nettop cuts the name to 15 letters while lsof cuts COMMAND to 9, so `join_nettop` joins on
+the pid, never the name. A Mac counts bytes per process, not per socket: each of the process's rows carries its total
+with `bytes_scope: "process"`, the page shows that total once (on the process's first row, labelled "process total"),
+and the seen-list counts it once per pid. Neither tool means no rows, not a failure. No content is read, ever: who
+connects where, and how much. The process name is the full one `ps_details` gives for the pid, as on the ports.
 
-`inbound` is the one flag a connection wears, and it is what the card's fourth mark is about: the local port is one
-this machine listens on, and the other end is another device on its own network — `is_lan_address` reads the private
-ranges (10/8, 172.16/12, 192.168/16), the link-local ones (169.254/16, fe80::/10) and unique-local IPv6 (fc00::/7),
-and puts loopback, the tailnet (100.64/10, fd7a:115c:a1e0::/48) and anything public outside them, since a machine
-reached over Tailscale is not a phone on the Wi-Fi.
+Only what goes out is a row. A connection whose local port is a TCP port this machine listens on was accepted, not
+made, so it is left out (a server's visitors are not destinations), and so is a loopback peer (127.0.0.0/8, ::1:
+this machine talking to itself, a browser on its own dev server) — one quiet minute on ezio once raised 14 to 17
+marks out of those two. The exception is `inbound`, the card's fourth mark: an accepted connection whose other end is
+another device on this machine's own network. `is_lan_address` reads the private ranges (10/8, 172.16/12,
+192.168/16), the link-local ones (169.254/16, fe80::/10) and unique-local IPv6 (fc00::/7), and puts loopback, the
+tailnet (100.64/10, fd7a:115c:a1e0::/48) and anything public outside them, since a machine reached over Tailscale is
+not a phone on the Wi-Fi.
 
 The marks are the server's, not `collect.py`'s: the machine has no memory of the last read and no way to write one.
 `lib/server/seen.ts` keeps the seen-list, one small JSON file next to `config.json` (`network-seen.json`, gitignored;
@@ -345,9 +374,14 @@ and the unseen marks. `foldRead` is pure and does the whole of it:
   process on it as new;
 - after that, a **process never seen** on that machine marks once (its destinations are recorded with it, since "a
   new destination for a known process" says nothing about a process nobody has seen);
-- a **destination** — the host name reverse DNS gave, or the address — a known process has not been seen reaching;
+- a **destination** — the host name reverse DNS gave, or the address — a known process has not been seen reaching.
+  Names are compared by site (`domainOf`: the last two labels, three under `co.uk`-style suffixes), so a new
+  load-balancer name of a site already reached (`lb-140-82-112-3-iad.github.com` after `lb-140-82-114-3-iad…`) is
+  not new; an address with no name is its own site. A loopback address is never a destination;
 - an **upload**: the bytes a process sent over what it had sent at the last read, past `network.uploadWarnMB`
-  (default 50 MB, decimal, `network_upload_mb`), so it is the jump and not the total;
+  (default 50 MB, decimal, `network_upload_mb`), so it is the jump and not the total. A socket's own bytes add up
+  across the process's sockets; a process total (a Mac) counts once per pid, so a process's connection count
+  changing between two reads cannot raise an upload;
 - a **local knock**: an `inbound` connection to a port this machine listens on from another device on its network.
 
 A mark stays in the state until Seen drops it, and the fact behind it stays in the list, which is what makes a
@@ -366,8 +400,9 @@ not undone by that read writing back the state it read before the click (2026-11
 write had).
 
 `lib/server/network.ts`'s `network()` is what `/api/network` answers, so a machine's section is
-`{allow, sockets, ssh, connections, upload_warn_mb, marks}`. The page draws the marks at the top of the machine's
-panel (each with a Seen button) and the Going out table under them (remote address and port, the host name — "no
+`{networks, sockets, ssh, connections, upload_warn_mb, marks}`. The page draws the marks at the top of the machine's
+panel (each with a Seen button; under 600px the pill and Seen share a line and the words take the one under it, so
+Seen is never pushed off the panel) and the Going out table under them (remote address and port, the host name — "no
 name" when reverse DNS had none — the process, and the bytes sent and received), then the Listening table of slice 1.
 It reads the marks off the same snapshot the Dashboard uses, so a mark costs nothing extra.
 
@@ -468,7 +503,7 @@ date stays plain — no reason, no tooltip. Read the two facts apart: `holdText`
 | `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel), and the three status sets the page reads (`each`, `working`, `done`). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
-| `/api/network` | Every listening socket on each machine with the mark it wears (open to everyone, expected public, local only), every established connection it has (remote end, host name, process, bytes sent and received), and what is new about them (a process never seen there, a new destination, an upload over `network.uploadWarnMB`, a knock from the local network), with the ports that machine may have public and its sshd's password and root settings — the read an agent asks to answer "is anything open that should not be, and what looks weird on my network right now?" |
+| `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's) and the knocks from its local network; and what is new about them (a process never seen there, a new destination, an upload over `network.uploadWarnMB`, a local knock) — the read an agent asks to answer "is anything open that should not be, and what looks weird on my network right now?" |
 | `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,

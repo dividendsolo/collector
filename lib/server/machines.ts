@@ -25,9 +25,9 @@ const REMOTE_KEYS = [
   "ok_exits",
   "work_script",
   "watch",
-  "network",
   "verify_label",
   "repos_dir",
+  "network",
 ] as const;
 
 export const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;

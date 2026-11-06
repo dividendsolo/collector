@@ -3,11 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 
 const TIP = ".card-tip, [data-tip]";
-type Card = { title: string; text: string; url: string } | null;
+type Fact = [label: string, value: string];
+type Card = { title: string; text: string; url: string; facts?: Fact[] } | null;
+
+/** The labelled facts an element carries in data-tip-facts (JSON, [label, value] pairs), or none. */
+function factsOf(el: HTMLElement): Fact[] | undefined {
+  if (!el.dataset.tipFacts) return undefined;
+  try {
+    const f = JSON.parse(el.dataset.tipFacts);
+    return Array.isArray(f) ? f.filter((x) => Array.isArray(x) && x.length === 2) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 const cache = new Map<string, Promise<Card>>();
 
 /** Card tooltip: hover or focus a card number to see what the card is for (title + its Summary or What).
- * Any element with data-tip (a Projects row) shows that text instead, with data-tip-title above it. */
+ * Any element with data-tip (a Projects row) shows that text instead, with data-tip-title above it; one that also
+ * carries data-tip-facts shows those labelled facts under it, one per line (the Network page's process). */
 export function CardTip() {
   const tip = useRef<HTMLDivElement>(null);
   const [body, setBody] = useState<{ key: string; card?: Card; loading: boolean } | null>(null);
@@ -26,12 +39,19 @@ export function CardTip() {
       t.style.top = `${r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6}px`;
     };
     const show = async (el: HTMLElement) => {
-      const key = el.dataset.tip ? `tip:${el.dataset.tip}` : `${el.dataset.repo}#${el.dataset.card}`;
+      const key =
+        el.dataset.tip || el.dataset.tipFacts
+          ? `tip:${el.dataset.tipTitle}:${el.dataset.tip}:${el.dataset.tipFacts}`
+          : `${el.dataset.repo}#${el.dataset.card}`;
       if (forKey.current === key) return;
       forKey.current = key;
       anchor.current = el;
-      if (el.dataset.tip) {
-        setBody({ key, card: { title: el.dataset.tipTitle || "", text: el.dataset.tip, url: "" }, loading: false });
+      if (el.dataset.tip || el.dataset.tipFacts) {
+        setBody({
+          key,
+          card: { title: el.dataset.tipTitle || "", text: el.dataset.tip || "", url: "", facts: factsOf(el) },
+          loading: false,
+        });
         requestAnimationFrame(place);
         return;
       }
@@ -93,6 +113,15 @@ export function CardTip() {
         <>
           <strong>{body.card.title}</strong>
           {body.card.text ? <span>{body.card.text}</span> : null}
+          {body.card.facts?.length ? (
+            <div className="tip-facts">
+              {body.card.facts.map(([label, value]) => (
+                <div key={label}>
+                  <span className="tip-label">{label}:</span> <span className="tip-value">{value}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </>
       ) : body ? (
         <span>Could not read {body.key}.</span>

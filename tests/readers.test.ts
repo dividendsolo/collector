@@ -462,129 +462,55 @@ describe("warnings", () => {
       { level: "error", text: "Foreman on m1 started 5 times in 60 s: it is starting itself in a loop" },
     ]);
   });
-  it("puts a machine's ports open to everyone in one row, naming them once each, and the two sshd settings (collector#65)", () => {
-    // The same socket is bound on IPv4 and IPv6, which ss prints twice: one thing to fix, named once.
+  const netWarnings = (machines: unknown[]) =>
+    warnings({ machines, github: {}, cfg: {}, services: [], domains: [], ticketsError: null, x: null, ai: [] });
+  const port = (p: number, reach: string, proto = "tcp") => ({
+    proto,
+    port: p,
+    addresses: ["0.0.0.0"],
+    process: null,
+    pid: null,
+    reach,
+    tailnet: reach === "internet" || reach === "lan",
+  });
+  it("puts a machine's ports open to the internet in one error row, and the two sshd settings (collector#65)", () => {
     const network = {
-      allow: [22, 80, 443],
-      sockets: [
-        { proto: "tcp", address: "0.0.0.0", port: 5432, process: "postgres", pid: "911", mark: "open" },
-        { proto: "tcp", address: "::", port: 5432, process: "postgres", pid: "911", mark: "open" },
-        { proto: "udp", address: "*", port: 5353, process: null, pid: null, mark: "open" },
-        { proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "700", mark: "allowed" },
-        { proto: "tcp", address: "127.0.0.1", port: 8080, process: "java", pid: "1350", mark: "local" },
-      ],
+      networks: { lan: [], internet: ["203.0.113.5"], tailnet: null },
+      sockets: [port(5432, "internet"), port(5353, "internet", "udp"), port(8080, "machine"), port(49375, "tailnet")],
       ssh: { source: "/etc/ssh/sshd_config", passwordauthentication: true, permitrootlogin: true },
     };
-    const w = warnings({
-      machines: [{ name: "vps", network }],
-      github: {},
-      cfg: {},
-      services: [],
-      domains: [],
-      ticketsError: null,
-      x: null,
-      ai: [],
-    });
-    expect(w.map((x) => [x.level, x.text])).toEqual([
-      ["error", "2 ports are open to everyone on vps: tcp 5432, udp 5353"],
+    expect(netWarnings([{ name: "vps", network }]).map((x) => [x.level, x.text])).toEqual([
+      ["error", "2 ports on vps are open to anyone on the internet: tcp 5432, udp 5353"],
       ["error", "SSH on vps: password authentication is on"],
       ["error", "SSH on vps: root login is on"],
     ]);
   });
-  it("names the first ten open ports and counts the rest, so one busy machine cannot bury the panel (collector#65)", () => {
-    const sockets = Array.from({ length: 13 }, (_, i) => ({
-      proto: "udp",
-      address: "*",
-      port: 5000 + i,
-      process: null,
-      pid: null,
-      mark: "open",
-    }));
-    const w = warnings({
-      machines: [{ name: "vps", network: { allow: [22], sockets, ssh: null } }],
-      github: {},
-      cfg: {},
-      services: [],
-      domains: [],
-      ticketsError: null,
-      x: null,
-      ai: [],
-    });
-    expect(w).toEqual([
+  it("warns about the internet's ports only, never the local network's (collector#65)", () => {
+    const network = {
+      networks: { lan: ["192.168.1.0/24"], internet: [], tailnet: "100.64.0.9" },
+      sockets: [port(7000, "lan"), port(5000, "lan"), port(22, "internet"), port(4000, "machine")],
+      ssh: null,
+    };
+    expect(netWarnings([{ name: "laptop", network }]).map((x) => [x.level, x.text])).toEqual([
+      ["error", "1 port on laptop is open to anyone on the internet: tcp 22"],
+    ]);
+  });
+  it("names the first ten ports and counts the rest, so one busy machine cannot bury the panel (collector#65)", () => {
+    const sockets = Array.from({ length: 13 }, (_, i) => port(5000 + i, "internet", "udp"));
+    expect(netWarnings([{ name: "vps", network: { networks: {}, sockets, ssh: null } }])).toEqual([
       {
         level: "error",
-        text: "13 ports are open to everyone on vps: udp 5000, udp 5001, udp 5002, udp 5003, udp 5004, udp 5005, udp 5006, udp 5007, udp 5008, udp 5009, and 3 more (see the Network page)",
+        text: "13 ports on vps are open to anyone on the internet: udp 5000, udp 5001, udp 5002, udp 5003, udp 5004, udp 5005, udp 5006, udp 5007, udp 5008, udp 5009, and 3 more (see the Network page)",
       },
     ]);
   });
-  it("says a single port is open in the singular, and nothing at all for a machine whose ports are all expected (collector#65)", () => {
-    const one = warnings({
-      machines: [
-        {
-          name: "vps",
-          network: {
-            allow: [22],
-            sockets: [{ proto: "tcp", address: "0.0.0.0", port: 6379, process: "redis", pid: "4", mark: "open" }],
-            ssh: null,
-          },
-        },
-      ],
-      github: {},
-      cfg: {},
-      services: [],
-      domains: [],
-      ticketsError: null,
-      x: null,
-      ai: [],
-    });
-    expect(one.map((x) => x.text)).toEqual(["A port is open to everyone on vps: tcp 6379"]);
-    expect(
-      warnings({
-        machines: [
-          {
-            name: "vps",
-            network: {
-              allow: [22],
-              sockets: [{ proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "7", mark: "allowed" }],
-              ssh: null,
-            },
-          },
-        ],
-        github: {},
-        cfg: {},
-        services: [],
-        domains: [],
-        ticketsError: null,
-        x: null,
-        ai: [],
-      }),
-    ).toEqual([]);
-  });
-  it("alarms on nothing when every port is expected public or local, or when there is no network read (collector#65)", () => {
-    const w = warnings({
-      machines: [
-        {
-          name: "vps",
-          network: {
-            allow: [22, 443],
-            sockets: [
-              { proto: "tcp", address: "0.0.0.0", port: 443, process: "nginx", pid: "99", mark: "allowed" },
-              { proto: "tcp", address: "::1", port: 5432, process: "postgres", pid: "911", mark: "local" },
-            ],
-            ssh: { source: "sshd -T", passwordauthentication: false, permitrootlogin: false },
-          },
-        },
-        { name: "laptop" },
-      ],
-      github: {},
-      cfg: {},
-      services: [],
-      domains: [],
-      ticketsError: null,
-      x: null,
-      ai: [],
-    });
-    expect(w).toEqual([]);
+  it("alarms on nothing when every port is the machine's or its tailnet's, or when there is no network read (collector#65)", () => {
+    const network = {
+      networks: { lan: [], internet: ["203.0.113.5"], tailnet: "100.64.0.10" },
+      sockets: [port(5432, "machine"), port(11434, "tailnet")],
+      ssh: { source: "sshd -T", passwordauthentication: false, permitrootlogin: false },
+    };
+    expect(netWarnings([{ name: "vps", network }, { name: "laptop" }])).toEqual([]);
   });
   it("puts the month's Actions bill on the right of the Actions row", () => {
     const w = warnings({

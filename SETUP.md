@@ -104,13 +104,8 @@ What to look at — read-only, and only what exists on this machine
   you can read right now, `{"name": "vps", "ssh": "user@host"}`. Confirm each remote before you write it:
   `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> 'python3 -c "print(1)"'` must print 1. A host you cannot read would
   sit on the page as a red row forever, so leave it out and name it in your report.
-- `network`: the ports a machine may have open to everyone, `{"allow": [22, 80, 443]}`, and `uploadWarnMB` (default
-  50), the megabytes a process may send between two reads before the Network page marks it a large upload. Collector
-  reads every listening socket on the machine and flags any socket bound beyond it whose port is not on this list, so
-  the list is how the person says a port is meant to be public. Write it only when something on the machine names
-  those ports — a firewall config, a published port in a compose file, a proxy's own config — and list the ports it
-  names alongside 22, 80 and 443. When nothing readable says so, leave the key out and say in your report that its
-  default is 22, 80 and 443.
+- `network`: `{"uploadWarnMB": 50}`, the megabytes a process may send between two reads before the Network page
+  marks it a large upload. Leave the key out unless the person names another amount; its default is 50.
 - `repos_dir`: the folder that holds the repos, if it is not `~/code`. `verify_label`: only if the person has a verify
   tool that labels the Docker containers it runs (`<prefix>.run`, `<prefix>.commit`); otherwise leave it out.
 

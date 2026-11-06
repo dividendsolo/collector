@@ -115,11 +115,14 @@ Each project page also shows a Stats card: monthly spend (subscriptions tagged w
 total revenue (from the project's payment providers, Stripe and Polar), and revenue and visitors over 30 days
 (from DataFast). The Payment keys page (`#/keys`) shows how to make each read-only key and whether it works.
 
-The **Network** page shows every port each machine listens on — TCP and UDP, with the process that owns it — and
-marks the ones anyone can reach: a socket bound to `0.0.0.0`, `::` or a public address whose port is not on that
-machine's allow list is red, a socket only this machine or its tailnet can reach is plain, and so is a port you put
-on the allow list. The same read says whether sshd takes password logins or root login. A machine with ports open
-to everyone gets one error row in Needs attention naming them, so one busy machine cannot bury every other warning.
+The **Network** page shows every port each machine listens on — TCP and UDP, with the process that owns it, one row
+per port — and who it is accessible to: anyone on the internet (red), its tailnet (green), the machine's local
+network (grey), or the machine alone. Collector works this out from the address the port is bound on and the machine's own
+addresses: a port on every address of a machine on a home network is open to that network, and the same port on a
+machine with a public address is open to the internet. It does not read the firewall, so a firewall may still block a
+port listed here. The same read says whether sshd takes password logins or root login. A machine with ports open to
+the internet gets one error row in Needs attention naming them, so one busy machine cannot bury every other warning.
+A port open only to the local network is no warning.
 
 It reads only. It never changes a job or a card on its own: the two buttons you click yourself (Start Tailscale,
 Start Hermes) act on the machine Collector runs on. Its other write is your repo choice, saved to `config.json`.
@@ -183,7 +186,7 @@ never read, so a typo cannot hide.
 | `ok_exits` | launchd exit codes that mean success for one job: `{"<label>": {"<code>": "<text>"}}`. |
 | `work_script` | A script that picks up cards and starts agents. `jobs` are the cron jobs that start it, `log` is its log (each start writes `=== tick <time> ===`), `name` is the name shown when it runs a step itself, `steps` is an optional folder where it writes what it does on each card now (one JSON file per card: `repo`, `card`, `step`, `since`, `pid`; the step shows on the script's own row, and a process in a card worktree with no step file and no verify run is a `leftover`, named after the program it runs, never after the script), and `max_starts_60s` (default 5) is the loop alarm. |
 | `watch` | The agents and jobs of your own you want a warning about, on top of the ones Collector reads by itself (Hermes's jobs, launchd's, `crontab -l`'s, the systemd timers, the Hermes gateway and its ticker, and the running Claude Code and Codex sessions): `[{"name": "Nightly backup", "launchd": "com.example.backup"}, {"name": "My Claude session", "session": "claude"}]`. One entry names one thing and the signal that says how it is doing: `process` (text its command line carries while it runs), `session` (`claude` or `codex`, a running coding-agent session), `launchd` (a label; its last exit code says whether its last run worked, and an `ok_exits` entry for that label still means success), `log` (a file: its last line against `fail_on`, and how long since it was written), or `heartbeat` (a file it writes as it goes, holding an epoch second or nothing) with `idle_after` seconds without a write (default 900). `machine` names the machine it lives on, by the name in `machines`; left out, the machine Collector runs on, since a process, a launchd label and a file each belong to one machine. A failure is an error in Needs attention and idle too long a warning; a `process` or a `session` that is not running reads as idle right away, and a file that was never written as idle too. Checked every 15 seconds with the machines. |
-| `network` | The ports a machine may have open to everyone, and what counts as a large upload: `{"allow": [22, 80, 443], "uploadWarnMB": 50}`. Every other port a machine listens on beyond `127.0.0.1` or its tailnet address is red on the Network page and an error in Needs attention, so this list is how you say a port is meant to be public; left out it reads 22, 80 and 443. A port you mean to be public goes here, and a dev server you meant to stop does not. `uploadWarnMB` (default 50) is the megabytes a process may send between two reads before the Network page marks it a large upload; the same page marks a process it has not seen before, a destination a known process has not been seen reaching, and a knock on a listening port from another device on the local network, and each mark stays in Needs attention until you click Seen. |
+| `network` | What counts as a large upload: `{"uploadWarnMB": 50}` (default 50), the megabytes a process may send between two reads before the Network page marks it a large upload. The same page marks a process it has not seen before, a destination a known process has not been seen reaching, and a knock on a listening port from another device on the local network, and each mark stays in Needs attention until you click Seen. |
 | `verify_label` | The Docker label prefix your verify tool puts on its containers (`<prefix>.run`, `<prefix>.commit`). A running verify shows as the card's current task. |
 | `services` | Sites to check once a minute: `[{"name": "My app", "url": "https://example.com"}]`. A project whose repo name matches a service name shows that service's status. |
 | `vendors` | The outside services you depend on, by their public status page: `[{"name": "GitHub", "url": "https://www.githubstatus.com"}]`. The Collector reads the page's feed by its shape: Statuspage (`/api/v2/summary.json`), Datadog status pages (`/config.json`), Better Stack (`/index.json`) and Stripe (`/current`) are found from `url`; any other feed goes in `"feed"` (Google Cloud's `incidents.json` is read too; for example X: `{"name": "X API", "url": "https://docs.x.com/status", "feed": "https://developer.x.com/api/status"}`). Open incidents show on the APIs page, and the APIs item in the sidebar counts the vendors with one (red for a major or critical one); they never go to Needs attention, since there is nothing to do about them. A service with no status page can use `"probe"`: one GET of an API that answers without a key (Nous: `https://inference-api.nousresearch.com/v1/models`), slow over 3 seconds, an outage on an error. A page with no feed it can read shows as a link. Checked every 5 minutes. |
@@ -228,9 +231,9 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
   too long — no process, no session, no file, or a file older than `idle_after` (default 900 seconds) — is a warning.
 - **Open ports (card #65):** every listening TCP and UDP socket each machine reports — `ss -tulnp` on Linux,
   `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -nP -iUDP` on a Mac — with the process and pid that own it, where this
-  user may read one (no `sudo`, so a root socket shows its address and port and no name). Each socket is marked
-  against that machine's `network.allow`: open to everyone, expected public, or local only (a loopback address, or
-  one in Tailscale's `100.64.0.0/10`). Nothing is scanned from outside and no port is opened or closed. The same
+  user may read one (no `sudo`, so a root socket shows its address and port and no name). Each port says who it
+  is accessible to: the internet, the local network, the tailnet, or the machine alone, from the address it is bound
+  on and the machine's own addresses (`ip -o addr show` on Linux, `ifconfig` on a Mac). The firewall is not read. Nothing is scanned from outside and no port is opened or closed. The same
   read says whether sshd takes password logins or root login (`sshd -T`, else `/etc/ssh/sshd_config`).
 - **What goes out (card #66):** every established connection each machine has, with the process and pid that own it,
   the remote address and port, the remote host name (reverse DNS, cached, and given up on after a moment) and

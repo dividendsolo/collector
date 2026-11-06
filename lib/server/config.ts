@@ -81,11 +81,7 @@ export interface Config {
     max_starts_60s?: number;
   };
   watch?: Watch[];
-  /** The ports a machine may have open to everyone (collector#65): `network.allow`, default `[22, 80, 443]`. A
-   * socket bound beyond this machine whose port is not on the list is flagged open to everyone; the list left out
-   * is the default, and an empty list expects nothing to be public. */
   network?: {
-    allow?: number[];
     /** The megabytes a process may send between two reads before the page marks it a large upload (collector#66),
      * default 50. */
     uploadWarnMB?: number;
