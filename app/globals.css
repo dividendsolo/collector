@@ -1071,6 +1071,22 @@
   #card-tip span {
     color: var(--muted);
   }
+  /* Labelled facts under a tooltip's text (the Network page's process): one per line, set apart from the text. */
+  #card-tip .tip-facts {
+    display: grid;
+    gap: 4px;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line-2);
+    font-size: 14px;
+  }
+  #card-tip .tip-label {
+    color: var(--faint);
+  }
+  #card-tip .tip-value {
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
   /* Projects: a full-page table that wraps inside its cells instead of scrolling sideways. */
   table.fit th,
   table.fit td {
@@ -1435,6 +1451,32 @@
      the line under a machine's table carries its allow list and what its sshd allows. */
   .net-open td.port {
     color: var(--red);
+  }
+  /* The Network page's badges: the tailnet in green, the local network greyed out. */
+  .pill.net-tailnet {
+    color: var(--green);
+    background: var(--green-bg);
+    border-color: var(--green-line);
+  }
+  .pill.net-tailnet .dot {
+    background: var(--green);
+  }
+  .pill.net-lan {
+    color: var(--faint);
+  }
+  /* Each machine's table sizes to its own rows: the port list wraps inside its cell, so one machine with a long list
+     (twenty UDP ports with no process name) cannot widen the column and push every other cell to the right. */
+  .net-table td.port {
+    white-space: normal;
+    max-width: 320px;
+    font-variant-numeric: tabular-nums;
+  }
+  .net-table td.mono {
+    white-space: normal;
+    max-width: 240px;
+  }
+  .net-badges .pill + .pill {
+    margin-left: 6px;
   }
   .net-note {
     margin: 0;

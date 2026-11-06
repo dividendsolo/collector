@@ -52,13 +52,6 @@
       "session": "claude"
     }
   ],
-  "network": {
-    "allow": [
-      22,
-      80,
-      443
-    ]
-  },
   "verify_label": "my-verify",
   "repos_dir": "~/code",
   "jobs": {

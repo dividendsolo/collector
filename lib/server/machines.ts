@@ -19,15 +19,7 @@ const SSH = [
   "ControlPersist=300",
 ];
 /** The settings collect.py needs on each machine; the rest stays on the server. */
-const REMOTE_KEYS = [
-  "launchd_prefixes",
-  "ok_exits",
-  "work_script",
-  "watch",
-  "network",
-  "verify_label",
-  "repos_dir",
-] as const;
+const REMOTE_KEYS = ["launchd_prefixes", "ok_exits", "work_script", "watch", "verify_label", "repos_dir"] as const;
 
 export const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 

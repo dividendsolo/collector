@@ -18,65 +18,126 @@ function drive<T>(probe: unknown): T {
   return JSON.parse(out) as T;
 }
 
-/** One listening socket as collect.py reads it, with the mark it worked out. */
+/** One listening socket as collect.py reads it. */
 interface Socket {
   proto: string;
   address: string;
   port: number;
   process: string | null;
   pid: string | null;
-  mark?: "open" | "allowed" | "local";
 }
 
-const DEFAULT_ALLOW = [22, 80, 443];
+/** One listening port with who can connect to it. */
+interface Port {
+  proto: string;
+  port: number;
+  addresses: string[];
+  process: string | null;
+  pid: string | null;
+  reach: "internet" | "lan" | "tailnet" | "machine";
+  tailnet: boolean;
+  info?: unknown;
+}
 
-describe("the three marks (collector#65)", () => {
-  const mark = (port: number, address: string, allow?: number[]) => drive<string>({ fn: "mark", port, address, allow });
+// A machine on a home network (private addresses only) with a tailnet, and a VPS with a public address.
+const HOME = { lan: ["192.168.1.0/24"], internet: [], tailnet: "100.64.0.9" };
+const VPS = { lan: [], internet: ["203.0.113.5"], tailnet: "100.64.0.10" };
+const BARE = { lan: [], internet: [], tailnet: null };
 
-  it("flags a port bound beyond this machine that the allow list does not name: open to everyone", () => {
-    expect(mark(5432, "0.0.0.0")).toBe("open");
-    expect(mark(6379, "::")).toBe("open");
-    expect(mark(3000, "*")).toBe("open");
-    expect(mark(8080, "203.0.113.9")).toBe("open");
-    // The card's own examples: a database, a dev server, Docker's API.
-    expect(mark(27017, "0.0.0.0")).toBe("open");
-    expect(mark(5173, "0.0.0.0")).toBe("open");
-    expect(mark(2375, "0.0.0.0")).toBe("open");
+describe("who can connect to a socket (collector#65)", () => {
+  const reach = (address: string, networks: object) => drive<[string, boolean]>({ fn: "reach", address, networks });
+
+  it("says a port on every address of a home machine is open to its local network and its tailnet, not the internet", () => {
+    expect(reach("*", HOME)).toEqual(["lan", true]);
+    expect(reach("0.0.0.0", HOME)).toEqual(["lan", true]);
+    expect(reach("::", HOME)).toEqual(["lan", true]);
   });
 
-  it("leaves a port on the machine's allow list plain: expected public", () => {
-    expect(mark(22, "0.0.0.0")).toBe("allowed");
-    expect(mark(80, "::")).toBe("allowed");
-    expect(mark(443, "203.0.113.9")).toBe("allowed");
-    expect(mark(8080, "0.0.0.0", [8080])).toBe("allowed");
-    // An allow list of the user's own decides; the default is only the default.
-    expect(mark(8081, "0.0.0.0", [8080])).toBe("open");
-    expect(mark(443, "0.0.0.0", [8080])).toBe("open");
+  it("says a port on every address of a machine with a public address is open to the internet", () => {
+    expect(reach("0.0.0.0", VPS)).toEqual(["internet", true]);
+    expect(reach("::", VPS)).toEqual(["internet", true]);
+    // A machine whose networks were not read reads as the internet: the safe direction.
+    expect(reach("*", BARE)).toEqual(["internet", false]);
   });
 
-  it("leaves a socket only this machine (or its tailnet) can reach plain: local only", () => {
-    expect(mark(5432, "127.0.0.1")).toBe("local");
-    expect(mark(5432, "127.0.0.53")).toBe("local");
-    expect(mark(6379, "::1")).toBe("local");
-    expect(mark(11434, "100.64.0.5")).toBe("local");
-    expect(mark(3000, "100.64.0.10")).toBe("local");
+  it("reads a bound address by its own range, whatever the machine's networks", () => {
+    expect(reach("203.0.113.9", HOME)).toEqual(["internet", false]);
+    expect(reach("192.168.1.20", VPS)).toEqual(["lan", false]);
+    expect(reach("10.0.0.4", VPS)).toEqual(["lan", false]);
+    expect(reach("fe80::1", VPS)).toEqual(["lan", false]);
+    expect(reach("not-an-address", HOME)).toEqual(["internet", false]);
   });
 
-  it("puts every address of the Tailscale range (100.64.0.0/10) on the local side, and no address past it", () => {
-    expect(drive<boolean>({ fn: "local", address: "100.64.0.0" })).toBe(true);
-    expect(drive<boolean>({ fn: "local", address: "100.127.255.255" })).toBe(true);
-    expect(drive<boolean>({ fn: "local", address: "100.63.255.255" })).toBe(false);
-    expect(drive<boolean>({ fn: "local", address: "100.128.0.0" })).toBe(false);
+  it("says a loopback address is this machine alone, and a Tailscale address the tailnet", () => {
+    for (const a of ["127.0.0.1", "127.0.0.53", "::1", "[::1]", "::ffff:127.0.0.1", "localhost"])
+      expect(reach(a, VPS)).toEqual(["machine", false]);
+    for (const a of ["100.64.0.0", "100.127.255.255", "100.64.0.5", "fd7a:115c:a1e0::1"])
+      expect(reach(a, VPS)).toEqual(["tailnet", false]);
+    // Just past the Tailscale range: the shared address space a carrier uses, a private one.
+    expect(reach("100.63.255.255", VPS)[0]).not.toBe("tailnet");
+    expect(reach("100.128.0.0", VPS)[0]).not.toBe("tailnet");
+  });
+});
+
+describe("the networks a machine is on", () => {
+  it("reads `ip -o addr show` (Linux)", () => {
+    const text = [
+      "1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever preferred_lft forever",
+      "2: eth0    inet 203.0.113.5/20 metric 100 brd 203.0.127.255 scope global dynamic eth0",
+      "2: eth0    inet6 2001:db8::5/64 scope global",
+      "3: tailscale0    inet 100.64.0.10/32 scope global tailscale0",
+      "4: docker0    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0",
+    ].join("\n");
+    expect(drive({ fn: "ip", text })).toEqual([
+      ["lo", "127.0.0.1/8"],
+      ["eth0", "203.0.113.5/20"],
+      ["eth0", "2001:db8::5/64"],
+      ["tailscale0", "100.64.0.10/32"],
+      ["docker0", "172.17.0.1/16"],
+    ]);
   });
 
-  it("reads the shapes the two tools print for a local address", () => {
-    expect(drive<boolean>({ fn: "local", address: "[::1]" })).toBe(true);
-    expect(drive<boolean>({ fn: "local", address: "::ffff:127.0.0.1" })).toBe(true);
-    expect(drive<boolean>({ fn: "local", address: "fe80::1" })).toBe(true);
-    expect(drive<boolean>({ fn: "local", address: "localhost" })).toBe(true);
-    expect(drive<boolean>({ fn: "local", address: "0.0.0.0" })).toBe(false);
-    expect(drive<boolean>({ fn: "local", address: "::" })).toBe(false);
-    expect(drive<boolean>({ fn: "local", address: "192.0.2.10" })).toBe(false);
+  it("reads `ifconfig` (macOS), with a hex netmask and a zone on a link-local address", () => {
+    const text = [
+      "lo0: flags=8049<UP,LOOPBACK,RUNNING,MULTICAST> mtu 16384",
+      "\tinet 127.0.0.1 netmask 0xff000000",
+      "en0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500",
+      "\tinet6 fe80::1%en0 prefixlen 64 secured scopeid 0xe",
+      "\tinet 192.168.1.20 netmask 0xffffff00 broadcast 192.168.1.255",
+      "utun5: flags=8051<UP,POINTOPOINT,RUNNING,MULTICAST> mtu 1280",
+      "\tinet 100.64.0.9 --> 100.64.0.9 netmask 0xffffffff",
+    ].join("\n");
+    expect(drive({ fn: "ifconfig", text })).toEqual([
+      ["lo0", "127.0.0.1/8"],
+      ["en0", "fe80::1/64"],
+      ["en0", "192.168.1.20/24"],
+      ["utun5", "100.64.0.9/32"],
+    ]);
+  });
+
+  it("sorts a machine's addresses into its local networks, its public addresses and its tailnet address", () => {
+    expect(
+      drive({
+        fn: "networks",
+        addresses: [
+          ["lo0", "127.0.0.1/8"],
+          ["en0", "fe80::1/64"],
+          ["en0", "192.168.1.20/24"],
+          ["utun5", "100.64.0.9/32"],
+          ["bridge100", "192.168.64.1/24"],
+        ],
+      }),
+    ).toEqual(HOME);
+    expect(
+      drive({
+        fn: "networks",
+        addresses: [
+          ["eth0", "203.0.113.5/20"],
+          ["tailscale0", "100.64.0.10/32"],
+          ["docker0", "172.17.0.1/16"],
+        ],
+      }),
+    ).toEqual(VPS);
   });
 });
 
@@ -147,6 +208,68 @@ describe("reading `lsof` (macOS, which has no ss)", () => {
   });
 });
 
+describe("the process behind a port (its tooltip)", () => {
+  it("reads `ps -axo pid=,ppid=,user=,etime=,comm=`, a path with spaces kept whole", () => {
+    const text = [
+      " 1272     1 me   03-15:01:06 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      " 1787  1253 me   03-15:00:59 /Applications/Brave Browser.app/Contents/Frameworks/Brave Browser Helper",
+      "not a line",
+    ].join("\n");
+    expect(drive({ fn: "ps", text })).toEqual({
+      "1272": {
+        ppid: "1",
+        user: "me",
+        seconds: 313266,
+        path: "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      },
+      "1787": {
+        ppid: "1253",
+        user: "me",
+        seconds: 313259,
+        path: "/Applications/Brave Browser.app/Contents/Frameworks/Brave Browser Helper",
+      },
+    });
+  });
+
+  it("reads the full name of a Linux process out of `args` when `comm` cut it, never an interpreter's script", () => {
+    const ps = [
+      "1000842  700 me    01:00 next-server (v1",
+      " 599186  700 me    01:00 hermes",
+      "    700    1 root  02:00 systemd",
+    ].join("\n");
+    const args = ["1000842 next-server (v16.4.2)", " 599186 /home/me/.hermes/python3 -I -c import os"].join("\n");
+    const out = drive<Record<string, { path: string; command: string }>>({ fn: "ps", text: ps, args });
+    expect(out["1000842"].path).toBe("next-server (v16.4.2)");
+    expect(out["599186"].path).toBe("hermes");
+    expect(out["599186"].command).toBe("/home/me/.hermes/python3 -I -c import os");
+    const info = drive<{ name: string; about: string; path: string }>({ fn: "info", pid: "1000842", ps, args });
+    expect(info.name).toBe("next-server (v16.4.2)");
+    expect(info.about).toContain("Next.js");
+    expect(info.path).toBe("next-server (v16.4.2)");
+  });
+
+  it("names a program we know in plain words, and says nothing it does not know", () => {
+    const ps = [
+      " 1253     1 me   02:00 /Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      " 1272     1 me   01:00 /System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter",
+      " 4242  1253 me   00:30 /opt/thing/unknownd",
+    ].join("\n");
+    const cc = drive<{ name: string; about: string }>({ fn: "info", pid: "1272", ps });
+    expect(cc.name).toBe("ControlCenter");
+    expect(cc.about).toContain("AirPlay Receiver");
+    expect(drive({ fn: "info", pid: "4242", ps })).toEqual({
+      name: "unknownd",
+      about: null,
+      seconds: 30,
+      started_by: "Brave Browser",
+      user: "me",
+      path: "/opt/thing/unknownd",
+    });
+    expect(drive({ fn: "info", pid: "999", ps })).toBeNull();
+    expect(drive({ fn: "info", pid: null, ps })).toBeNull();
+  });
+});
+
 describe("the sshd settings that should not be on", () => {
   it("reads `sshd -T`, whose keys are lower case, and flags only what is really on", () => {
     const out = drive<{ passwordauthentication: boolean; permitrootlogin: boolean }>({
@@ -179,37 +302,103 @@ describe("the sshd settings that should not be on", () => {
 describe("the section one machine reads", () => {
   const sockets: Socket[] = [
     { proto: "tcp", address: "127.0.0.1", port: 5432, process: "postgres", pid: "911" },
+    { proto: "tcp", address: "::1", port: 5432, process: "postgres", pid: "911" },
     { proto: "tcp", address: "0.0.0.0", port: 3000, process: "bun", pid: "628125" },
-    { proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "700" },
+    { proto: "tcp", address: "::", port: 3000, process: "bun", pid: "628125" },
+    { proto: "tcp", address: "100.64.0.10", port: 49375, process: null, pid: null },
+    { proto: "udp", address: "*", port: 5353, process: null, pid: null },
     { proto: "udp", address: "*", port: 5353, process: "avahi-daemon", pid: "650" },
   ];
 
-  it("marks every socket with the machine's allow list, the ones open to everyone first", () => {
-    const out = drive<{ allow: number[]; sockets: Socket[] }>({ fn: "section", sockets });
-    expect(out.allow).toEqual(DEFAULT_ALLOW);
+  it("reads one row per port, with every address it is bound on and who can connect to it, the most exposed first", () => {
+    const out = drive<{ networks: object; sockets: Port[] }>({ fn: "section", sockets, networks: VPS });
+    expect(out.networks).toEqual(VPS);
     expect(out.sockets).toEqual([
-      { proto: "tcp", address: "0.0.0.0", port: 3000, process: "bun", pid: "628125", mark: "open" },
-      { proto: "udp", address: "*", port: 5353, process: "avahi-daemon", pid: "650", mark: "open" },
-      { proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "700", mark: "allowed" },
-      { proto: "tcp", address: "127.0.0.1", port: 5432, process: "postgres", pid: "911", mark: "local" },
+      {
+        proto: "tcp",
+        port: 3000,
+        addresses: ["0.0.0.0", "::"],
+        process: "bun",
+        pid: "628125",
+        reach: "internet",
+        tailnet: true,
+        info: null,
+      },
+      {
+        proto: "udp",
+        port: 5353,
+        addresses: ["*"],
+        process: "avahi-daemon",
+        pid: "650",
+        reach: "internet",
+        tailnet: true,
+        info: null,
+      },
+      {
+        proto: "tcp",
+        port: 49375,
+        addresses: ["100.64.0.10"],
+        process: null,
+        pid: null,
+        reach: "tailnet",
+        tailnet: false,
+        info: null,
+      },
+      {
+        proto: "tcp",
+        port: 5432,
+        addresses: ["127.0.0.1", "::1"],
+        process: "postgres",
+        pid: "911",
+        reach: "machine",
+        tailnet: false,
+        info: null,
+      },
     ]);
   });
 
-  it("takes the allow list the user set, and carries the sshd flags with where they were read", () => {
-    const out = drive<{ allow: number[]; sockets: Socket[]; ssh: any }>({
+  it("reads the same ports on a home machine as open to its local network, not the internet", () => {
+    const out = drive<{ sockets: Port[] }>({ fn: "section", sockets, networks: HOME });
+    expect(out.sockets.map((s) => [s.port, s.reach])).toEqual([
+      [3000, "lan"],
+      [5353, "lan"],
+      [49375, "tailnet"],
+      [5432, "machine"],
+    ]);
+  });
+
+  it("gives each port's process its full name and the facts for its tooltip, from ps", () => {
+    const ps = [
+      "    1     0 root      7-05:56:33 /sbin/launchd",
+      "  700     1 root      2-01:00:00 /usr/sbin/sshd",
+      "  911     1 me        01:02:03 /opt/homebrew/opt/postgresql@17/bin/postgres",
+      "628125   700 me           04:05 /home/me/.bun/bin/bun",
+    ].join("\n");
+    const out = drive<{ sockets: Port[] }>({ fn: "section", sockets, networks: VPS, ps });
+    const pg = out.sockets.find((s) => s.port === 5432);
+    expect(pg?.process).toBe("postgres");
+    expect(pg?.info).toMatchObject({
+      name: "postgres",
+      about: "PostgreSQL database server.",
+      seconds: 3723,
+      user: "me",
+      path: "/opt/homebrew/opt/postgresql@17/bin/postgres",
+    });
+    // Started by its parent, by the parent's own name; pid 1 is the machine's own service manager.
+    expect(out.sockets.find((s) => s.port === 3000)?.info).toMatchObject({ started_by: "sshd", seconds: 245 });
+    expect(["launchd", "systemd"]).toContain((pg?.info as { started_by?: string } | undefined)?.started_by);
+    // A socket with no pid has nothing to say.
+    expect(out.sockets.find((s) => s.port === 49375)?.info).toBeNull();
+  });
+
+  it("carries the sshd flags with where they were read", () => {
+    const out = drive<{ ssh: any }>({
       fn: "section",
       sockets,
-      allow: [3000, 5353],
+      networks: VPS,
       ssh_text: "passwordauthentication yes\n",
       ssh_source: "/etc/ssh/sshd_config",
     });
-    expect(out.allow).toEqual([3000, 5353]);
-    expect(out.sockets.map((s) => [s.port, s.mark])).toEqual([
-      [22, "open"],
-      [3000, "allowed"],
-      [5353, "allowed"],
-      [5432, "local"],
-    ]);
     expect(out.ssh).toEqual({
       source: "/etc/ssh/sshd_config",
       passwordauthentication: true,
@@ -218,8 +407,7 @@ describe("the section one machine reads", () => {
   });
 
   it("says ssh was not read at all on a machine with nothing to read there", () => {
-    expect(drive<{ ssh: any }>({ fn: "section", sockets: [] }).ssh).toBeNull();
-    expect(drive<{ sockets: Socket[]; ssh: any }>({ fn: "section", sockets: [] })).toMatchObject({
+    expect(drive<{ sockets: Port[]; ssh: any }>({ fn: "section", sockets: [], networks: BARE })).toMatchObject({
       sockets: [],
       ssh: null,
     });

@@ -45,11 +45,12 @@ describe("a clean machine (collector#55)", () => {
     expect(snap.profiles).toEqual([]);
     expect(snap.hermes_gateway).toBeNull();
     expect(snap.host_broken).toEqual([]);
-    // No `ss` and no `lsof` (collector#65): the Network section reads empty rather than failing, and the ports it
-    // did not read are not marked open. `ssh` is read from a file rather than a tool, so it is whatever this
-    // machine's own config file holds — never an exception.
-    expect(snap.network.allow).toEqual([22, 80, 443]);
-    expect(snap.network.sockets).toEqual([]);
+    // The Network section (collector#65) reads without failing. A Mac keeps lsof and ifconfig at fixed paths, which
+    // collect.py reads by path, so the section may hold this machine's own ports: what it holds is the shape, never
+    // an exception. `ssh` is read from a file rather than a tool, so it is whatever this machine's config file holds.
+    expect(Object.keys(snap.network.networks).sort()).toEqual(["internet", "lan", "tailnet"]);
+    expect(Array.isArray(snap.network.sockets)).toBe(true);
+    for (const s of snap.network.sockets) expect(["internet", "lan", "tailnet", "machine"]).toContain(s.reach);
   });
 
   it("still names the machine it read, whatever it is", () => {

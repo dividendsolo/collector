@@ -1,14 +1,39 @@
 import { snapshot } from "./machines";
 
-/** One listening socket of a machine, as `collect.py` read it (collector#65): `open` is the one that matters — bound
- * beyond this machine and not on the machine's allow list, so anyone who can reach the machine can reach it. */
+/** Who can connect to a listening port (collector#65), the most exposed first: anyone on the internet, the machines
+ * on the machine's local network, the machines on its tailnet, the machine alone. */
+export type Reach = "internet" | "lan" | "tailnet" | "machine";
+
+/** One listening port of a machine, as `collect.py` read it: its IPv4 and IPv6 sockets are one row, with every address
+ * it is bound on. `tailnet` is true when the machine's tailnet can connect to it as well (a port on every address). */
+/** What the tooltip on a process name says: its full name, what it is when it is a program we know, how long it has
+ * run, what started it, its user and its path. Null for a socket with no process. */
+export interface ProcessInfo {
+  name: string | null;
+  about: string | null;
+  seconds: number | null;
+  started_by: string | null;
+  user: string | null;
+  path: string | null;
+}
+
 export interface NetworkSocket {
+  info?: ProcessInfo | null;
   proto: string;
-  address: string;
   port: number;
+  addresses: string[];
   process: string | null;
   pid: string | null;
-  mark: "open" | "allowed" | "local";
+  reach: Reach;
+  tailnet: boolean;
+}
+
+/** The networks a machine is on, read from its own addresses: the private ones (a home Wi-Fi), its public addresses
+ * (a VPS) and its Tailscale address. */
+export interface MachineNetworks {
+  lan: string[];
+  internet: string[];
+  tailnet: string | null;
 }
 
 /** The two sshd settings that should not be on, and where they were read (or null on a machine that was never asked
@@ -20,7 +45,7 @@ export interface NetworkSsh {
 }
 
 export interface NetworkRead {
-  allow: number[];
+  networks: MachineNetworks;
   sockets: NetworkSocket[];
   ssh: NetworkSsh | null;
 }
@@ -36,20 +61,9 @@ export interface MachineNetwork {
   network: NetworkRead | null;
 }
 
-/** The sockets open to everyone on one machine: the mark `collect.py` worked out against the machine's own allow
- * list, one row per port — `ss` and `lsof` each print the same socket twice when it is bound on both an IPv4 and an
- * IPv6 address, which is one thing to fix, not two. */
-export function openSockets(m: { network?: NetworkRead | null } | null | undefined): NetworkSocket[] {
-  const seen = new Set<string>();
-  const out: NetworkSocket[] = [];
-  for (const s of m?.network?.sockets || []) {
-    if (s?.mark !== "open") continue;
-    const key = `${s.proto}:${s.port}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(s);
-  }
-  return out;
+/** The ports anyone on the internet can connect to: the ones the Dashboard warns about. */
+export function exposedSockets(m: { network?: NetworkRead | null } | null | undefined): NetworkSocket[] {
+  return (m?.network?.sockets || []).filter((s) => s?.reach === "internet");
 }
 
 /** The Network page's read, and what an agent asks: is anything open that should not be? One machine each, in the

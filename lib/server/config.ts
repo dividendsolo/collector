@@ -81,10 +81,6 @@ export interface Config {
     max_starts_60s?: number;
   };
   watch?: Watch[];
-  /** The ports a machine may have open to everyone (collector#65): `network.allow`, default `[22, 80, 443]`. A
-   * socket bound beyond this machine whose port is not on the list is flagged open to everyone; the list left out
-   * is the default, and an empty list expects nothing to be public. */
-  network?: { allow?: number[] };
   verify_label?: string;
   services?: Service[];
   vendors?: Vendor[];
@@ -113,7 +109,6 @@ export const CONFIG_KEYS = [
   "ok_exits",
   "work_script",
   "watch",
-  "network",
   "verify_label",
   "services",
   "vendors",

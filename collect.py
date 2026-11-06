@@ -9,6 +9,7 @@ coding-agent session, a launchd label, a log or a heartbeat file), and changes n
 """
 import glob
 import hashlib
+import ipaddress
 import json
 import os
 import platform
@@ -968,61 +969,138 @@ def listen_ports():
     return ports
 
 
-# The Network section (collector#65): every listening TCP and UDP socket on this machine, with the ones open to
-# everyone flagged. Read only, no sudo, nothing installed anywhere, and no port ever scanned from outside — this is
-# what each machine says it listens on. `ss -tulnp` on Linux, `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -nP -iUDP` on
-# macOS (a Mac has no ss); both read through `read_command`, so a machine without the tool reads empty.
-NETWORK = CONFIG.get("network") or {}
-# The ports a machine means to be public when its config says nothing else; config.json's network.allow replaces it.
-DEFAULT_ALLOW = (22, 80, 443)
+# The Network section (collector#65): every listening TCP and UDP socket on this machine, and who can connect to
+# it. Read only, no sudo, nothing installed anywhere, and no port ever scanned from outside — this is what each
+# machine says it listens on. `ss -tulnp` on Linux, `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -nP -iUDP` on macOS (a
+# Mac has no ss); both read through `read_command`, so a machine without the tool reads empty. The firewall is not
+# read: a port the machine listens on for the internet can still be blocked by ufw or the macOS firewall.
 # The two sshd settings that should not be on: password logins, and root's.
 SSHD_DIRECTIVES = ("passwordauthentication", "permitrootlogin")
 SSHD_CONFIG = "/etc/ssh/sshd_config"
 # The addresses the two tools print for a socket bound on every address of the machine.
 WILDCARD_ADDRESSES = ("*", "0.0.0.0", "::", "0:0:0:0:0:0:0:0")
+# Tailscale's own ranges: the addresses a machine is reached on inside its tailnet.
+TAILNET_RANGES = (ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("fd7a:115c:a1e0::/48"))
+# The private ranges, an address only the machines on the same local network can reach: RFC 1918, IPv6's unique
+# local range, and the link-local ranges. Every other address is one anyone on the internet may reach.
+PRIVATE_RANGES = tuple(ipaddress.ip_network(n) for n in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "fc00::/7", "fe80::/10"))
+# Interfaces that are not a network other machines are on: loopback, the tailnet's tunnel (its addresses are read
+# by range), and the bridges Docker, VMs and the like make inside the machine.
+VIRTUAL_INTERFACES = re.compile(r"^(lo|tailscale|utun|docker|br-|veth|virbr|vmnet|bridge|awdl|llw|anpi|ap\d|gif|stf)")
+# Who can connect to a socket, the most exposed first: anyone on the internet, the machines on this machine's
+# local network, the machines on its tailnet, this machine alone.
+REACH_RANK = {"internet": 0, "lan": 1, "tailnet": 2, "machine": 3}
 
 
-def network_allow(cfg=None):
-    """The ports a machine's allow list says may be public: config.json's `network.allow`, else [22, 80, 443]. An
-    entry that is not a port is left out rather than obeyed, so a typo cannot turn a port into an expected one;
-    `allow` given as an empty list is obeyed and nothing is expected to be public."""
-    raw = (NETWORK if cfg is None else cfg).get("allow") if isinstance(NETWORK if cfg is None else cfg, dict) else None
-    if not isinstance(raw, list):
-        return list(DEFAULT_ALLOW)
-    ports = set()
-    for value in raw:
-        if isinstance(value, bool) or not isinstance(value, (int, str)) or not str(value).isdigit():
+def in_tailnet(ip):
+    return any(ip.version == net.version and ip in net for net in TAILNET_RANGES)
+
+
+def is_private(ip):
+    return any(ip.version == net.version and ip in net for net in PRIVATE_RANGES)
+
+
+# The two address tools by their own paths, the way LSOF is: launchd and a bare `ssh host` give a short PATH.
+IP = next((p for p in ("/usr/sbin/ip", "/sbin/ip", "/usr/bin/ip", "/bin/ip") if os.path.exists(p)), "ip")
+IFCONFIG = next((p for p in ("/sbin/ifconfig", "/usr/sbin/ifconfig") if os.path.exists(p)), "ifconfig")
+
+
+def interface_addresses():
+    """(interface, ip_interface) for each address on this machine: `ip -o addr show` on Linux, `ifconfig` where
+    there is no `ip` (a Mac). [] when neither tool is there."""
+    if platform.system() == "Linux":
+        return parse_ip_addr(read_command([IP, "-o", "addr", "show"]) or "")
+    return parse_ifconfig(read_command([IFCONFIG]) or "")
+
+
+def parse_ip_addr(text):
+    """`ip -o addr show` -> (interface, ip_interface): `2: eth0    inet 192.0.2.5/24 brd ...`, one per line."""
+    out = []
+    for line in (text or "").splitlines():
+        fields = line.split()
+        if len(fields) < 4 or fields[2] not in ("inet", "inet6"):
             continue
-        if 0 < int(value) <= 65535:
-            ports.add(int(value))
-    return sorted(ports)
+        try:
+            out.append((fields[1], ipaddress.ip_interface(fields[3])))
+        except ValueError:
+            continue
+    return out
 
 
-def is_local_address(address):
-    """True when a socket's address is one only this machine or its own tailnet can reach: a loopback address
-    (127.0.0.0/8, ::1), a Tailscale address (100.64.0.0/10, fd7a:115c:a1e0::/48) or a link-local one. Anything
-    else — a wildcard, a public address, a LAN one — is an address other machines can reach. An address that cannot
-    be placed reads as reachable, not as private: the flag is the safe direction."""
+def parse_ifconfig(text):
+    """`ifconfig` (macOS) -> (interface, ip_interface). An interface's line starts at the left (`en0: flags=...`);
+    its addresses follow, indented: `inet 192.0.2.5 netmask 0xffffff00` and `inet6 fe80::1%en0 prefixlen 64`."""
+    out, iface = [], None
+    for line in (text or "").splitlines():
+        if line and not line[0].isspace():
+            iface = line.split(":", 1)[0]
+            continue
+        fields = line.split()
+        if iface is None or len(fields) < 2 or fields[0] not in ("inet", "inet6"):
+            continue
+        address = fields[1].split("%", 1)[0]
+        prefix = None
+        if "netmask" in fields and fields.index("netmask") + 1 < len(fields):
+            mask = fields[fields.index("netmask") + 1]
+            prefix = bin(int(mask, 16)).count("1") if mask.startswith("0x") else mask
+        elif "prefixlen" in fields and fields.index("prefixlen") + 1 < len(fields):
+            prefix = fields[fields.index("prefixlen") + 1]
+        try:
+            out.append((iface, ipaddress.ip_interface(f"{address}/{prefix}" if prefix is not None else address)))
+        except ValueError:
+            continue
+    return out
+
+
+def machine_networks(addresses):
+    """The networks this machine is on, from its own addresses: `lan`, the private networks it is on (a home Wi-Fi
+    is `192.168.1.0/24`); `internet`, its public addresses (a VPS); `tailnet`, its Tailscale address or None.
+    Loopback, link-local and the bridges inside the machine are no network another machine is on."""
+    lan, internet, tailnet = [], [], None
+    for iface, ifc in addresses:
+        ip = ifc.ip
+        if ip.is_loopback or ip.is_link_local or ip.is_unspecified or ip.is_multicast:
+            continue
+        if in_tailnet(ip):
+            tailnet = tailnet or str(ip)
+            continue
+        if VIRTUAL_INTERFACES.match(iface or ""):
+            continue
+        if is_private(ip):
+            lan.append(str(ifc.network))
+        else:
+            internet.append(str(ip))
+    return {"lan": sorted(set(lan)), "internet": sorted(set(internet)), "tailnet": tailnet}
+
+
+def reach_of(address, networks):
+    """(who can connect to a socket bound on `address`, and whether the machine's tailnet can as well):
+    - `machine`: only this machine (127.0.0.1, ::1);
+    - `tailnet`: the machines on its tailnet (a Tailscale address);
+    - `lan`: the machines on its local network (a private or link-local address, or every address of a machine
+      that has no public one);
+    - `internet`: anyone on the internet (any other address, or every address of a machine that has a public one).
+    An address that cannot be placed reads as the internet, not as private: the flag is the safe direction."""
     a = (address or "").strip().strip("[]").lower().split("%", 1)[0]
     if a in WILDCARD_ADDRESSES:
-        return False
-    if a == "localhost" or a.startswith("127.") or a == "::1":
-        return True
-    # An IPv4 address mapped into IPv6 (`::ffff:127.0.0.1`) is the IPv4 address.
-    if a.startswith("::ffff:"):
-        return is_local_address(a[len("::ffff:") :])
-    head = a.split(":", 1)[0]
-    if re.fullmatch(r"[0-9a-f]{1,4}", head):
-        # fe80::/10: the link-local range, fe80 to febf in the first hextet.
-        if 0xFE80 <= int(head, 16) <= 0xFEBF:
-            return True
-        if a.startswith("fd7a:115c:a1e0:"):
-            return True
-    parts = a.split(".")
-    if len(parts) == 4 and all(part.isdigit() for part in parts):
-        # 100.64.0.0/10 is Tailscale's own range, the address a machine is reached on inside its tailnet.
-        return int(parts[0]) == 100 and 64 <= int(parts[1]) <= 127
-    return False
+        everywhere = "lan" if networks.get("lan") and not networks.get("internet") else "internet"
+        return everywhere, bool(networks.get("tailnet"))
+    if a == "localhost":
+        return "machine", False
+    try:
+        ip = ipaddress.ip_address(a)
+    except ValueError:
+        return "internet", False
+    if getattr(ip, "ipv4_mapped", None):
+        ip = ip.ipv4_mapped
+    if ip.is_loopback:
+        return "machine", False
+    if in_tailnet(ip):
+        return "tailnet", False
+    if is_private(ip):
+        return "lan", False
+    return "internet", False
 
 
 def split_address(text):
@@ -1121,37 +1199,148 @@ def sshd_flags(text):
     return {name: on.get(name) == "yes" for name in SSHD_DIRECTIVES}
 
 
-def mark_of(port, address, allow=DEFAULT_ALLOW):
-    """One socket's mark: `local` when only this machine or its tailnet can reach it, `allowed` when the machine's
-    allow list says that port may be public, and `open` otherwise — the ones that matter, a database, a dev server
-    or Docker's API an agent left on every interface (collector#65)."""
-    if is_local_address(address):
-        return "local"
-    return "allowed" if port in allow else "open"
+# What a program that listens on a port is, in one line, for the tooltip on its name (collector#65). Matched on the
+# program's file name (the last part of its path), lower case. A program not named here shows its facts alone: how
+# long it has run, what started it, its user and its path — never a guess.
+KNOWN_PROGRAMS = {
+    "controlcenter": "macOS Control Center. Its ports 5000 and 7000 are the AirPlay Receiver: other Apple devices on "
+                     "the network can send audio, video or a screen mirror to this Mac.",
+    "rapportd": "macOS Handoff and Universal Clipboard: lets your own Apple devices pass work and the clipboard to "
+                "this Mac.",
+    "sharingd": "macOS sharing: AirDrop and the other Continuity features.",
+    "replicatord": "macOS iPhone Mirroring and widget sync with your iPhone.",
+    "mdnsresponder": "macOS Bonjour: finds printers, speakers and other devices on the local network.",
+    "localsend": "LocalSend: sends and receives files with other devices on the local network.",
+    "com.docker.backend": "Docker Desktop: forwards the ports of running containers to this machine.",
+    "docker-proxy": "Docker: forwards a container's port to this machine.",
+    "brave browser helper": "Brave's network helper. Port 5353 is mDNS: the browser looks for Chromecasts and other "
+                            "devices on the local network.",
+    "google chrome helper": "Chrome's network helper. Port 5353 is mDNS: the browser looks for Chromecasts and other "
+                            "devices on the local network.",
+    "postgres": "PostgreSQL database server.",
+    "sshd": "OpenSSH server: lets you log in to this machine over SSH.",
+    "tailscaled": "Tailscale: the tailnet's own connection. Port 41641 is how tailnet devices reach this machine.",
+    "avahi-daemon": "Avahi: Linux's mDNS, finds and announces devices on the local network.",
+    "systemd-resolved": "systemd's DNS resolver, for this machine alone.",
+    "dhclient": "DHCP client: gets this machine's IP address from the network.",
+    "systemd-networkd": "systemd's network manager: gets this machine's IP address from the network (DHCP).",
+    "cupsd": "CUPS: the printing service.",
+    "smbd": "Samba: Windows file sharing.",
+    "next-server": "A Next.js web app server. Port 4000 is Collector; any other port is a dev server.",
+    "bun": "A program run with Bun (a JavaScript runtime). Its path below says which one.",
+    "node": "A program run with Node.js. Its path below says which one.",
+    "ssh": "An SSH tunnel: forwards this port to another machine.",
+    "google chrome": "Google Chrome. Port 9222 is its remote debugging port, used by browser automation.",
+    "brave browser": "Brave browser.",
+    "logipluginservice": "Logitech Options+: the Logitech mouse and keyboard software.",
+    "raycast backend": "Raycast, the macOS launcher.",
+    "code helper": "VS Code's helper process.",
+    "code helper (plugin)": "VS Code's extension host.",
+    "hermes": "Hermes: the agent gateway and its jobs.",
+    "java": "A Java program. Its command below says which one (signal-cli is the Signal messenger bridge).",
+    "pi": "pi, the coding agent.",
+    "hex": "Hex, the macOS dictation app.",
+}
 
 
-def network_rows(sockets, allow=None):
-    """The machine's sockets with their marks: the ones open to everyone first, then the expected-public ports,
-    then the local ones, each group in port order."""
-    allow = network_allow() if allow is None else allow
-    rank = {"open": 0, "allowed": 1, "local": 2}
-    rows = [dict(row, mark=mark_of(row.get("port"), row.get("address"), allow)) for row in sockets]
-    return sorted(rows, key=lambda r: (rank[r["mark"]], r.get("port") or 0, r.get("proto") or "", r.get("address") or ""))
+def ps_details(text, args=None):
+    """`ps -axo pid=,ppid=,user=,etime=,comm=` -> pid -> {ppid, user, seconds, path}. `comm` is the program's full
+    path on a Mac and its short name on Linux, and it may hold spaces (`Brave Browser Helper.app/...`), so it is the
+    rest of the line."""
+    out = {}
+    for line in (text or "").splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 5 or not parts[0].isdigit():
+            continue
+        try:
+            secs = seconds(parts[3])
+        except ValueError:
+            secs = None
+        out[parts[0]] = {"ppid": parts[1], "user": parts[2], "seconds": secs, "path": parts[4].strip()}
+    # Linux's `comm` is the short name, cut to 15 letters (`next-server (v1`). `args` holds the full command: the name
+    # is taken from it only when it continues the cut one — a renamed process (`next-server (v16.4.2)`) or a program
+    # whose own path ends in a longer name — so an interpreter (`python3` running Hermes) never replaces the name.
+    for line in (args or "").splitlines():
+        parts = line.split(None, 1)
+        if len(parts) != 2 or parts[0] not in out:
+            continue
+        d, command = out[parts[0]], parts[1].strip()
+        d["command"] = command[:300]
+        short = d["path"]
+        if len(short) >= 15 and command.startswith(short):
+            d["path"] = command.split(")", 1)[0] + ")" if "(" in short else command.split()[0]
+        elif len(short) >= 15 and file_name(command.split()[0]).startswith(short):
+            d["path"] = command.split()[0]
+    return out
 
 
-def network_section(sockets, ssh_text=None, ssh_source=None, allow=None):
-    """One machine's Network section: the allow list it was read with, every listening socket with its mark, and the
-    two sshd settings with where they were read — or null where the machine has nothing to say about ssh."""
-    allow = network_allow() if allow is None else allow
+def file_name(path):
+    """A program's own name out of its path: the file name, so `/usr/libexec/rapportd` is `rapportd`."""
+    return (path or "").rstrip("/").rsplit("/", 1)[-1] or None
+
+
+def process_info(pid, details):
+    """What the tooltip on a listening process says (collector#65): its full name (lsof cuts a name to nine letters,
+    `ControlCe`), what it is when it is a program we know, how long it has run, what started it, its user and its
+    path. None for a socket with no pid, or a pid `ps` did not list."""
+    d = details.get(str(pid)) if pid else None
+    if not d:
+        return None
+    name = file_name(d["path"])
+    # Linux keeps only 15 letters of a program's name in `comm`, and Next renames its server `next-server (v16.4.2)`:
+    # the known-program match reads the name up to its first ` (`.
+    known = KNOWN_PROGRAMS.get((name or "").lower()) or KNOWN_PROGRAMS.get((name or "").split(" (", 1)[0].lower())
+    parent = details.get(d["ppid"])
+    started_by = file_name(parent["path"]) if parent else None
+    if d["ppid"] == "1":
+        started_by = "launchd" if platform.system() == "Darwin" else "systemd"
+    return {"name": name, "about": known, "seconds": d["seconds"],
+            "started_by": started_by, "user": d["user"], "path": d.get("command") or d["path"]}
+
+
+def network_rows(sockets, networks, details=None):
+    """The machine's sockets with who can connect to each, one row per port: `ss` and `lsof` print a socket bound on
+    both IPv4 and IPv6 twice, and a browser opens a UDP socket per interface, which is one thing to fix, not twenty.
+    The most exposed first, each group in port order."""
+    rows = {}
+    for row in sockets:
+        reach, tailnet = reach_of(row.get("address"), networks)
+        key = (row.get("proto"), row.get("port"), reach)
+        have = rows.get(key)
+        if have is None:
+            have = rows[key] = {"proto": row.get("proto"), "port": row.get("port"), "addresses": [],
+                                "process": row.get("process"), "pid": row.get("pid"), "reach": reach,
+                                "tailnet": tailnet}
+        if row.get("address") not in have["addresses"]:
+            have["addresses"].append(row.get("address"))
+        have["tailnet"] = have["tailnet"] or tailnet
+        if not have["process"] and row.get("process"):
+            have["process"], have["pid"] = row.get("process"), row.get("pid")
+    for row in rows.values():
+        row["info"] = process_info(row.get("pid"), details or {})
+        if row["info"] and row["info"]["name"]:
+            row["process"] = row["info"]["name"]
+    return sorted(rows.values(), key=lambda r: (REACH_RANK[r["reach"]], r.get("port") or 0, r.get("proto") or ""))
+
+
+def network_section(sockets, networks, ssh_text=None, ssh_source=None, details=None):
+    """One machine's Network section: the networks it is on, every listening port with who can connect to it, and
+    the two sshd settings with where they were read — or null where the machine has nothing to say about ssh."""
     ssh = None if ssh_text is None else {"source": ssh_source, **sshd_flags(ssh_text)}
-    return {"allow": allow, "sockets": network_rows(sockets, allow), "ssh": ssh}
+    return {"networks": networks, "sockets": network_rows(sockets, networks, details), "ssh": ssh}
 
 
 def network_read():
-    """This machine's Network section (collector#65): what it listens on, and what its sshd allows. No ss and no
-    lsof is not an error — the section reads empty, the way every other read here does without its tool."""
+    """This machine's Network section (collector#65): what it listens on, who can connect to it, and what its sshd
+    allows. No ss and no lsof is not an error — the section reads empty, the way every other read here does without
+    its tool."""
     ssh = sshd_read()
-    return network_section(listen_sockets(), ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None)
+    details = ps_details(
+        read_command(["ps", "-axo", "pid=,ppid=,user=,etime=,comm="]) or "",
+        read_command(["ps", "-axo", "pid=,args="]) if platform.system() == "Linux" else None,
+    )
+    return network_section(listen_sockets(), machine_networks(interface_addresses()),
+                           ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None, details=details)
 
 
 def child_pids(links=None):
