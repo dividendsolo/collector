@@ -98,8 +98,16 @@ function accessibleTo(
         about: `Devices on the same Wi-Fi or wired network as ${machine}${nets?.lan.length ? ` (${nets.lan[0]})` : ""}.`,
         facts: [
           ["Who can connect", "phones, TVs, smart plugs and guests on your Wi-Fi"],
-          ["What keeps others out", "your router: it drops connections that come from the internet"],
-          ["How an attacker gets in", "a hacked device on your network, a guest, or a weak Wi-Fi password"],
+          [
+            "What keeps others out",
+            "your router, in two ways: its Wi-Fi password keeps out people nearby, and it drops every connection " +
+              "that comes from the internet",
+          ],
+          [
+            "How an attacker gets in",
+            "a leaked or weak Wi-Fi password, a guest you gave the password to, or a hacked device already on " +
+              "your network",
+          ],
           ["This port", port],
         ],
       },
