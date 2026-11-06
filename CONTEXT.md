@@ -340,9 +340,11 @@ machines read into `/api/network` — `{at, machines: [{name, local, read_at, st
 10-second read the rest of the page uses, so it costs no extra ssh. `exposedSockets` is the view the warnings use: the
 ports open to the internet.
 
-The page draws the most exposed ports first. A machine's panel head counts the ports open to the internet,
-and says when it is showing a last good read; under the table sit the networks the machine is on, the note that the
-firewall is not read, and the ssh verdict with where it was read from.
+The page draws the most exposed ports first. Every machine's table has the same fixed column widths, so "Accessible
+to" lines up from one panel to the next; a long port list wraps in its own column, and under 900px the table scrolls
+sideways inside its panel. A machine's addresses are not on the page (a screenshot or a screen share would carry
+them): they are in the tooltip on "addresses" beside its name. Under the table sit the firewall line and the ssh
+verdict.
 
 ## The toasts (card #67)
 

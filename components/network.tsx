@@ -142,14 +142,15 @@ function firewallNote(fw: Firewall | null | undefined): string {
   return `${fw.tool} is on (incoming: ${fw.incoming}); each port shows who it lets in`;
 }
 
-/** The networks a machine is on, in one line: what "local network" and "internet" mean for it. */
-function networksNote(n: MachineNetworks | undefined): string {
-  if (!n) return "";
-  const parts: string[] = [];
-  if (n.internet.length) parts.push(`public address ${n.internet.join(", ")}`);
-  if (n.lan.length) parts.push(`local network ${n.lan.join(", ")}`);
-  if (n.tailnet) parts.push(`tailnet address ${n.tailnet}`);
-  return parts.join(" · ");
+/** The networks a machine is on, as the facts of the tooltip on its name: kept off the page itself, so a screenshot
+ * or a screen share does not carry the machine's addresses (James, 2026-11-06). */
+function networkFacts(n: MachineNetworks | undefined): string | undefined {
+  if (!n) return undefined;
+  const facts: [string, string][] = [];
+  if (n.internet.length) facts.push(["Public address", n.internet.join(", ")]);
+  if (n.lan.length) facts.push(["Local network", n.lan.join(", ")]);
+  if (n.tailnet) facts.push(["Tailnet address", n.tailnet]);
+  return facts.length ? JSON.stringify(facts) : undefined;
 }
 
 /** The two sshd settings in one line, bad only while something is on. Null where ssh was never read (a Mac). */
@@ -297,15 +298,39 @@ function SocketRow({
   );
 }
 
+/** The five columns at the same widths in every machine's table, so "Accessible to" lines up from one panel to the
+ * next whatever a machine's longest port list is (James, 2026-11-06). The port list wraps inside its own column. */
+const NetCols = () => (
+  <colgroup>
+    <col style={{ width: "26%" }} />
+    <col style={{ width: "22%" }} />
+    <col style={{ width: "8%" }} />
+    <col style={{ width: "18%" }} />
+    <col style={{ width: "26%" }} />
+  </colgroup>
+);
+
 /** One machine's block: every port it listens on, with who can connect to each, the most exposed first. */
 function Machine({ m }: { m: MachineNetwork }) {
   const sockets = m.network?.sockets || [];
   const open = sockets.filter((s) => s.reach === "internet").length;
   const ssh = sshNote(m.network?.ssh);
-  const nets = networksNote(m.network?.networks);
+  const facts = networkFacts(m.network?.networks);
+  const title = m.local ? `${m.name} (this machine)` : m.name;
   return (
     <section className="panel">
-      <PanelHead icon="shield" title={m.local ? `${m.name} (this machine)` : m.name}>
+      <PanelHead icon="shield" title={title}>
+        {facts ? (
+          <span
+            className="card-tip net-addresses"
+            data-tip="The networks this machine is on. Hidden from the page so a screenshot does not carry them."
+            data-tip-title={`${m.name}'s addresses`}
+            data-tip-facts={facts}
+            tabIndex={0}
+          >
+            addresses
+          </span>
+        ) : null}
         <span className={`count${open ? " hot" : ""}`} title={open ? `${open} ports open to the internet` : undefined}>
           {open || sockets.length}
         </span>
@@ -315,6 +340,7 @@ function Machine({ m }: { m: MachineNetwork }) {
       {sockets.length ? (
         <div className="wrap">
           <table className="net-table">
+            <NetCols />
             <thead>
               <tr>
                 <th>Port</th>
@@ -338,8 +364,6 @@ function Machine({ m }: { m: MachineNetwork }) {
         </div>
       )}
       <p className="sub net-note">
-        {nets || "No network address read"}
-        {" · "}
         {firewallNote(m.network?.firewall)}
         {ssh ? (
           <>

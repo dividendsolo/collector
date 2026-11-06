@@ -1522,14 +1522,27 @@
   }
   /* Each machine's table sizes to its own rows: the port list wraps inside its cell, so one machine with a long list
      (twenty UDP ports with no process name) cannot widen the column and push every other cell to the right. */
+  /* Fixed widths line the columns up across the machines' panels, at every width. Under 900px the table keeps a
+     minimum width and scrolls sideways inside its panel, as the other wide tables here do. */
+  .net-table {
+    table-layout: fixed;
+    min-width: 860px;
+  }
   .net-table td.port {
     white-space: normal;
-    max-width: 320px;
     font-variant-numeric: tabular-nums;
   }
-  .net-table td.mono {
+  .net-table td.mono,
+  .net-table td:last-child {
     white-space: normal;
-    max-width: 240px;
+    overflow-wrap: anywhere;
+  }
+  .net-table td.net-badges {
+    white-space: normal;
+  }
+  .net-addresses {
+    font-size: 12px;
+    color: var(--faint);
   }
   /* The row a toast's link scrolls to (collector#67): one soft red pulse, then back to normal. */
   .net-flash td {
