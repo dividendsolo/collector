@@ -148,6 +148,19 @@ export function visibleToasts(all: Toast[], dismissed: Record<string, string>): 
   return all.filter((t) => !(t.dismissible && dismissed[t.key] === t.state));
 }
 
+/** The dismissals still worth keeping: a check that is green now drops its dismissal, so the next time it breaks
+ * its toast shows, even with the same value as before (2026-11-06: dismiss "stealth off", fix it, break it again,
+ * and the toast stayed hidden). A check that is still amber, and one not read this time, keeps its dismissal. */
+export function forgetFixed(
+  dismissed: Record<string, string>,
+  machines: { name: string; checks: Check[] }[],
+): Record<string, string> {
+  const green = new Set(machines.flatMap((m) => m.checks.filter((c) => c.level === "green").map((c) => c.id)));
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(dismissed)) if (!green.has(k)) out[k] = v;
+  return out;
+}
+
 /** How many ports are open to the internet, across every machine: the Network page's count in the sidebar. A port is
  * counted once per machine, whatever its addresses. */
 export function internetPortCount(machines: MachineIn[] | null | undefined): number {

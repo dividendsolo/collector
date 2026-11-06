@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { securityChecks } from "@/lib/checks";
-import { checkToasts, newAlarms, serviceToasts, sortToasts, visibleToasts } from "@/lib/toasts";
+import { checkToasts, forgetFixed, newAlarms, serviceToasts, sortToasts, visibleToasts } from "@/lib/toasts";
 import { useLive } from "./data";
 import { SCROLL_EVENT } from "./network";
 import { useServices } from "./services";
@@ -98,13 +98,24 @@ export function Toasts() {
   // Until both reads are in, a thing that is fine cannot be told from one not read yet: no alarm before then.
   const ready = services !== null && state !== null;
   const gone = useSyncExternalStore(onDismiss, dismissed, () => NONE);
-  const all = useMemo(() => {
-    const machines = (state?.machines || []).map((m: any) => ({
-      name: m.name,
-      checks: securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall"),
-    }));
-    return [...serviceToasts(services), ...checkToasts(machines)];
-  }, [services, state?.machines]);
+  const machines = useMemo(
+    () =>
+      (state?.machines || []).map((m: any) => ({
+        name: m.name,
+        checks: securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall"),
+      })),
+    [state?.machines],
+  );
+  const all = useMemo(() => [...serviceToasts(services), ...checkToasts(machines)], [services, machines]);
+  // A fixed check forgets its dismissal, so the next time it breaks the toast shows again.
+  useEffect(() => {
+    if (!state) return;
+    const kept = forgetFixed(gone, machines);
+    if (Object.keys(kept).length !== Object.keys(gone).length) {
+      localStorage.setItem(KEY, JSON.stringify(kept));
+      dispatchEvent(new Event(EVENT));
+    }
+  }, [state, machines, gone]);
   const shown = useMemo(() => sortToasts(visibleToasts(all, gone)), [all, gone]);
   // One alarm per red toast this page has not sounded for yet, the ones showing at load included: those sound on the
   // first click or key, since the browser holds every sound until then.
