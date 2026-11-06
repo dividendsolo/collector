@@ -224,4 +224,282 @@ describe("the section one machine reads", () => {
       ssh: null,
     });
   });
+
+  it("carries the connections and the upload threshold (collector#66)", () => {
+    const out = drive<{ connections: Connection[]; upload_warn_mb: number }>({
+      fn: "section",
+      sockets: [],
+      connections: [{ proto: "tcp", address: "198.51.100.1", port: 443, process: "curl", pid: "1" }],
+    });
+    expect(out.upload_warn_mb).toBe(50);
+    expect(out.connections).toEqual([{ proto: "tcp", address: "198.51.100.1", port: 443, process: "curl", pid: "1" }]);
+    expect(drive<{ upload_warn_mb: number }>({ fn: "section", sockets: [], upload_mb: 200 }).upload_warn_mb).toBe(200);
+  });
+});
+
+/** One established connection as collect.py reads it (collector#66). */
+interface Connection {
+  proto: string;
+  address: string;
+  port: number | null;
+  local_address?: string;
+  local_port?: number | null;
+  process: string | null;
+  pid: string | null;
+  bytes_sent: number | null;
+  bytes_received: number | null;
+  inbound?: boolean;
+}
+
+describe("reading `ss -tnpi` (the connections going out, with their bytes)", () => {
+  // `ss -tnpi` on a Linux machine: the header, an established socket and the indented info line that carries its
+  // counters, a connection of another user's (no process without sudo), a socket in another state, and the loopback
+  // pair two processes on one machine share.
+  const SS = [
+    "State      Recv-Q Send-Q Local Address:Port   Peer Address:Port Process",
+    'ESTAB      0      0      192.0.2.5:51234      198.51.100.1:443   users:(("curl",pid=1234,fd=5))',
+    "\t cubic wscale:7,7 rto:204 rtt:1.5/0.7 ato:40 mss:1448 pmtu:1500 cwnd:10 bytes_sent:13456000 bytes_acked:13456001 bytes_received:2048 segs_out:10 segs_in:12",
+    'ESTAB      0      0      192.0.2.5:51235      203.0.113.7:22     users:(("ssh",pid=4321,fd=3))',
+    "\t cubic wscale:10,10 rto:201 rtt:0.757/0.86 ato:40 mss:32768 cwnd:10 bytes_sent:6862 bytes_received:2239",
+    "TIME-WAIT  0      0      192.0.2.5:51236      198.51.100.9:80",
+    "ESTAB      0      0      192.0.2.5:51237      198.51.100.9:993",
+    "ESTAB      0      0      127.0.0.1:42228      127.0.0.1:3107",
+    "\t cubic wscale:10,10 rto:201 rtt:0.757/0.86 mss:32768 cwnd:10 bytes_sent:6862 bytes_received:2239",
+  ].join("\n");
+
+  it("reads each established connection's remote end, process and bytes, and skips every other state", () => {
+    expect(drive<Connection[]>({ fn: "ss_est", text: SS })).toEqual([
+      {
+        proto: "tcp",
+        address: "198.51.100.1",
+        port: 443,
+        local_address: "192.0.2.5",
+        local_port: 51234,
+        process: "curl",
+        pid: "1234",
+        bytes_sent: 13456000,
+        bytes_received: 2048,
+      },
+      {
+        proto: "tcp",
+        address: "203.0.113.7",
+        port: 22,
+        local_address: "192.0.2.5",
+        local_port: 51235,
+        process: "ssh",
+        pid: "4321",
+        bytes_sent: 6862,
+        bytes_received: 2239,
+      },
+      // No info line under it: the OS gave no counters for this one, which is not an error.
+      {
+        proto: "tcp",
+        address: "198.51.100.9",
+        port: 993,
+        local_address: "192.0.2.5",
+        local_port: 51237,
+        process: null,
+        pid: null,
+        bytes_sent: null,
+        bytes_received: null,
+      },
+      {
+        proto: "tcp",
+        address: "127.0.0.1",
+        port: 3107,
+        local_address: "127.0.0.1",
+        local_port: 42228,
+        process: null,
+        pid: null,
+        bytes_sent: 6862,
+        bytes_received: 2239,
+      },
+    ]);
+  });
+
+  it("is empty for a machine whose ss says nothing, and for no output at all", () => {
+    expect(
+      drive<Connection[]>({ fn: "ss_est", text: "State Recv-Q Send-Q Local Address:Port Peer Address:Port\n" }),
+    ).toEqual([]);
+    expect(drive<Connection[]>({ fn: "ss_est", text: "" })).toEqual([]);
+  });
+});
+
+describe("reading `lsof -nP -iTCP -sTCP:ESTABLISHED` (macOS, which has no ss)", () => {
+  // A Mac's established connections: both ends in one `local->remote` token, IPv6 in brackets, and the state lsof
+  // appends to the row.
+  const LSOF = [
+    "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
+    "Google    4321  me   30u  IPv4      0x1      0t0  TCP 192.0.2.5:51234->198.51.100.1:443 (ESTABLISHED)",
+    "sshd       700  me    3u  IPv4      0x2      0t0  TCP 192.0.2.5:22->192.168.1.20:49152 (ESTABLISHED)",
+    "Google    4321  me   31u  IPv6      0x3      0t0  TCP [2001:db8::5]:51235->[2001:db8::9]:443 (ESTABLISHED)",
+  ].join("\n");
+
+  it("reads both ends of each connection with its process, and counts no bytes (lsof counts none)", () => {
+    expect(drive<Connection[]>({ fn: "lsof_est", text: LSOF })).toEqual([
+      {
+        proto: "tcp",
+        address: "198.51.100.1",
+        port: 443,
+        local_address: "192.0.2.5",
+        local_port: 51234,
+        process: "Google",
+        pid: "4321",
+        bytes_sent: null,
+        bytes_received: null,
+      },
+      {
+        proto: "tcp",
+        address: "192.168.1.20",
+        port: 49152,
+        local_address: "192.0.2.5",
+        local_port: 22,
+        process: "sshd",
+        pid: "700",
+        bytes_sent: null,
+        bytes_received: null,
+      },
+      {
+        proto: "tcp",
+        address: "2001:db8::9",
+        port: 443,
+        local_address: "2001:db8::5",
+        local_port: 51235,
+        process: "Google",
+        pid: "4321",
+        bytes_sent: null,
+        bytes_received: null,
+      },
+    ]);
+  });
+
+  it("reads nothing out of an empty read, and out of anything that is not a socket row", () => {
+    expect(drive<Connection[]>({ fn: "lsof_est", text: "" })).toEqual([]);
+    expect(drive<Connection[]>({ fn: "lsof_est", text: "COMMAND PID USER FD TYPE\n" })).toEqual([]);
+  });
+});
+
+describe("reading `nettop` (the bytes a Mac counts per process)", () => {
+  // `nettop -P -L 1 -n -J bytes_in,bytes_out`: CSV, a header whose second column is empty, then one row per
+  // process with the clock time, its name and its two counters.
+  const NETTOP = [
+    "time,,bytes_in,bytes_out,",
+    "14:26:12.442036,Safari,120000,40000,",
+    "14:26:12.442036,com.apple.WebKit.Networking,9000,1000,",
+    "14:26:12.442036,Safari,1000,500,",
+  ].join("\n");
+
+  it("reads each process's bytes in and out, summing a process nettop lists twice", () => {
+    expect(drive<Record<string, [number, number]>>({ fn: "nettop", text: NETTOP })).toEqual({
+      Safari: [121000, 40500],
+      "com.apple.WebKit.Networking": [9000, 1000],
+    });
+  });
+
+  it("reads nothing out of the header alone, a blank line or no output", () => {
+    expect(drive({ fn: "nettop", text: "time,,bytes_in,bytes_out,\n" })).toEqual({});
+    expect(drive({ fn: "nettop", text: "14:26:12.442036,,,\n" })).toEqual({});
+    expect(drive({ fn: "nettop", text: "" })).toEqual({});
+  });
+});
+
+describe("another device on the local network (collector#66)", () => {
+  const lan = (address: string) => drive<boolean>({ fn: "lan", address });
+
+  it("reads the private, link-local and unique-local ranges as the local network", () => {
+    expect(lan("192.168.1.20")).toBe(true);
+    expect(lan("10.0.0.5")).toBe(true);
+    expect(lan("172.16.0.1")).toBe(true);
+    expect(lan("172.31.255.255")).toBe(true);
+    expect(lan("169.254.5.5")).toBe(true);
+    expect(lan("fe80::1")).toBe(true);
+    expect(lan("fd00:1234::5")).toBe(true);
+    expect(lan("::ffff:192.168.1.5")).toBe(true);
+  });
+
+  it("leaves this machine, the tailnet, and everything public out of it", () => {
+    expect(lan("127.0.0.1")).toBe(false);
+    expect(lan("::1")).toBe(false);
+    expect(lan("172.15.0.1")).toBe(false);
+    expect(lan("172.32.0.1")).toBe(false);
+    expect(lan("203.0.113.9")).toBe(false);
+    // A tailnet address is another machine, but not one on this network — even the unique-local one Tailscale uses.
+    expect(lan("100.64.0.5")).toBe(false);
+    expect(lan("fd7a:115c:a1e0::1")).toBe(false);
+    expect(lan("")).toBe(false);
+  });
+});
+
+describe("the connections one machine reads", () => {
+  const listening: Socket[] = [
+    { proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "700" },
+    { proto: "tcp", address: "0.0.0.0", port: 7000, process: "AirPlay", pid: "900" },
+    { proto: "tcp", address: "0.0.0.0", port: 3000, process: "bun", pid: "628125" },
+  ];
+  const row = (over: Partial<Connection>): Connection => ({
+    proto: "tcp",
+    address: "198.51.100.1",
+    port: 443,
+    local_address: "192.0.2.5",
+    local_port: 51234,
+    process: "curl",
+    pid: "1234",
+    bytes_sent: 100,
+    bytes_received: 200,
+    ...over,
+  });
+
+  it("flags a connection to a listening port from another device on the local network, and only that", () => {
+    const rows: Connection[] = [
+      row({ address: "198.51.100.1", port: 443, local_port: 51234 }), // curl out to the internet
+      row({ address: "192.168.1.20", port: 49152, local_port: 22, process: "sshd", pid: "700" }), // a phone's ssh
+      row({ address: "192.168.1.21", port: 51234, local_port: 7000, process: "AirPlay", pid: "900" }), // an AirPlay probe
+      row({ address: "203.0.113.9", port: 51235, local_port: 22, process: "sshd", pid: "700" }), // ssh in from outside
+      row({ address: "203.0.113.7", port: 22, local_port: 51240, process: "ssh", pid: "4321" }), // ssh out
+      row({ address: "192.168.1.22", port: 51236, local_port: 9999 }), // LAN, but nothing listens on 9999
+    ];
+    // `local_port`/`remote` and the flag: the read sorts the local knocks first, then by process, address and port,
+    // so two reads of one machine list the same connections in the same order.
+    expect(
+      drive<Connection[]>({ fn: "connections", rows, sockets: listening }).map((c) => [
+        `${c.process} ${c.address}:${c.port}`,
+        c.inbound,
+      ]),
+    ).toEqual([
+      ["AirPlay 192.168.1.21:51234", true],
+      ["sshd 192.168.1.20:49152", true],
+      ["curl 192.168.1.22:51236", false],
+      ["curl 198.51.100.1:443", false],
+      ["ssh 203.0.113.7:22", false],
+      ["sshd 203.0.113.9:51235", false],
+    ]);
+  });
+
+  it("is empty for a machine with nothing established, and keeps each connection's own bytes", () => {
+    expect(drive<Connection[]>({ fn: "connections", rows: [], sockets: [] })).toEqual([]);
+    const out = drive<Connection[]>({ fn: "connections", rows: [row({ bytes_sent: 13456000 })], sockets: [] });
+    expect(out[0].bytes_sent).toBe(13456000);
+    expect(out[0].inbound).toBe(false);
+  });
+});
+
+describe("the upload threshold (collector#66)", () => {
+  const mb = (cfg?: any) => drive<number>({ fn: "upload_mb", cfg });
+
+  it("reads config.json's network.uploadWarnMB, and 50 when it says nothing", () => {
+    expect(mb()).toBe(50);
+    expect(mb({})).toBe(50);
+    expect(mb({ allow: [22] })).toBe(50);
+    expect(mb({ uploadWarnMB: 200 })).toBe(200);
+    expect(mb({ uploadWarnMB: 1.5 })).toBe(1.5);
+  });
+
+  it("leaves a value that is not a positive number out rather than obeying it: a typo cannot turn the mark off", () => {
+    expect(mb({ uploadWarnMB: 0 })).toBe(50);
+    expect(mb({ uploadWarnMB: -5 })).toBe(50);
+    expect(mb({ uploadWarnMB: "500" })).toBe(50);
+    expect(mb({ uploadWarnMB: true })).toBe(50);
+    expect(mb({ uploadWarnMB: null })).toBe(50);
+    expect(mb("nonsense")).toBe(50);
+  });
 });

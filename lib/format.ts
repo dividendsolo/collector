@@ -110,6 +110,16 @@ export const shortRole = (role?: string | null) =>
 
 export const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
 
+/** A byte count in the words a person reads it in: "824 B", "12 kB", "118 MB", "1.2 GB". The decimal units the
+ * network counters use (1 kB = 1,000 bytes), and a dash where the tool counted nothing (collector#66). */
+export function bytes(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "—";
+  if (n < 1000) return `${Math.round(n)} B`;
+  if (n < 1e6) return `${Math.round(n / 1000)} kB`;
+  if (n < 1e9) return `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`;
+  return `${(n / 1e9).toFixed(1)} GB`;
+}
+
 /** P0 -> 0, P1 -> 1, none -> 9. */
 export const prio = (p?: string | null) => (p ? +p.slice(1) : 9);
 

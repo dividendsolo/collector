@@ -1139,19 +1139,192 @@ def network_rows(sockets, allow=None):
     return sorted(rows, key=lambda r: (rank[r["mark"]], r.get("port") or 0, r.get("proto") or "", r.get("address") or ""))
 
 
-def network_section(sockets, ssh_text=None, ssh_source=None, allow=None):
-    """One machine's Network section: the allow list it was read with, every listening socket with its mark, and the
-    two sshd settings with where they were read — or null where the machine has nothing to say about ssh."""
+def network_section(sockets, ssh_text=None, ssh_source=None, allow=None, connections=None, upload_mb=None):
+    """One machine's Network section: the allow list it was read with, every listening socket with its mark, the two
+    sshd settings with where they were read — or null where the machine has nothing to say about ssh — and, since
+    collector#66, the established connections it has going out and the megabytes a process may send between two
+    reads before the page marks it."""
     allow = network_allow() if allow is None else allow
     ssh = None if ssh_text is None else {"source": ssh_source, **sshd_flags(ssh_text)}
-    return {"allow": allow, "sockets": network_rows(sockets, allow), "ssh": ssh}
+    return {"allow": allow, "sockets": network_rows(sockets, allow), "ssh": ssh,
+            "connections": [] if connections is None else connections,
+            "upload_warn_mb": network_upload_mb() if upload_mb is None else upload_mb}
 
 
 def network_read():
-    """This machine's Network section (collector#65): what it listens on, and what its sshd allows. No ss and no
-    lsof is not an error — the section reads empty, the way every other read here does without its tool."""
+    """This machine's Network section (collector#65, collector#66): what it listens on, what it is connected out to,
+    and what its sshd allows. No ss and no lsof is not an error — the section reads empty, the way every other read
+    here does without its tool."""
+    sockets = listen_sockets()
     ssh = sshd_read()
-    return network_section(listen_sockets(), ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None)
+    return network_section(sockets, ssh_text=ssh[1] if ssh else None, ssh_source=ssh[0] if ssh else None,
+                           connections=connections_read(sockets=sockets))
+
+
+# What each machine sends out (collector#66): every established TCP connection with its process, its remote end, and
+# the bytes the OS counts for it — `ss -tnpi` on Linux carries both, and a Mac needs `lsof` for the ends and
+# `nettop` for the bytes. Read only, no sudo, nothing installed anywhere, and no traffic content: who connects
+# where, and how much.
+NETTOP = "nettop"
+NETTOP_FIELDS = "bytes_in,bytes_out"
+# The info line `ss -i` prints under a socket holds these two counters.
+SS_INFO_FIELDS = ("bytes_sent", "bytes_received")
+# The megabytes a process may send between two reads before the page marks it, when config.json says nothing.
+DEFAULT_UPLOAD_WARN_MB = 50
+
+
+def network_upload_mb(cfg=None):
+    """The megabytes a process may send between two reads before the page marks it (collector#66): config.json's
+    `network.uploadWarnMB`, else 50. A value that is not a positive number is left out rather than obeyed, so a typo
+    cannot turn the mark off; the mark itself is worked out where the last read is kept, not here."""
+    section = NETWORK if cfg is None else cfg
+    raw = section.get("uploadWarnMB") if isinstance(section, dict) else None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        return DEFAULT_UPLOAD_WARN_MB
+    return float(raw)
+
+
+def ss_info_counters(line):
+    """(bytes sent, bytes received) out of the `ss -i` info line under a socket, or (None, None) when it carries
+    neither — a socket that has not counted any traffic prints neither field."""
+    found = {}
+    for name in SS_INFO_FIELDS:
+        match = re.search(rf"\b{name}:(\d+)", line or "")
+        if match:
+            found[name] = int(match.group(1))
+    return (found.get("bytes_sent"), found.get("bytes_received"))
+
+
+def parse_ss_established(text):
+    """`ss -tnpi` output -> one row per established TCP connection: the remote end (address and port), the local end,
+    and the process that owns it with the bytes sent and received on the socket, where the info line under it counts
+    them. A connection in any other state (TIME-WAIT, SYN-SENT, CLOSE-WAIT) is not an established one and is
+    skipped, and so is the header. `-p` shows the user's own processes without sudo, so a connection of another
+    user's keeps its ends and no name."""
+    out, last = [], None
+    for line in (text or "").splitlines():
+        if line[:1] in (" ", "\t"):
+            # The `-i` info line belongs to the socket above it (`cubic ... bytes_sent:1024 bytes_received:2048`).
+            sent, received = ss_info_counters(line)
+            if last is not None:
+                last["bytes_sent"], last["bytes_received"] = sent, received
+            continue
+        fields = line.split()
+        if len(fields) < 5 or fields[0].upper() != "ESTAB":
+            continue
+        address, port = split_address(fields[4])
+        if port is None:
+            continue
+        local_address, local_port = split_address(fields[3])
+        owner = re.search(r'\("([^"]*)",pid=(\d+)', line)
+        last = {"proto": "tcp", "address": address, "port": port, "local_address": local_address,
+                "local_port": local_port, "process": owner.group(1) if owner else None,
+                "pid": owner.group(2) if owner else None, "bytes_sent": None, "bytes_received": None}
+        out.append(last)
+    return out
+
+
+def parse_lsof_established(text):
+    """`lsof -nP -iTCP -sTCP:ESTABLISHED` output -> the same rows as `parse_ss_established`, less the bytes: lsof
+    counts none. The socket reads `local->remote` (`192.0.2.5:51234->198.51.100.1:443`), and the state lsof appends
+    is not part of either end. A row that is not a connected socket is skipped."""
+    out = []
+    for line in (text or "").splitlines():
+        fields = line.split()
+        if len(fields) < 3 or not fields[1].isdigit():
+            continue  # the header, and anything that is not a socket row
+        proto = next((i for i, word in enumerate(fields) if word.lower() in ("tcp", "udp")), None)
+        if proto is None or proto + 1 >= len(fields) or "->" not in fields[proto + 1]:
+            continue
+        local, _, remote = fields[proto + 1].partition("->")
+        local_address, local_port = split_address(local)
+        address, port = split_address(remote)
+        if port is None:
+            continue
+        out.append({"proto": fields[proto].lower(), "address": address, "port": port,
+                    "local_address": local_address, "local_port": local_port,
+                    "process": fields[0] or None, "pid": fields[1], "bytes_sent": None, "bytes_received": None})
+    return out
+
+
+def parse_nettop(text):
+    """`nettop -P -L 1 -n -J bytes_in,bytes_out` output -> process name -> (bytes in, bytes out), the bytes a Mac
+    counts per process, which lsof cannot give. nettop writes CSV with a header row (`time,,bytes_in,bytes_out,`);
+    a row is the clock time, the process, then its two counters, and a process nettop lists twice is summed. A line
+    that is not such a row (the header, a blank tail) is skipped."""
+    out = {}
+    for line in (text or "").splitlines():
+        fields = [f.strip() for f in line.split(",")]
+        while fields and not fields[-1]:
+            fields.pop()
+        if len(fields) < 4 or not re.match(r"^\d{1,2}:\d{2}:\d{2}", fields[0]):
+            continue
+        name = fields[1]
+        numbers = [f for f in fields[2:] if f.isdigit()]
+        if not name or len(numbers) < 2:
+            continue
+        received, sent = int(numbers[-2]), int(numbers[-1])
+        in_before, out_before = out.get(name, (0, 0))
+        out[name] = (in_before + received, out_before + sent)
+    return out
+
+
+def established_sockets():
+    """Every established TCP connection this machine has: `ss -tnpi` on Linux, which carries the bytes on each
+    socket; on a Mac (no ss) `lsof -nP -iTCP -sTCP:ESTABLISHED` for the remote ends, joined to
+    `nettop -P -L 1 -n -J bytes_in,bytes_out` for the bytes each process counted, since lsof counts none. Both read
+    through `read_command`, so a machine with neither tool reads empty. [] with no connection."""
+    if platform.system() == "Linux":
+        return parse_ss_established(read_command(["ss", "-tnpi"]) or "")
+    rows = parse_lsof_established(read_command([LSOF, "-nP", "-iTCP", "-sTCP:ESTABLISHED"]) or "")
+    per_process = parse_nettop(read_command([NETTOP, "-P", "-L", "1", "-n", "-J", NETTOP_FIELDS]) or "")
+    for row in rows:
+        counted = per_process.get(row["process"] or "")
+        if counted:
+            row["bytes_received"], row["bytes_sent"] = counted
+    return rows
+
+
+def is_lan_address(address):
+    """True when an address is another device on this machine's own local network: a private IPv4 one
+    (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), a link-local one (169.254.0.0/16, fe80::/10) or a unique-local
+    IPv6 one (fc00::/7). Loopback (this machine itself), a Tailscale address (another machine, but not one on this
+    network — its fd7a:115c:a1e0::/48 is inside the unique-local range) and a public address are not: an AirPlay
+    probe from a phone is, and a server on the internet is not."""
+    a = (address or "").strip().strip("[]").lower().split("%", 1)[0]
+    if a.startswith("::ffff:"):
+        a = a[len("::ffff:") :]
+    if a.startswith("fd7a:115c:a1e0:"):
+        return False
+    parts = a.split(".")
+    if len(parts) == 4 and all(part.isdigit() and int(part) < 256 for part in parts):
+        first, second = int(parts[0]), int(parts[1])
+        return (first == 10 or (first == 172 and 16 <= second <= 31) or (first == 192 and second == 168)
+                or (first == 169 and second == 254))
+    head = a.split(":", 1)[0]
+    if re.fullmatch(r"[0-9a-f]{1,4}", head):
+        first = int(head, 16)
+        # fc00::/7 is the unique-local range (fc00 to fdff); fe80::/10 the link-local one.
+        return 0xFC00 <= first <= 0xFDFF or 0xFE80 <= first <= 0xFEBF
+    return False
+
+
+def connections_read(*, rows=None, sockets=None):
+    """This machine's established connections (collector#66): what it is connected out to, and what reached it.
+    `inbound` marks the one worth flagging — a connection whose local port is a port this machine listens on and
+    whose other end is another device on the local network, an AirPlay probe or a dev server someone on the Wi-Fi
+    found. Inbound first, then by process, address and port, so a read is stable between two reads.
+
+    `rows` and `sockets` are the two reads a caller can hand in (a test does); left out, this machine is read. Both
+    are named by keyword on purpose: the two are both lists of socket rows, and a positional call handed the
+    listening sockets in as the connections once (collector#66, caught on the live page).
+    """
+    rows = established_sockets() if rows is None else rows
+    ports = {row.get("port") for row in (listen_sockets() if sockets is None else sockets)}
+    out = [dict(row, inbound=row.get("local_port") in ports and is_lan_address(row.get("address")))
+           for row in rows]
+    return sorted(out, key=lambda r: (not r["inbound"], r.get("process") or "", r.get("address") or "",
+                                      r.get("port") or 0))
 
 
 def child_pids(links=None):

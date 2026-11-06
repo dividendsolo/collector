@@ -50,6 +50,10 @@ describe("a clean machine (collector#55)", () => {
     // machine's own config file holds — never an exception.
     expect(snap.network.allow).toEqual([22, 80, 443]);
     expect(snap.network.sockets).toEqual([]);
+    // No `ss`, `lsof` or `nettop` (collector#66): nothing is connected out, so no connection rows and no names to
+    // resolve — and the threshold the page shows is still the configured default.
+    expect(snap.network.connections).toEqual([]);
+    expect(snap.network.upload_warn_mb).toBe(50);
   });
 
   it("still names the machine it read, whatever it is", () => {

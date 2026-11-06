@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Print, as JSON, what collect.py's network reader says about one case on stdin (collector#65).
+"""Print, as JSON, what collect.py's network reader says about one case on stdin (collector#65, collector#66).
 
-`tests/network.test.ts` drives this: a case holds the text `ss` or `lsof` prints, or the socket rows themselves,
-so the marks a machine's reader works out are tested on the exact lines those tools write, without a socket of our
-own and without a host name or port of ours in the repo. By hand:
+`tests/network.test.ts` drives this: a case holds the text `ss`, `lsof` or `nettop` prints, or the connection rows
+themselves, so the marks a machine's reader works out are tested on the exact lines those tools write, without a
+socket of our own and without a host name or port of ours in the repo. By hand:
 
     echo '{"fn": "ss", "text": "tcp LISTEN 0 128 0.0.0.0:5432 0.0.0.0:*"}' | python3 tests/network.driver.py
 """
@@ -21,18 +21,30 @@ def main():
     fn = case["fn"]
     if fn == "ss":
         out = collect.parse_ss(case["text"])
+    elif fn == "ss_est":
+        out = collect.parse_ss_established(case["text"])
     elif fn == "lsof":
         out = collect.parse_lsof(case["text"])
+    elif fn == "lsof_est":
+        out = collect.parse_lsof_established(case["text"])
+    elif fn == "nettop":
+        out = collect.parse_nettop(case["text"])
     elif fn == "mark":
         out = collect.mark_of(case["port"], case["address"], case.get("allow") or collect.DEFAULT_ALLOW)
     elif fn == "local":
         out = collect.is_local_address(case["address"])
+    elif fn == "lan":
+        out = collect.is_lan_address(case["address"])
     elif fn == "ssh":
         out = collect.sshd_flags(case["text"])
+    elif fn == "upload_mb":
+        out = collect.network_upload_mb(case.get("cfg"))
+    elif fn == "connections":
+        out = collect.connections_read(rows=case.get("rows"), sockets=case.get("sockets"))
     elif fn == "section":
         out = collect.network_section(
             case["sockets"], ssh_text=case.get("ssh_text"), ssh_source=case.get("ssh_source"),
-            allow=case.get("allow"),
+            allow=case.get("allow"), connections=case.get("connections"), upload_mb=case.get("upload_mb"),
         )
     else:
         raise SystemExit(f"unknown fn: {fn}")
