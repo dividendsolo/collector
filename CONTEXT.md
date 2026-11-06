@@ -276,6 +276,44 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
+## The Network page: every open port, and the ones anyone can reach (card #65)
+
+Slice 1 of 2 — what is open; slice 2, what goes out, is its own card. The Network page (`#/network`) shows one block
+per machine Collector already reads, each with every listening TCP and UDP socket: protocol, address, port, and the
+process and pid that own it. Read only, no `sudo`, nothing installed anywhere, and no port scanned from outside:
+`collect.py` asks each machine what it listens on.
+
+`collect.py`'s `network_read` is the reader. `listen_sockets` reads `ss -tulnp` on Linux and `lsof -nP -iTCP
+-sTCP:LISTEN` plus `lsof -nP -iUDP` elsewhere, both through `read_command`, so a machine with neither tool reads
+empty rather than failing. `-iUDP` also lists connected UDP sockets (`local->remote`, a browser's QUIC);
+`parse_lsof` skips any socket name with `->`, so an outbound connection never reads as an open port. `parse_ss`
+and `parse_lsof` turn the two tools' own lines into the same rows — one per
+socket, with its owner where this user may read one (`-p` shows only the user's own processes without `sudo`, so a
+root socket keeps its address and port and no name), reading past the zone `ss` appends (`203.0.113.10%eth0:68`) and
+the brackets around an IPv6 address. `mark_of` marks each socket against the machine's allow list:
+
+- **open** (red on the page, and named in the machine's one error row in Needs attention): bound beyond this machine
+  — a wildcard, a public address or a LAN one — and not on the machine's allow list. That is the whole rule: the
+  card's own examples are the reason the default list is short, and an address that cannot be placed reads as
+  reachable, since the flag is the safe direction.
+- **allowed**: the port is on the machine's allow list — `network.allow` in config.json, default `[22, 80, 443]`,
+  sent to each machine in `lib/server/machines.ts`'s `REMOTE_KEYS`.
+- **local**: a loopback address (127.0.0.0/8, ::1), a Tailscale one (100.64.0.0/10, fd7a:115c:a1e0::/48) or a
+  link-local one. Never flagged.
+
+`sshd_read` and `sshd_flags` read the two settings that should not be on — `passwordauthentication yes` and
+`permitrootlogin yes` — from `sshd -T` when that answers (it normally needs root), else from
+`/etc/ssh/sshd_config`; a directive that is only commented out is not set, and a Mac is not asked at all.
+
+One machine's section is `{allow, sockets, ssh}` on its snapshot; `lib/server/network.ts`'s `network()` turns the
+machines read into `/api/network` — `{at, machines: [{name, local, read_at, stale, error, network}]}` — from the same
+10-second read the rest of the page uses, so it costs no extra ssh. `openSockets` is the one-row-per-port view the
+warnings use: a socket bound on both an IPv4 and an IPv6 address is one thing to fix, not two.
+
+The page draws the sockets open to everyone first, then the expected-public ones, then the local ones. A machine's
+panel head counts them (red, with the number open) and says when it is showing a last good read; under the table sits
+the allow list and the ssh verdict, with where it was read from.
+
 ## The Sponsor button (card #52)
 
 Collector stays free and open source, and its own revenue starts with GitHub Sponsors. The button on the repo
@@ -365,6 +403,7 @@ date stays plain — no reason, no tooltip. Read the two facts apart: `holdText`
 | `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel), and the three status sets the page reads (`each`, `working`, `done`). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
+| `/api/network` | Every listening socket on each machine with the mark it wears (open to everyone, expected public, local only), the ports that machine may have public, and its sshd's password and root settings — the read an agent asks to answer "is anything open that should not be?" |
 | `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,

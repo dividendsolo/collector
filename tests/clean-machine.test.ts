@@ -45,6 +45,11 @@ describe("a clean machine (collector#55)", () => {
     expect(snap.profiles).toEqual([]);
     expect(snap.hermes_gateway).toBeNull();
     expect(snap.host_broken).toEqual([]);
+    // No `ss` and no `lsof` (collector#65): the Network section reads empty rather than failing, and the ports it
+    // did not read are not marked open. `ssh` is read from a file rather than a tool, so it is whatever this
+    // machine's own config file holds — never an exception.
+    expect(snap.network.allow).toEqual([22, 80, 443]);
+    expect(snap.network.sockets).toEqual([]);
   });
 
   it("still names the machine it read, whatever it is", () => {

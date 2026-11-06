@@ -1431,6 +1431,15 @@
     background: var(--amber-bg);
     border-color: var(--amber-line);
   }
+  /* The Network page (collector#65): the port anyone can reach reads in the red the page uses for a failure, and
+     the line under a machine's table carries its allow list and what its sshd allows. */
+  .net-open td.port {
+    color: var(--red);
+  }
+  .net-note {
+    margin: 0;
+    padding: 10px 16px 12px;
+  }
   .heat {
     padding: 14px 16px 16px;
   }
