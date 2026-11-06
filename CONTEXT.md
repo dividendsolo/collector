@@ -464,9 +464,18 @@ away by itself when the problem is resolved (James, 2026-11-06). Each toast has 
 A red toast this page has not sounded for yet (a key and state it has not seen) plays a short two-tone alarm made
 with Web Audio; Slow makes no sound, and one problem sounds once. A browser plays no sound before the first click or
 key on the page, so the red toasts showing at load sound on that first click or key; after it, a new one sounds at
-once. The network toast's link (`#/network?first=internet`) scrolls
-the Network page smoothly to the first port open to the internet and flashes that row once; the route ignores the
-query, and the page takes it off the address so a refresh does not scroll again.
+once.
+
+Every toast's title links to its page and the thing on it, the same way for every toast (James, 2026-11-06):
+`#/<page>?to=<element id>` (`jumpHref` in `lib/jump.ts`). `useJump` (`components/jump.tsx`, mounted in the Shell)
+takes `?to=` off the address, waits up to 8 seconds for the element, glides to it (centered, instant under reduced
+motion) and flashes it once (`.jump-flash`). It works the same when the page is already open. The targets: a service
+toast goes to its row on Services (`service:<url>`), a Security check to its row on Network (`check:<machine>:<check>`),
+the open-ports check to the machine's first port open to the internet (`ports:<machine>:internet`), and a GitHub
+limit to the GitHub limits panel on APIs (`github-limit`).
+
+A GitHub API limit (REST or GraphQL) with under 500 calls left raises an amber toast with Dismiss, since nobody can
+fix it but wait for the reset; it shows again when the limit runs out. Needs attention lists both limits too.
 
 The sidebar's Network item counts the ports open to the internet across every machine (`internetPortCount`), the
 same number the toast and Needs attention name.

@@ -10,6 +10,7 @@ import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
 import { LiveProvider, useLive } from "./data";
 import { FlowPage } from "./flow";
+import { useJump } from "./jump";
 import { NetworkPage } from "./network";
 import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, vendorHit, WorkPage } from "./pages";
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
@@ -60,14 +61,14 @@ const useHash = () =>
     () => "",
   );
 
-/** The page a hash opens, without its query: `#/network?first=internet` and `#/network` are one page. The Shell
+/** The page a hash opens, without its query: `#/network?to=check:vps:internet` and `#/network` are one page. The Shell
  * scrolls to the top when this changes, so a page that takes a query off its own address is not sent back up
  * (collector#67: the toast's link scrolled to the port, then back to the top). */
 export const pageOf = (hash: string) => hash.replace(/^#\/?/, "").split("?", 1)[0];
 
 /** Pages: the hash picks one (#/cron); the sidebar and the top bar follow it. */
 export function route(hash: string) {
-  // A page may carry a query after its name (`#/network?first=internet`): the page reads it, the route ignores it.
+  // A page may carry a query after its name (`#/network?to=check:vps:internet`): the page reads it, the route ignores it.
   let name = hash.replace(/^#\/?/, "").split("?", 1)[0] || "dashboard";
   if (name === "running") name = "agents"; // the old address of the Agents page
   const repo = name.match(/^projects\/([\w.-]+\/[\w.-]+)$/);
@@ -216,10 +217,11 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
 
 function Shell() {
   const hash = useHash();
+  useJump();
   const r = route(hash);
   // Scroll to the top on every page change. Braces matter: scrollTo returns a promise in current Chrome, and React
   // would call it as the cleanup.
-  // A query on the same page (`?first=internet`) is no page change: the top is only for a new page.
+  // A query on the same page (`?to=<id>`) is no page change: the top is only for a new page.
   const at = pageOf(hash);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the page is the trigger
   useEffect(() => {

@@ -50,7 +50,7 @@ export function ServiceRows({ list }: { list: Svc[] }) {
   return (
     <>
       {list.map((x) => (
-        <li key={x.url + x.name}>
+        <li key={x.url + x.name} id={`service:${x.url}`}>
           <div>
             <div className="name">{x.name}</div>
             <div className="sub">

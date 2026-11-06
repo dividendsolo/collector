@@ -198,9 +198,17 @@ export function warnings(w: WarningInputs): Warning[] {
     if (d.ssl_days != null && d.ssl_days <= 14)
       out.push({ level: "error", text: `The HTTPS certificate of ${d.name} runs out in ${d.ssl_days} days` });
   }
-  const g = w.github.graphql;
-  if (g && g.limit - g.used < 500)
-    out.push({ level: "error", text: `GitHub GraphQL limit nearly gone: ${g.limit - g.used} of ${g.limit} left` });
+  for (const [k, name] of [
+    ["graphql", "GraphQL"],
+    ["core", "REST"],
+  ] as const) {
+    const g = w.github[k];
+    if (g && g.limit - g.used < 500)
+      out.push({
+        level: "error",
+        text: `GitHub ${name} limit nearly gone: ${Math.max(0, g.limit - g.used)} of ${g.limit} left`,
+      });
+  }
   const ga = w.github.actions;
   if (ga?.used != null && ga.limit && ga.used >= ga.limit * 0.9)
     out.push({
