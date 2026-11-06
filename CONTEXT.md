@@ -385,18 +385,20 @@ not a phone on the Wi-Fi.
 The marks are the server's, not `collect.py`'s: the machine has no memory of the last read and no way to write one.
 `lib/server/seen.ts` keeps the seen-list, one small JSON file next to `config.json` (`network-seen.json`, gitignored;
 `COLLECTOR_SEEN` names the file, and `COLLECTOR_CONFIG`'s folder is what it is derived from, so a test points both at
-a temp directory and the real one is never written). Per machine it holds the processes and the destinations each has
-been seen going to, the bytes each had sent at the last read, the local knocks already seen, the reverse-DNS cache
+a temp directory and the real one is never written). Per machine it holds the processes and the sites each has been
+seen going to, the bytes each had sent at the last read, the local knocks already seen, the reverse-DNS cache
 and the unseen marks. `foldRead` is pure and does the whole of it:
 
 - the machine's **first read fills the list and marks nothing** — otherwise a fresh install would report every
   process on it as new;
 - after that, a **process never seen** on that machine marks once (its destinations are recorded with it, since "a
   new destination for a known process" says nothing about a process nobody has seen);
-- a **destination** — the host name reverse DNS gave, or the address — a known process has not been seen reaching.
+- a **destination** — a site, from the host name reverse DNS gave — a known process has not been seen reaching.
   Names are compared by site (`domainOf`: the last two labels, three under `co.uk`-style suffixes), so a new
   load-balancer name of a site already reached (`lb-140-82-112-3-iad.github.com` after `lb-140-82-114-3-iad…`) is
-  not new; an address with no name is its own site. A loopback address is never a destination;
+  not new. An address with no reverse name is never a destination mark: most CDN and cloud addresses have none, and
+  three minutes on a Mac once made 29 marks of one dev server reaching Cloudflare's unnamed 104.x and 172.67.x. A new
+  process and an upload still mark whatever the address. A loopback address is never a destination;
 - an **upload**: the bytes a process sent over what it had sent at the last read, past `network.uploadWarnMB`
   (default 50 MB, decimal, `network_upload_mb`), so it is the jump and not the total. A socket's own bytes add up
   across the process's sockets; a process total (a Mac) counts once per pid, so a process's connection count
@@ -405,9 +407,9 @@ and the unseen marks. `foldRead` is pure and does the whole of it:
 
 A mark stays in the state until Seen drops it, and the fact behind it stays in the list, which is what makes a
 cleared mark stay cleared; an upload that keeps going earns a fresh mark, because that is what "since the last read"
-means. A connection of another user's has no name to mark by and is left out of the process rows. The marks are
-capped at 50 a machine (the newest kept) so the file cannot grow without end — a browser earns a handful the first
-time it visits a site, since each address it reaches is a destination of its own.
+means. A connection of another user's has no name to mark by and is left out of the process rows. Only the
+destination marks are capped, at 50 a machine (the newest kept), so the file cannot grow without end; a process,
+upload or knock mark leaves only through Seen (`capDestinations`).
 
 Reverse DNS happens here, not on the machine: `resolveNames` asks once per address ever, from the cache in the state,
 with 700 ms on it (a name that takes longer is no name), keeps an empty answer so the address is not asked again, and

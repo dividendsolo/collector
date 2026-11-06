@@ -17,7 +17,8 @@ export interface SeenMachine {
   /** The read this state was last folded from, or null: the machine has never been read, and its first read fills
    * the list and marks nothing. */
   at: number | null;
-  /** Process name -> the destinations seen for it (a host name where reverse DNS gave one, and the address). */
+  /** Process name -> the sites seen for it (`example.com`, from the name reverse DNS gave; an older file may also hold
+   * full names and addresses, which compare by site the same way). */
   processes: Record<string, string[]>;
   /** Process name -> the bytes it had sent at the last read, which is what a large upload is measured from. */
   bytes: Record<string, number>;
@@ -36,10 +37,11 @@ export interface SeenState {
 /** A megabyte as the network counters mean it: 1,000,000 bytes, the decimal one nettop and ss counts in. */
 export const MB = 1_000_000;
 export const DEFAULT_UPLOAD_WARN_MB = 50;
-/** Marks kept per machine, and names cached per machine: enough to be useful, never a file that grows without end. */
-const MAX_MARKS = 50;
+/** Destination marks kept per machine, and names cached per machine: enough to be useful, never a file that grows
+ * without end. Only destination marks are capped: a process, upload or knock mark leaves only through Seen. */
+const MAX_DEST_MARKS = 50;
 const MAX_NAMES = 200;
-const MAX_DESTS = 50;
+const MAX_DESTS = 200;
 /** Reverse DNS is a nicety, never a reason to hold a read up: an answer that takes longer than this is no answer. */
 export const DNS_TIMEOUT_MS = 700;
 
@@ -102,10 +104,6 @@ export function writeSeen(state: SeenState) {
     // Read only where Collector runs cannot write (a stranger's first run): the marks still show for this read.
   }
 }
-
-/** The destination a connection went to, as the seen-list knows it: the host name where reverse DNS gave one, else
- * the address. */
-const destOf = (c: NetworkConnection) => c.host || c.address || null;
 
 /** This machine itself: 127.0.0.0/8, ::1, and the IPv4-mapped form of a loopback address. */
 export function isLoopback(address: string | null | undefined): boolean {
@@ -190,7 +188,6 @@ export function foldRead(
   // bytes (`ss` on Linux) add up across the process's sockets.
   const counted = new Set<string>();
   for (const c of rows || []) {
-    const dest = destOf(c);
     if (c.inbound) {
       const key = `${c.local_port ?? ""}/${c.address ?? ""}`;
       if (!first && c.address && !inbound.has(key))
@@ -227,9 +224,13 @@ export function foldRead(
           bytes: null,
           at: opts.now,
         });
-      else if (dest && !knownDest(seen, dest) && !(c.address && seen.includes(c.address)))
+      // Only a named host is a destination worth a mark: most CDN and cloud addresses have no reverse name, and a
+      // bare address is not a place a person recognises (collector#66's second review: three minutes on a Mac made
+      // 29 marks of one dev server reaching Cloudflare's unnamed 104.x and 172.67.x). A new process and an upload
+      // still mark whatever the address.
+      else if (c.host && !knownDest(seen, c.host))
         add({
-          id: `destination:${name}:${domainOf(dest)}`,
+          id: `destination:${name}:${domainOf(c.host)}`,
           kind: "destination",
           process: name,
           pid: c.pid ?? null,
@@ -240,9 +241,9 @@ export function foldRead(
           at: opts.now,
         });
     }
-    processes[name] = [...new Set([...(seen || []), dest, c.address].filter((x): x is string => !!x))].slice(
-      -MAX_DESTS,
-    );
+    // Kept by site, the only thing a destination is compared by, so a browser's stream of addresses cannot push
+    // the sites it is known to reach out of the list.
+    processes[name] = [...new Set([...(seen || []), ...(c.host ? [domainOf(c.host)] : [])])].slice(-MAX_DESTS);
     if (typeof c.bytes_sent === "number") {
       if (c.bytes_scope === "process") {
         const key = `${name}/${c.pid ?? ""}`;
@@ -280,8 +281,23 @@ export function foldRead(
     bytes,
     inbound: [...inbound].slice(-MAX_NAMES),
     names: prev?.names || {},
-    marks: marks.slice(-MAX_MARKS),
+    marks: capDestinations(marks),
   };
+}
+
+/**
+ * The marks to keep: every one but the oldest destination marks past `MAX_DEST_MARKS`. The card says a mark shows
+ * until Seen, so a process, upload or knock mark is never dropped (collector#66's second review: a burst of
+ * destination marks pushed them out within minutes); the destination marks are the many and the least telling.
+ */
+export function capDestinations(marks: NetworkMark[]): NetworkMark[] {
+  let extra = marks.filter((m) => m.kind === "destination").length - MAX_DEST_MARKS;
+  if (extra <= 0) return marks;
+  return marks.filter((m) => {
+    if (m.kind !== "destination" || extra <= 0) return true;
+    extra--;
+    return false;
+  });
 }
 
 /** Reverse DNS for one address: its first name, without the trailing dot, or "" (asked, and there is none). */

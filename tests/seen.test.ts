@@ -57,8 +57,9 @@ describe("the seen-list's first read (collector#66)", () => {
     );
     expect(first.marks).toEqual([]);
     expect(first.at).toBe(1000);
-    // What the process was seen going to: the name reverse DNS gave, and the address it resolved from.
-    expect(first.processes).toEqual({ curl: ["downloads.example.com", "198.51.100.1"], ssh: ["198.51.100.1"] });
+    // What the process was seen going to, by site: the name reverse DNS gave, cut to its site. An unnamed address
+    // is no site, so ssh is known with none.
+    expect(first.processes).toEqual({ curl: ["example.com"], ssh: [] });
     expect(first.bytes).toEqual({ curl: 0, ssh: 0 });
   });
 
@@ -87,7 +88,7 @@ describe("what gets marked (collector#66)", () => {
     const out = fold([conn({ process: "nc", pid: "999", host: "drop.example.net" })]);
     expect(ids(out.marks)).toEqual(["process:nc"]);
     expect(out.marks[0]).toMatchObject({ kind: "process", process: "nc", pid: "999", host: "drop.example.net" });
-    expect(out.processes.nc).toEqual(["drop.example.net", "198.51.100.1"]);
+    expect(out.processes.nc).toEqual(["example.net"]);
   });
 
   it("marks a new destination for a process it already knows", () => {
@@ -95,8 +96,22 @@ describe("what gets marked (collector#66)", () => {
     expect(ids(fold([conn({ host: "news.example.org", address: "203.0.113.9" })]).marks)).toEqual([
       "destination:curl:example.org",
     ]);
-    // An address with no name is a destination too.
-    expect(ids(fold([conn({ host: null, address: "203.0.113.9" })]).marks)).toEqual(["destination:curl:203.0.113.9"]);
+  });
+
+  it("does not mark an address with no name: a known process reaching a provider's unnamed addresses is not news", () => {
+    // Most CDN and cloud addresses have no reverse name, and a bare address is not a place a person recognises:
+    // three minutes on a Mac made 29 marks of one dev server reaching Cloudflare's 104.x and 172.67.x (collector#66's
+    // second review). A new process and an upload still mark, whatever the address; a new named site still does.
+    const out = fold(
+      ["104.16.1.5", "104.18.32.7", "104.21.9.9", "172.67.3.4", "172.64.80.1", "2606:4700::6810:1"].map((address) =>
+        conn({ host: null, address }),
+      ),
+    );
+    expect(out.marks).toEqual([]);
+    expect(ids(fold([conn({ host: null, address: "104.16.1.5", process: "nc" })]).marks)).toEqual(["process:nc"]);
+    expect(ids(fold([conn({ host: "drop.example.net", address: "104.16.1.5" })]).marks)).toEqual([
+      "destination:curl:example.net",
+    ]);
   });
 
   it("marks an upload over the threshold since the last read, and the bytes it sent", () => {
@@ -203,6 +218,22 @@ describe("what gets marked (collector#66)", () => {
     expect(twice.at).toBe(1020);
   });
 
+  it("drops only destination marks when the list is full: a process, upload or knock mark waits for Seen", () => {
+    // The card: marks stay in Needs attention until James clicks Seen. Only the destination marks, the many and the
+    // least telling, are capped, so a burst of them cannot push a new process out unseen.
+    let state = fold([conn({ process: "nc", pid: "999" })]);
+    for (let i = 0; i < 60; i++)
+      state = seen.foldRead(state, [conn({ host: `host${i}.example${i}.net`, address: `198.51.100.${i + 2}` })], {
+        now: 1020 + i,
+      });
+    const kinds = state.marks.map((m) => m.kind);
+    expect(ids(state.marks)).toContain("process:nc");
+    expect(kinds.filter((k) => k === "destination").length).toBe(50);
+    // The newest destinations are the ones kept.
+    expect(ids(state.marks)).toContain("destination:curl:example59.net");
+    expect(ids(state.marks)).not.toContain("destination:curl:example0.net");
+  });
+
   it("keeps a mark until it is seen, even after the machine stops sending it", () => {
     const marked = fold([conn({ process: "nc" })]);
     expect(ids(seen.foldRead(marked, [], { now: 1030 }).marks)).toEqual(["process:nc"]);
@@ -222,7 +253,7 @@ describe("Seen (collector#66)", () => {
     expect(out[0].network.connections[0]).toMatchObject({ address: "198.51.100.1", host: "downloads.example.com" });
     const written = JSON.parse(fs.readFileSync(seen.seenPath(), "utf8"));
     expect(Object.keys(written.machines)).toEqual(["ezio"]);
-    expect(written.machines.ezio.processes).toEqual({ curl: ["downloads.example.com", "198.51.100.1"] });
+    expect(written.machines.ezio.processes).toEqual({ curl: ["example.com"] });
     expect(written.machines.ezio.names).toEqual({ "198.51.100.1": "downloads.example.com" });
   });
 
