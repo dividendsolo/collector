@@ -1486,11 +1486,6 @@
     background: var(--amber-bg);
     border-color: var(--amber-line);
   }
-  /* The Network page (collector#65): the port anyone can reach reads in the red the page uses for a failure, and
-     the line under a machine's table carries the networks it is on and what its sshd allows. */
-  .net-open td.port {
-    color: var(--red);
-  }
   /* The Network page's badges: the tailnet in green, the local network greyed out. */
   .pill.net-tailnet {
     color: var(--green);
