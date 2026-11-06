@@ -409,7 +409,9 @@ A mark stays in the state until Seen drops it, and the fact behind it stays in t
 cleared mark stay cleared; an upload that keeps going earns a fresh mark, because that is what "since the last read"
 means. A connection of another user's has no name to mark by and is left out of the process rows. Only the
 destination marks are capped, at 50 a machine (the newest kept), so the file cannot grow without end; a process,
-upload or knock mark leaves only through Seen (`capDestinations`).
+upload or knock mark leaves only through Seen (`capDestinations`). A ceiling of 500 marks in all
+(`MAX_MARKS_CEILING`) is the one exception, there so a local device knocking from address after address cannot grow
+the file without end.
 
 Reverse DNS happens here, not on the machine: `resolveNames` asks once per address ever, from the cache in the state,
 with 700 ms on it (a name that takes longer is no name), keeps an empty answer so the address is not asked again, and

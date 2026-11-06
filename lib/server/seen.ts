@@ -40,6 +40,9 @@ export const DEFAULT_UPLOAD_WARN_MB = 50;
 /** Destination marks kept per machine, and names cached per machine: enough to be useful, never a file that grows
  * without end. Only destination marks are capped: a process, upload or knock mark leaves only through Seen. */
 const MAX_DEST_MARKS = 50;
+/** The most marks a machine keeps in all, a ceiling no ordinary day reaches: past it the oldest go, so a local device
+ * that knocks from address after address cannot grow the seen-list without end. */
+export const MAX_MARKS_CEILING = 500;
 const MAX_NAMES = 200;
 const MAX_DESTS = 200;
 /** Reverse DNS is a nicety, never a reason to hold a read up: an answer that takes longer than this is no answer. */
@@ -288,16 +291,20 @@ export function foldRead(
 /**
  * The marks to keep: every one but the oldest destination marks past `MAX_DEST_MARKS`. The card says a mark shows
  * until Seen, so a process, upload or knock mark is never dropped (collector#66's second review: a burst of
- * destination marks pushed them out within minutes); the destination marks are the many and the least telling.
+ * destination marks pushed them out within minutes); the destination marks are the many and the least telling. The
+ * one exception is `MAX_MARKS_CEILING`, which only a flood reaches.
  */
 export function capDestinations(marks: NetworkMark[]): NetworkMark[] {
   let extra = marks.filter((m) => m.kind === "destination").length - MAX_DEST_MARKS;
-  if (extra <= 0) return marks;
-  return marks.filter((m) => {
-    if (m.kind !== "destination" || extra <= 0) return true;
-    extra--;
-    return false;
-  });
+  const kept =
+    extra <= 0
+      ? marks
+      : marks.filter((m) => {
+          if (m.kind !== "destination" || extra <= 0) return true;
+          extra--;
+          return false;
+        });
+  return kept.slice(-MAX_MARKS_CEILING);
 }
 
 /** Reverse DNS for one address: its first name, without the trailing dot, or "" (asked, and there is none). */

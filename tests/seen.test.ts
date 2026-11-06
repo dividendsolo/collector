@@ -234,6 +234,17 @@ describe("what gets marked (collector#66)", () => {
     expect(ids(state.marks)).not.toContain("destination:curl:example0.net");
   });
 
+  it("still bounds the file when a device floods knocks: a hard ceiling far above any ordinary day", () => {
+    // A device on the local network can knock from address after address (IPv6 hands out plenty); uncapped, each one
+    // is a mark and the seen-list grows without end. The ceiling keeps the newest, and never bites a normal read.
+    const knocks = Array.from({ length: 600 }, (_, i) =>
+      conn({ inbound: true, local_port: 7000, address: `fd00::${i.toString(16)}`, process: "AirPlay" }),
+    );
+    const out = fold(knocks);
+    expect(out.marks.length).toBe(seen.MAX_MARKS_CEILING);
+    expect(ids(out.marks)).toContain("inbound:7000/fd00::257");
+  });
+
   it("keeps a mark until it is seen, even after the machine stops sending it", () => {
     const marked = fold([conn({ process: "nc" })]);
     expect(ids(seen.foldRead(marked, [], { now: 1030 }).marks)).toEqual(["process:nc"]);
