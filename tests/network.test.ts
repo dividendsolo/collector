@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -610,6 +611,366 @@ describe("the section one machine reads", () => {
       ssh: null,
     });
   });
+
+  it("carries the connections and the upload threshold (collector#66)", () => {
+    const out = drive<{ connections: Connection[]; upload_warn_mb: number }>({
+      fn: "section",
+      sockets: [],
+      networks: BARE,
+      connections: [{ proto: "tcp", address: "198.51.100.1", port: 443, process: "curl", pid: "1" }],
+    });
+    expect(out.upload_warn_mb).toBe(50);
+    expect(out.connections).toEqual([{ proto: "tcp", address: "198.51.100.1", port: 443, process: "curl", pid: "1" }]);
+    expect(
+      drive<{ upload_warn_mb: number }>({ fn: "section", sockets: [], networks: BARE, upload_mb: 200 }).upload_warn_mb,
+    ).toBe(200);
+  });
+});
+
+/** One established connection as collect.py reads it (collector#66). */
+interface Connection {
+  proto: string;
+  address: string;
+  port: number | null;
+  local_address?: string;
+  local_port?: number | null;
+  process: string | null;
+  pid: string | null;
+  bytes_sent: number | null;
+  bytes_received: number | null;
+  bytes_scope?: "socket" | "process" | null;
+  inbound?: boolean;
+}
+
+describe("reading `ss -tnpi` (the connections going out, with their bytes)", () => {
+  // `ss -tnpi` on a Linux machine: the header, an established socket and the indented info line that carries its
+  // counters, a connection of another user's (no process without sudo), a socket in another state, and the loopback
+  // pair two processes on one machine share.
+  const SS = [
+    "State      Recv-Q Send-Q Local Address:Port   Peer Address:Port Process",
+    'ESTAB      0      0      192.0.2.5:51234      198.51.100.1:443   users:(("curl",pid=1234,fd=5))',
+    "\t cubic wscale:7,7 rto:204 rtt:1.5/0.7 ato:40 mss:1448 pmtu:1500 cwnd:10 bytes_sent:13456000 bytes_acked:13456001 bytes_received:2048 segs_out:10 segs_in:12",
+    'ESTAB      0      0      192.0.2.5:51235      203.0.113.7:22     users:(("ssh",pid=4321,fd=3))',
+    "\t cubic wscale:10,10 rto:201 rtt:0.757/0.86 ato:40 mss:32768 cwnd:10 bytes_sent:6862 bytes_received:2239",
+    "TIME-WAIT  0      0      192.0.2.5:51236      198.51.100.9:80",
+    "ESTAB      0      0      192.0.2.5:51237      198.51.100.9:993",
+    "ESTAB      0      0      127.0.0.1:42228      127.0.0.1:3107",
+    "\t cubic wscale:10,10 rto:201 rtt:0.757/0.86 mss:32768 cwnd:10 bytes_sent:6862 bytes_received:2239",
+  ].join("\n");
+
+  it("reads each established connection's remote end, process and bytes, and skips every other state", () => {
+    expect(drive<Connection[]>({ fn: "ss_est", text: SS })).toEqual([
+      {
+        proto: "tcp",
+        address: "198.51.100.1",
+        port: 443,
+        local_address: "192.0.2.5",
+        local_port: 51234,
+        process: "curl",
+        pid: "1234",
+        bytes_sent: 13456000,
+        bytes_received: 2048,
+        bytes_scope: "socket",
+      },
+      {
+        proto: "tcp",
+        address: "203.0.113.7",
+        port: 22,
+        local_address: "192.0.2.5",
+        local_port: 51235,
+        process: "ssh",
+        pid: "4321",
+        bytes_sent: 6862,
+        bytes_received: 2239,
+        bytes_scope: "socket",
+      },
+      // No info line under it: the OS gave no counters for this one, which is not an error.
+      {
+        proto: "tcp",
+        address: "198.51.100.9",
+        port: 993,
+        local_address: "192.0.2.5",
+        local_port: 51237,
+        process: null,
+        pid: null,
+        bytes_sent: null,
+        bytes_received: null,
+        bytes_scope: "socket",
+      },
+      {
+        proto: "tcp",
+        address: "127.0.0.1",
+        port: 3107,
+        local_address: "127.0.0.1",
+        local_port: 42228,
+        process: null,
+        pid: null,
+        bytes_sent: 6862,
+        bytes_received: 2239,
+        bytes_scope: "socket",
+      },
+    ]);
+  });
+
+  it("is empty for a machine whose ss says nothing, and for no output at all", () => {
+    expect(
+      drive<Connection[]>({ fn: "ss_est", text: "State Recv-Q Send-Q Local Address:Port Peer Address:Port\n" }),
+    ).toEqual([]);
+    expect(drive<Connection[]>({ fn: "ss_est", text: "" })).toEqual([]);
+  });
+});
+
+describe("reading `lsof -nP -iTCP -sTCP:ESTABLISHED` (macOS, which has no ss)", () => {
+  // A Mac's established connections: both ends in one `local->remote` token, IPv6 in brackets, and the state lsof
+  // appends to the row.
+  const LSOF = [
+    "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
+    "Google    4321  me   30u  IPv4      0x1      0t0  TCP 192.0.2.5:51234->198.51.100.1:443 (ESTABLISHED)",
+    "sshd       700  me    3u  IPv4      0x2      0t0  TCP 192.0.2.5:22->192.168.1.20:49152 (ESTABLISHED)",
+    "Google    4321  me   31u  IPv6      0x3      0t0  TCP [2001:db8::5]:51235->[2001:db8::9]:443 (ESTABLISHED)",
+  ].join("\n");
+
+  it("reads lsof's escaped space as a space (`Brave\\x20` is the cut `Brave Browser Helper`)", () => {
+    const line = "Brave\\x20  1787 me   31u  IPv4  0x4  0t0  TCP 192.0.2.5:51328->198.51.100.3:443 (ESTABLISHED)";
+    expect(drive<Connection[]>({ fn: "lsof_est", text: line })[0].process).toBe("Brave");
+  });
+
+  it("reads both ends of each connection with its process, and counts no bytes (lsof counts none)", () => {
+    expect(drive<Connection[]>({ fn: "lsof_est", text: LSOF })).toEqual([
+      {
+        proto: "tcp",
+        address: "198.51.100.1",
+        port: 443,
+        local_address: "192.0.2.5",
+        local_port: 51234,
+        process: "Google",
+        pid: "4321",
+        bytes_sent: null,
+        bytes_received: null,
+        bytes_scope: null,
+      },
+      {
+        proto: "tcp",
+        address: "192.168.1.20",
+        port: 49152,
+        local_address: "192.0.2.5",
+        local_port: 22,
+        process: "sshd",
+        pid: "700",
+        bytes_sent: null,
+        bytes_received: null,
+        bytes_scope: null,
+      },
+      {
+        proto: "tcp",
+        address: "2001:db8::9",
+        port: 443,
+        local_address: "2001:db8::5",
+        local_port: 51235,
+        process: "Google",
+        pid: "4321",
+        bytes_sent: null,
+        bytes_received: null,
+        bytes_scope: null,
+      },
+    ]);
+  });
+
+  it("keeps one row per socket when a process holds it on two file descriptors (ssh on fd 4 and fd 5)", () => {
+    const twoFds = [
+      "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
+      "ssh       3327  me    4u  IPv4      0x5      0t0  TCP 192.0.2.5:55185->198.51.100.7:22 (ESTABLISHED)",
+      "ssh       3327  me    5u  IPv4      0x5      0t0  TCP 192.0.2.5:55185->198.51.100.7:22 (ESTABLISHED)",
+      "ssh       3327  me    6u  IPv4      0x6      0t0  TCP 192.0.2.5:55186->198.51.100.7:22 (ESTABLISHED)",
+    ].join("\n");
+    const rows = drive<Connection[]>({ fn: "lsof_est", text: twoFds });
+    expect(rows.map((r) => `${r.local_port}->${r.address}:${r.port} ${r.pid}`)).toEqual([
+      "55185->198.51.100.7:22 3327",
+      "55186->198.51.100.7:22 3327",
+    ]);
+  });
+
+  it("reads nothing out of an empty read, and out of anything that is not a socket row", () => {
+    expect(drive<Connection[]>({ fn: "lsof_est", text: "" })).toEqual([]);
+    expect(drive<Connection[]>({ fn: "lsof_est", text: "COMMAND PID USER FD TYPE\n" })).toEqual([]);
+  });
+});
+
+describe("reading `nettop` (the bytes a Mac counts per process)", () => {
+  // `nettop -P -L 1 -n -J bytes_in,bytes_out` as it really prints, captured on a Mac (macOS 27) on 2026-11-06 with
+  // the app names swapped for placeholders: a header whose first column is empty, then one `name.pid,in,out,` row
+  // per process, with no clock column. nettop cuts the name to 15 letters, and a name may hold a dot of its own.
+  const NETTOP = [
+    ",bytes_in,bytes_out,",
+    "launchd.1,0,0,",
+    "syslogd.573,0,31915,",
+    "Example Browser.1787,146016766,585017,",
+    "python3.14.5696,5015962,9408,",
+    "Code Helper (Pl.73632,0,0,",
+    "com.example.bac.19389,0,0,",
+    "ssh.414,241855718,164411062,",
+    "",
+  ].join("\n");
+
+  it("reads each process's name, pid and bytes in and out, the pid split off the name's last dot", () => {
+    expect(drive<Record<string, [string, number, number]>>({ fn: "nettop", text: NETTOP })).toEqual({
+      "1": ["launchd", 0, 0],
+      "573": ["syslogd", 0, 31915],
+      "1787": ["Example Browser", 146016766, 585017],
+      "5696": ["python3.14", 5015962, 9408],
+      "73632": ["Code Helper (Pl", 0, 0],
+      "19389": ["com.example.bac", 0, 0],
+      "414": ["ssh", 241855718, 164411062],
+    });
+  });
+
+  it("reads nothing out of the header alone, a blank line, a row with no pid or no output", () => {
+    expect(drive({ fn: "nettop", text: ",bytes_in,bytes_out,\n" })).toEqual({});
+    expect(drive({ fn: "nettop", text: "launchd,0,0,\n" })).toEqual({});
+    expect(drive({ fn: "nettop", text: "ssh.414,,,\n" })).toEqual({});
+    expect(drive({ fn: "nettop", text: "" })).toEqual({});
+  });
+
+  it("joins the bytes to lsof's rows on the pid, as the process's total, not on lsof's cut name", () => {
+    const rows = [
+      { proto: "tcp", address: "198.51.100.1", port: 443, process: "Example\\x20", pid: "1787" },
+      { proto: "tcp", address: "198.51.100.2", port: 443, process: "Example\\x20", pid: "1787" },
+      { proto: "tcp", address: "203.0.113.7", port: 22, process: "ssh", pid: "414" },
+      { proto: "tcp", address: "203.0.113.8", port: 22, process: "ssh", pid: "9999" },
+    ].map((r) => ({ ...r, bytes_sent: null, bytes_received: null, bytes_scope: null }));
+    const out = drive<Connection[]>({ fn: "join_nettop", rows, text: NETTOP });
+    expect(out.map((c) => [c.pid, c.bytes_sent, c.bytes_received, c.bytes_scope])).toEqual([
+      ["1787", 585017, 146016766, "process"],
+      ["1787", 585017, 146016766, "process"],
+      ["414", 164411062, 241855718, "process"],
+      // A pid nettop did not list keeps no bytes rather than another process's.
+      ["9999", null, null, null],
+    ]);
+  });
+});
+
+describe("another device on the local network (collector#66)", () => {
+  const lan = (address: string) => drive<boolean>({ fn: "lan", address });
+
+  it("reads the private, link-local and unique-local ranges as the local network", () => {
+    expect(lan("192.168.1.20")).toBe(true);
+    expect(lan("10.0.0.5")).toBe(true);
+    expect(lan("172.16.0.1")).toBe(true);
+    expect(lan("172.31.255.255")).toBe(true);
+    expect(lan("169.254.5.5")).toBe(true);
+    expect(lan("fe80::1")).toBe(true);
+    expect(lan("fd00:1234::5")).toBe(true);
+    expect(lan("::ffff:192.168.1.5")).toBe(true);
+  });
+
+  it("leaves this machine, the tailnet, and everything public out of it", () => {
+    expect(lan("127.0.0.1")).toBe(false);
+    expect(lan("::1")).toBe(false);
+    expect(lan("172.15.0.1")).toBe(false);
+    expect(lan("172.32.0.1")).toBe(false);
+    expect(lan("203.0.113.9")).toBe(false);
+    // A tailnet address is another machine, but not one on this network — even the unique-local one Tailscale uses.
+    expect(lan("100.64.0.5")).toBe(false);
+    expect(lan("fd7a:115c:a1e0::1")).toBe(false);
+    expect(lan("")).toBe(false);
+  });
+});
+
+describe("the connections one machine reads", () => {
+  const listening: Socket[] = [
+    { proto: "tcp", address: "0.0.0.0", port: 22, process: "sshd", pid: "700" },
+    { proto: "tcp", address: "0.0.0.0", port: 7000, process: "AirPlay", pid: "900" },
+    { proto: "tcp", address: "0.0.0.0", port: 3000, process: "bun", pid: "628125" },
+  ];
+  const row = (over: Partial<Connection>): Connection => ({
+    proto: "tcp",
+    address: "198.51.100.1",
+    port: 443,
+    local_address: "192.0.2.5",
+    local_port: 51234,
+    process: "curl",
+    pid: "1234",
+    bytes_sent: 100,
+    bytes_received: 200,
+    ...over,
+  });
+
+  it("flags a connection to a listening port from another device on the local network, and only that", () => {
+    const rows: Connection[] = [
+      row({ address: "198.51.100.1", port: 443, local_port: 51234 }), // curl out to the internet
+      row({ address: "192.168.1.20", port: 49152, local_port: 22, process: "sshd", pid: "700" }), // a phone's ssh
+      row({ address: "192.168.1.21", port: 51234, local_port: 7000, process: "AirPlay", pid: "900" }), // an AirPlay probe
+      row({ address: "203.0.113.7", port: 22, local_port: 51240, process: "ssh", pid: "4321" }), // ssh out
+      row({ address: "192.168.1.22", port: 51236, local_port: 9999 }), // LAN, but nothing listens on 9999
+    ];
+    // `local_port`/`remote` and the flag: the read sorts the local knocks first, then by process, address and port,
+    // so two reads of one machine list the same connections in the same order.
+    expect(
+      drive<Connection[]>({ fn: "connections", rows, sockets: listening }).map((c) => [
+        `${c.process} ${c.address}:${c.port}`,
+        c.inbound,
+      ]),
+    ).toEqual([
+      ["AirPlay 192.168.1.21:51234", true],
+      ["sshd 192.168.1.20:49152", true],
+      ["curl 192.168.1.22:51236", false],
+      ["curl 198.51.100.1:443", false],
+      ["ssh 203.0.113.7:22", false],
+    ]);
+  });
+
+  it("leaves out what is not going anywhere: a connection a server accepted, and this machine talking to itself", () => {
+    const rows: Connection[] = [
+      row({ address: "198.51.100.1", port: 443, local_port: 51234 }), // curl out: the one that stays
+      row({ address: "203.0.113.9", port: 51235, local_port: 22, process: "sshd", pid: "700" }), // ssh in from outside
+      row({ address: "203.0.113.10", port: 61000, local_port: 3000, process: "bun", pid: "628125" }), // a site visitor
+      row({ address: "127.0.0.1", port: 4319, local_address: "127.0.0.1", local_port: 40030, process: "next-server" }),
+      row({ address: "::1", port: 4319, local_address: "::1", local_port: 50952, process: "chrome" }),
+      row({ address: "::ffff:127.0.0.1", port: 5432, local_port: 50000, process: "node" }),
+    ];
+    expect(
+      drive<Connection[]>({ fn: "connections", rows, sockets: listening }).map((c) => `${c.process} ${c.address}`),
+    ).toEqual(["curl 198.51.100.1"]);
+  });
+
+  it("names each connection's process by its full name from ps, where it has the pid", () => {
+    const ps = "1787     1 me 01:00 /Applications/Example Browser.app/Contents/MacOS/Example Browser Helper\n";
+    const out = drive<Connection[]>({
+      fn: "connections",
+      rows: [row({ process: "Example ", pid: "1787" }), row({ process: "curl", pid: "1234", port: 80 })],
+      sockets: [],
+      ps,
+    });
+    expect(out.map((c) => c.process)).toEqual(["Example Browser Helper", "curl"]);
+  });
+
+  it("is empty for a machine with nothing established, and keeps each connection's own bytes", () => {
+    expect(drive<Connection[]>({ fn: "connections", rows: [], sockets: [] })).toEqual([]);
+    const out = drive<Connection[]>({ fn: "connections", rows: [row({ bytes_sent: 13456000 })], sockets: [] });
+    expect(out[0].bytes_sent).toBe(13456000);
+    expect(out[0].inbound).toBe(false);
+  });
+});
+
+describe("the upload threshold (collector#66)", () => {
+  const mb = (cfg?: any) => drive<number>({ fn: "upload_mb", cfg });
+
+  it("reads config.json's network.uploadWarnMB, and 50 when it says nothing", () => {
+    expect(mb()).toBe(50);
+    expect(mb({})).toBe(50);
+    expect(mb({ allow: [22] })).toBe(50);
+    expect(mb({ uploadWarnMB: 200 })).toBe(200);
+    expect(mb({ uploadWarnMB: 1.5 })).toBe(1.5);
+  });
+
+  it("leaves a value that is not a positive number out rather than obeying it: a typo cannot turn the mark off", () => {
+    expect(mb({ uploadWarnMB: 0 })).toBe(50);
+    expect(mb({ uploadWarnMB: -5 })).toBe(50);
+    expect(mb({ uploadWarnMB: "500" })).toBe(50);
+    expect(mb({ uploadWarnMB: true })).toBe(50);
+    expect(mb({ uploadWarnMB: null })).toBe(50);
+    expect(mb("nonsense")).toBe(50);
+  });
 });
 
 describe("the operating system", () => {
@@ -621,5 +982,13 @@ describe("the operating system", () => {
       drive({ fn: "os", os_release: 'NAME="Ubuntu"\nPRETTY_NAME="Ubuntu 26.04.1 LTS"\nVERSION_ID="26.04"\n' }),
     ).toBe("Ubuntu 26.04.1 LTS");
     expect(drive({ fn: "os" })).toBeNull();
+  });
+});
+
+describe("the machine panel's count pills (collector#66)", () => {
+  it('keep their number and word on one line, so "7 new" does not stack "7" over "new" at 425px', () => {
+    const css = fs.readFileSync(path.join(ROOT, "app", "globals.css"), "utf8");
+    const rule = css.match(/\n\s*\.count\s*\{([^}]*)\}/);
+    expect(rule?.[1]).toMatch(/white-space:\s*nowrap/);
   });
 });

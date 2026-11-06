@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Print, as JSON, what collect.py's network reader says about one case on stdin (collector#65).
+"""Print, as JSON, what collect.py's network reader says about one case on stdin (collector#65, collector#66).
 
-`tests/network.test.ts` drives this: a case holds the text `ss` or `lsof` prints, or the socket rows themselves,
-so who can connect to each port, as a machine's reader works it out, are tested on the exact lines those tools write, without a socket of our
-own and without a host name or port of ours in the repo. By hand:
+`tests/network.test.ts` drives this: a case holds the text `ss`, `lsof` or `nettop` prints, or the socket and
+connection rows themselves, so who can connect to each port and what each machine sends out, as a machine's reader
+works them out, are tested on the exact lines those tools write, without a socket of our own and without a host name
+or port of ours in the repo. By hand:
 
     echo '{"fn": "ss", "text": "tcp LISTEN 0 128 0.0.0.0:5432 0.0.0.0:*"}' | python3 tests/network.driver.py
 """
@@ -21,8 +22,23 @@ def main():
     fn = case["fn"]
     if fn == "ss":
         out = collect.parse_ss(case["text"])
+    elif fn == "ss_est":
+        out = collect.parse_ss_established(case["text"])
     elif fn == "lsof":
         out = collect.parse_lsof(case["text"])
+    elif fn == "lsof_est":
+        out = collect.parse_lsof_established(case["text"])
+    elif fn == "nettop":
+        out = collect.parse_nettop(case["text"])
+    elif fn == "join_nettop":
+        out = collect.join_nettop(case["rows"], collect.parse_nettop(case["text"]))
+    elif fn == "lan":
+        out = collect.is_lan_address(case["address"])
+    elif fn == "upload_mb":
+        out = collect.network_upload_mb(case.get("cfg"))
+    elif fn == "connections":
+        out = collect.connections_read(rows=case.get("rows"), sockets=case.get("sockets"),
+                                       details=collect.ps_details(case["ps"]) if case.get("ps") else None)
     elif fn == "reach":
         out = collect.reach_of(case["address"], case["networks"])
     elif fn == "ip":
@@ -55,6 +71,7 @@ def main():
             details=collect.ps_details(case["ps"]) if case.get("ps") else None,
             fw={"tool": "ufw", **collect.parse_ufw(case["ufw"])} if case.get("ufw") else None,
             acl=case.get("acl"),
+            connections=case.get("connections"), upload_mb=case.get("upload_mb"),
         )
     else:
         raise SystemExit(f"unknown fn: {fn}")

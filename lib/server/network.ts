@@ -50,6 +50,45 @@ export interface MachineNetworks {
   tailnet: string | null;
 }
 
+/** One connection going out of a machine (collector#66), as `collect.py` read it: the remote end, the local end, the
+ * process that owns it, and the bytes the OS counted (`ss -i` on Linux, per socket; `nettop` on a Mac, per process;
+ * `null` where the tool counts none). Accepted connections and loopback peers are left out, except `inbound`: a
+ * connection that reached a port this machine listens on from another device on the local network — the one the
+ * page flags. `host` is not `collect.py`'s: the server fills it
+ * from reverse DNS. */
+export interface NetworkConnection {
+  proto: string;
+  address: string | null;
+  port: number | null;
+  local_address?: string | null;
+  local_port?: number | null;
+  process: string | null;
+  pid: string | null;
+  bytes_sent: number | null;
+  bytes_received: number | null;
+  /** What the bytes count: "socket" (`ss`, this connection's own) or "process" (`nettop`, the whole process's total,
+   * the same on each of its connections); null where nothing was counted. */
+  bytes_scope?: "socket" | "process" | null;
+  inbound?: boolean;
+  host?: string | null;
+}
+
+/** One thing that is new about a machine's network (collector#66): a process never seen there, a new destination
+ * for a process it knows, an upload over the threshold, or a knock from the local network. It stays until someone
+ * clicks Seen (`GET /api/network` carries the marks; `POST /api/network/seen` drops one). */
+export interface NetworkMark {
+  id: string;
+  kind: "process" | "destination" | "upload" | "inbound";
+  process: string | null;
+  pid: string | null;
+  host: string | null;
+  address: string | null;
+  port: number | null;
+  /** The bytes it sent since the last read (an upload), else null. */
+  bytes: number | null;
+  at: number;
+}
+
 /** The two sshd settings that should not be on, and where they were read (or null on a machine that was never asked
  * — a Mac, or one with no sshd). */
 export interface NetworkSsh {
@@ -67,6 +106,12 @@ export interface NetworkRead {
   firewall?: Firewall | null;
   sockets: NetworkSocket[];
   ssh: NetworkSsh | null;
+  /** Every established connection this machine has, with its remote end and its bytes (collector#66). */
+  connections?: NetworkConnection[];
+  /** The megabytes a process may send between two reads before it is marked; `network.uploadWarnMB`. */
+  upload_warn_mb?: number;
+  /** What is new about this machine's network, from the seen-list the server keeps (collector#66). */
+  marks?: NetworkMark[];
 }
 
 /** One machine's Network section, with how its read went: a machine whose read failed keeps its last good one, marked

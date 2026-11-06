@@ -276,12 +276,16 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
-## The Network page: every open port, and who can connect to it (card #65)
+## The Network page: every open port, who can connect to it, and what each machine sends out (cards #65, #66)
 
-Slice 1 of 2 — what is open; slice 2, what goes out, is its own card. The Network page (`#/network`) shows one block
-per machine Collector already reads, each with every listening TCP and UDP port: the port, who it is accessible to,
-the protocol, the addresses it is bound on, and the process and pid that own it. Read only, no `sudo`, nothing
-installed anywhere, and no port scanned from outside: `collect.py` asks each machine what it listens on.
+Slices 1 and 2 of the same check: what is open, and what goes out. The Network page (`#/network`) shows one block
+per machine Collector already reads. Read only, no `sudo`, nothing installed anywhere, and no port scanned from
+outside: `collect.py` asks each machine what it listens on and what it is connected to.
+
+### What is open (collector#65)
+
+Each machine's block lists every listening TCP and UDP port: the port, who it is accessible to, the protocol, the
+addresses it is bound on, and the process and pid that own it.
 
 `collect.py`'s `network_read` is the reader. `listen_sockets` reads `ss -tulnp` on Linux and `lsof -nP -iTCP
 -sTCP:LISTEN` plus `lsof -nP -iUDP` elsewhere, both through `read_command`, so a machine with neither tool reads
@@ -353,6 +357,85 @@ to" lines up from one panel to the next; a long port list wraps in its own colum
 sideways inside its panel. A machine's addresses are not on the page (a screenshot or a screen share would carry
 them): they are in the tooltip on "addresses" beside its name. Under the table sit the firewall line and the ssh
 verdict.
+
+### What goes out, and what is new about it (collector#66)
+
+`collect.py`'s second reader is `connections_read`, and each connection row carries the remote end, the local end,
+the process and pid that own it, and the bytes the OS counted. `established_sockets` picks the platform's tools
+through `read_command`: `ss -tnpi` on Linux, whose indented info line under a socket holds `bytes_sent` and
+`bytes_received` for that socket (`bytes_scope: "socket"`; `parse_ss_established` skips every state but `ESTAB`, so a
+`TIME-WAIT` is not a connection); on a Mac, `lsof -nP -iTCP -sTCP:ESTABLISHED` for the ends, and `nettop -P -L 1 -n
+-J bytes_in,bytes_out` for the bytes. Real nettop prints a header `,bytes_in,bytes_out,` and then one
+`name.pid,<in>,<out>,` row per process, with no clock column; the pid is what follows the name's last dot
+(`python3.14.5696`), and nettop cuts the name to 15 letters while lsof cuts COMMAND to 9, so `join_nettop` joins on
+the pid, never the name. A Mac counts bytes per process, not per socket: each of the process's rows carries its total
+with `bytes_scope: "process"`, the page shows that total once (on the process's first row, labelled "process total"),
+and the seen-list counts it once per pid. Neither tool means no rows, not a failure. No content is read, ever: who
+connects where, and how much. The process name is the full one `ps_details` gives for the pid, as on the ports.
+
+Only what goes out is a row. A connection whose local port is a TCP port this machine listens on was accepted, not
+made, so it is left out (a server's visitors are not destinations), and so is a loopback peer (127.0.0.0/8, ::1:
+this machine talking to itself, a browser on its own dev server) — one quiet minute on ezio once raised 14 to 17
+marks out of those two. The exception is `inbound`, the card's fourth mark: an accepted connection whose other end is
+another device on this machine's own network. `is_lan_address` reads the private ranges (10/8, 172.16/12,
+192.168/16), the link-local ones (169.254/16, fe80::/10) and unique-local IPv6 (fc00::/7), and puts loopback, the
+tailnet (100.64/10, fd7a:115c:a1e0::/48) and anything public outside them, since a machine reached over Tailscale is
+not a phone on the Wi-Fi.
+
+The marks are the server's, not `collect.py`'s: the machine has no memory of the last read and no way to write one.
+`lib/server/seen.ts` keeps the seen-list, one small JSON file next to `config.json` (`network-seen.json`, gitignored;
+`COLLECTOR_SEEN` names the file, and `COLLECTOR_CONFIG`'s folder is what it is derived from, so a test points both at
+a temp directory and the real one is never written). Per machine it holds the processes and the sites each has been
+seen going to, the bytes each had sent at the last read, the local knocks already seen, the reverse-DNS cache
+and the unseen marks. `foldRead` is pure and does the whole of it:
+
+- the machine's **first read fills the list and marks nothing** — otherwise a fresh install would report every
+  process on it as new;
+- after that, a **process never seen** on that machine marks once (its destinations are recorded with it, since "a
+  new destination for a known process" says nothing about a process nobody has seen);
+- a **destination** — a site, from the host name reverse DNS gave — a known process has not been seen reaching.
+  Names are compared by site (`domainOf`: the last two labels, three under `co.uk`-style suffixes), so a new
+  load-balancer name of a site already reached (`lb-140-82-112-3-iad.github.com` after `lb-140-82-114-3-iad…`) is
+  not new. An address with no reverse name is never a destination mark: most CDN and cloud addresses have none, and
+  three minutes on a Mac once made 29 marks of one dev server reaching Cloudflare's unnamed 104.x and 172.67.x. A new
+  process and an upload still mark whatever the address. A loopback address is never a destination;
+- an **upload**: the bytes a process sent over what it had sent at the last read, past `network.uploadWarnMB`
+  (default 50 MB, decimal, `network_upload_mb`), so it is the jump and not the total. A socket's own bytes add up
+  across the process's sockets; a process total (a Mac) counts once per pid, so a process's connection count
+  changing between two reads cannot raise an upload;
+- a **local knock**: an `inbound` connection to a port this machine listens on from another device on its network.
+
+A mark stays in the state until Seen drops it, and the fact behind it stays in the list, which is what makes a
+cleared mark stay cleared; an upload that keeps going earns a fresh mark, because that is what "since the last read"
+means. A connection of another user's has no name to mark by and is left out of the process rows. Only the
+destination marks are capped, at 50 a machine (the newest kept), so the file cannot grow without end; a process,
+upload or knock mark leaves only through Seen (`capDestinations`). The one exception is a ceiling of 500 knock marks
+(`MAX_MARKS_CEILING`, the oldest knocks go), there so a local device knocking from address after address cannot grow
+the file without end; process and upload marks are one per process name, so they never need a cap.
+
+Reverse DNS happens here, not on the machine: `resolveNames` asks once per address ever, from the cache in the state,
+with 700 ms on it (a name that takes longer is no name), keeps an empty answer so the address is not asked again, and
+skips this machine's own loopback. `observeAll` folds every machine's read into the list once per snapshot read (the
+same 10-second read, no extra ssh) and writes the file back only when it changed; a machine whose read failed keeps
+its last good read and its marks rather than folding an empty one. The file is read, changed and written whole, so
+those steps run one at a time (`seen.ts`'s one-at-a-time tail): a Seen click that lands while a read is folding is
+not undone by that read writing back the state it read before the click (2026-11-06, the one race this page's one
+write had).
+
+`lib/server/network.ts`'s `network()` is what `/api/network` answers, so a machine's section is
+`{networks, sockets, ssh, connections, upload_warn_mb, marks}`. The page draws the marks at the top of the machine's
+panel (each with a Seen button; under 600px the pill and Seen share a line and the words take the one under it, so
+Seen is never pushed off the panel) and the Going out table under them (remote address and port, the host name — "no
+name" when reverse DNS had none — the process, and the bytes sent and received), then the Listening table of slice 1.
+It reads the marks off the same snapshot the Dashboard uses, so a mark costs nothing extra.
+
+The marks are rows in **Needs attention** — `warn` level, since nothing is broken and they are things to look at,
+which is the card's own question ("what looks weird on my network right now?"). `lib/network.ts`'s `markText` writes
+the words, with the machine's name in the Dashboard row and without it on the page, and each row's Seen click posts
+`/api/network/seen?machine=<name>&id=<mark id>` — the id in the query is what lets one click clear one row (`a
+warning's action is a URL, not a body`). `app/api/network/seen/route.ts` is the one write this page adds, and it
+takes the same two values from a JSON body too, for a shell or an agent. The route answers `{machine, id, cleared,
+marks}` — the list that machine now carries.
 
 ## Security checks (each machine's rubric)
 
@@ -486,13 +569,13 @@ date stays plain — no reason, no tooltip. Read the two facts apart: `holdText`
 | `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel), and the three status sets the page reads (`each`, `working`, `done`). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
-| `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on, and its sshd's password and root settings — the read an agent asks to answer "is anything open that should not be?" |
+| `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's) and the knocks from its local network; and what is new about them (a process never seen there, a new destination, an upload over `network.uploadWarnMB`, a local knock) — the read an agent asks to answer "is anything open that should not be, and what looks weird on my network right now?" |
 | `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,
 `/api/card`, `/api/repos`, `/api/work`, `/api/work-stats`, `/api/version`); the board's server-sent events are
-`/api/events`. The one-click fixes are `POST /api/tailscale` (Start Tailscale) and `POST /api/hermes` (Start Hermes),
-each answering with the state after the click.
+`/api/events`. The one-click fixes are `POST /api/tailscale` (Start Tailscale), `POST /api/hermes` (Start Hermes) and
+`POST /api/network/seen` (a mark's Seen click), each answering with the state after the click.
 The board poll costs 1 GraphQL point per read, about 360 an hour while a page is open, and the page sizes in
 `lib/server/board.ts` are what keep the query under 100 connection requests. Keep it at 1.
 

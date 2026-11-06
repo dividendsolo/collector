@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ago,
+  bytes,
   daysAgo,
   duration,
   historyless,
@@ -38,6 +39,19 @@ describe("format", () => {
   it("formats durations", () => {
     expect(duration(600)).toBe("10 min");
     expect(duration(3900)).toBe("1 h 5 min");
+  });
+  it("formats a byte count in the units the network counters use (collector#66)", () => {
+    expect(bytes(0)).toBe("0 B");
+    expect(bytes(824)).toBe("824 B");
+    expect(bytes(12_400)).toBe("12 kB");
+    expect(bytes(134_560_000)).toBe("135 MB");
+    expect(bytes(60_000_000)).toBe("60 MB");
+    expect(bytes(2_500_000)).toBe("2.5 MB");
+    expect(bytes(1_200_000_000)).toBe("1.2 GB");
+    // Nothing counted, and a tool that gave a number we cannot read: a dash, never "null B".
+    expect(bytes(null)).toBe("—");
+    expect(bytes(undefined)).toBe("—");
+    expect(bytes(Number.NaN)).toBe("—");
   });
   it("reads cron and launchd schedules", () => {
     expect(schedule("*/5 * * * *")).toBe("every 5 min");

@@ -104,6 +104,8 @@ What to look at — read-only, and only what exists on this machine
   you can read right now, `{"name": "vps", "ssh": "user@host"}`. Confirm each remote before you write it:
   `ssh -o BatchMode=yes -o ConnectTimeout=5 <host> 'python3 -c "print(1)"'` must print 1. A host you cannot read would
   sit on the page as a red row forever, so leave it out and name it in your report.
+- `network`: `{"uploadWarnMB": 50}`, the megabytes a process may send between two reads before the Network page
+  marks it a large upload. Leave the key out unless the person names another amount; its default is 50.
 - `repos_dir`: the folder that holds the repos, if it is not `~/code`. `verify_label`: only if the person has a verify
   tool that labels the Docker containers it runs (`<prefix>.run`, `<prefix>.commit`); otherwise leave it out.
 

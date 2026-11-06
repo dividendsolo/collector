@@ -1,3 +1,4 @@
+import { markText } from "../network";
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
 import { type Config, unknownConfigKeys } from "./config";
@@ -147,6 +148,21 @@ export function warnings(w: WarningInputs): Warning[] {
       out.push({ level: "error", text: `SSH on ${m.name}: password authentication is on` });
     if (ssh?.source === "sshd -T" && ssh.permitrootlogin)
       out.push({ level: "error", text: `SSH on ${m.name}: root login is on` });
+    // What the machine is sending out (collector#66): a process never seen there, a destination a known process has
+    // not been seen reaching, an upload over `network.uploadWarnMB` since the last read, or a knock on a listening
+    // port from another device on the local network. The seen-list keeps each one until Seen drops it, so the row
+    // stays put and a third party (an agent) can read the same marks off /api/network. A warning, not an error:
+    // nothing is broken — it is a thing to look at, which is the card's own question ("what looks weird on my
+    // network right now?"). The Seen click is the mark's own id, so one click clears one row.
+    for (const mark of m.network?.marks || [])
+      out.push({
+        level: "warn",
+        text: markText(mark, m.name),
+        action: {
+          label: "Seen",
+          post: `/api/network/seen?machine=${encodeURIComponent(m.name)}&id=${encodeURIComponent(mark.id)}`,
+        },
+      });
     const starts: number[] = Array.isArray(m.work_starts_10m) ? m.work_starts_10m : [];
     const limit = work.max_starts_60s ?? 5;
     // collect.py reports the starts as epoch seconds.

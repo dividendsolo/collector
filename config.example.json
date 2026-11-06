@@ -52,6 +52,9 @@
       "session": "claude"
     }
   ],
+  "network": {
+    "uploadWarnMB": 50
+  },
   "verify_label": "my-verify",
   "repos_dir": "~/code",
   "jobs": {
