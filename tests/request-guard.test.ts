@@ -24,11 +24,37 @@ vi.mock("@/lib/server/paths", async () => {
   return { ...actual, ROOT: root };
 });
 
-/** The two routes these tests go through: the click that stages a restart, and the cheapest read there is. */
+/**
+ * The two one-click routes' own work, mocked (collector#71): `POST /api/tailscale` starts the tailnet on this machine
+ * and restarts the ssh jobs that failed on it, and `POST /api/hermes` kickstarts the gateway the waiting crew runs
+ * on. A test here proves the refusal, never the start; the machines read behind them is mocked too, so no test
+ * reaches ssh.
+ */
+const clicks = vi.hoisted(() => ({
+  startTailscale: vi.fn(async () => ({ ok: true, state: "Running" })),
+  restartSshJobs: vi.fn(async () => [] as string[]),
+  startGateway: vi.fn(async () => ({ ok: true, state: "running", pid: "1064" })),
+}));
+
+vi.mock("@/lib/server/tailscale", () => ({
+  startTailscale: clicks.startTailscale,
+  restartSshJobs: clicks.restartSshJobs,
+}));
+vi.mock("@/lib/server/hermes", () => ({ startGateway: clicks.startGateway }));
+vi.mock("@/lib/server/machines", () => ({
+  snapshot: { peek: () => ({ machines: [] }), get: async () => ({ machines: [] }) },
+}));
+
+/** The routes these tests go through: the two one-click buttons, the click that stages a restart, and the cheapest
+ * read there is. */
+let tailscale: (req: Request) => Response | Promise<Response>;
+let hermes: (req: Request) => Response | Promise<Response>;
 let update: (req: Request) => Response | Promise<Response>;
 let version: (req: Request) => Response | Promise<Response>;
 
 beforeAll(async () => {
+  tailscale = (await import("@/app/api/tailscale/route")).POST;
+  hermes = (await import("@/app/api/hermes/route")).POST;
   update = (await import("@/app/api/update/route")).POST;
   version = (await import("@/app/api/version/route")).GET;
 });
@@ -103,6 +129,79 @@ describe("a write from another site (collector#69)", () => {
       "sec-fetch-site": "same-origin",
     });
     expect(r.status).toBe(403);
+  });
+});
+
+/**
+ * The card's own repro, one route at a time (collector#71): `/api/tailscale` and `/api/hermes` take no body, so a
+ * cross-site form post needs no preflight and any page open in this browser can start the tailnet (and the ssh jobs
+ * that failed on it) or kickstart the Hermes gateway on this machine. The guard from collector#69 is the check the
+ * card asks for; these hold it to both routes' own handlers, so neither can lose it quietly.
+ */
+describe("Start Tailscale and Start Hermes answer this page only (collector#71)", () => {
+  const CROSS = { origin: "https://evil.example.com", "sec-fetch-site": "cross-site" };
+  const OWN = { origin: `http://${HOST}`, "sec-fetch-site": "same-origin" };
+
+  /** One one-click post, exactly as the hidden form and as the page's own click send it. */
+  const post = async (
+    route: (req: Request) => Response | Promise<Response>,
+    path: string,
+    headers: Record<string, string>,
+  ) => route(new Request(`http://${HOST}${path}`, { method: "POST", headers }));
+
+  it("Start Tailscale refuses a post from another site and never starts the tailnet", async () => {
+    clicks.startTailscale.mockClear();
+    clicks.restartSshJobs.mockClear();
+
+    const r = await post(tailscale, "/api/tailscale", { host: HOST, ...CROSS });
+    expect(r.status).toBe(403);
+    expect((await r.json()).why).toBe("a write comes from this page only");
+    // An older browser sends no Sec-Fetch-Site at all: the Origin is the whole statement, on its own port or another.
+    expect((await post(tailscale, "/api/tailscale", { host: HOST, origin: "https://evil.example.com" })).status).toBe(
+      403,
+    );
+    expect((await post(tailscale, "/api/tailscale", { host: HOST, origin: "http://127.0.0.1:3000" })).status).toBe(403);
+
+    expect(clicks.startTailscale).not.toHaveBeenCalled();
+    expect(clicks.restartSshJobs).not.toHaveBeenCalled();
+  });
+
+  it("Start Tailscale still starts the tailnet on the page's own click, and for a shell with no browser headers", async () => {
+    clicks.startTailscale.mockClear();
+    clicks.restartSshJobs.mockClear();
+
+    const own = await post(tailscale, "/api/tailscale", { host: HOST, ...OWN });
+    expect(own.status).toBe(200);
+    expect(await own.json()).toEqual({ ok: true, state: "Running" });
+    expect(clicks.startTailscale).toHaveBeenCalledTimes(1);
+    expect(clicks.restartSshJobs).toHaveBeenCalledTimes(1); // the click's own follow-on work still runs
+
+    // No Origin and no Sec-Fetch-Site is not a browser: a shell or an agent is answered as it always was.
+    expect((await post(tailscale, "/api/tailscale", { host: HOST })).status).toBe(200);
+    expect(clicks.startTailscale).toHaveBeenCalledTimes(2);
+  });
+
+  it("Start Hermes refuses a post from another site and never kickstarts the gateway", async () => {
+    clicks.startGateway.mockClear();
+
+    const r = await post(hermes, "/api/hermes", { host: HOST, ...CROSS });
+    expect(r.status).toBe(403);
+    expect((await r.json()).why).toBe("a write comes from this page only");
+    expect((await post(hermes, "/api/hermes", { host: HOST, origin: "https://evil.example.com" })).status).toBe(403);
+
+    expect(clicks.startGateway).not.toHaveBeenCalled();
+  });
+
+  it("Start Hermes still kickstarts the gateway on the page's own click, and for a shell with no browser headers", async () => {
+    clicks.startGateway.mockClear();
+
+    const own = await post(hermes, "/api/hermes", { host: HOST, ...OWN });
+    expect(own.status).toBe(200);
+    expect(await own.json()).toEqual({ ok: true, state: "running", pid: "1064" });
+    expect(clicks.startGateway).toHaveBeenCalledTimes(1);
+
+    expect((await post(hermes, "/api/hermes", { host: HOST })).status).toBe(200);
+    expect(clicks.startGateway).toHaveBeenCalledTimes(2);
   });
 });
 

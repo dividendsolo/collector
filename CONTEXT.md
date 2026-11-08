@@ -603,6 +603,9 @@ and a curl get the click's own answer, and a foreign `Host` is 403 on a GET rout
 file calls the guard and that the five state-changing routes are the list (`/api/hermes`, `/api/projects`,
 `/api/proposals` — the fifth, added by collector#77 — `/api/tailscale`, `/api/update`), so a new one has to be guarded
 on purpose.
+The two one-click routes are driven through their own handlers as well (collector#71), their work mocked: a
+cross-site post to `/api/tailscale` or `/api/hermes` is 403 and starts nothing, and the page's own click still starts
+the tailnet or kickstarts the Hermes gateway.
 
 `config.json` and `.env` are gitignored and stay that way: the repo is public and `config.json` holds real host
 names, job names and board ids.
