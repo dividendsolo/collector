@@ -30,6 +30,10 @@ const dir = path.resolve(option(argv, "dir") || path.join(path.dirname(fileURLTo
 /** How the page is restarted, whole, for serving that is not the launchd job of `CONTEXT.md`. */
 const restart = option(argv, "restart") || restartCommand(option(argv, "label"));
 
+/** How long the restart is given before the script gives up on it (repo standard S2): the swap is already in
+ * place, so a restart that hangs is logged rather than waited on forever. */
+const RESTART_TIMEOUT_MS = 60_000;
+
 const staged = stagedSide(dir);
 if (!staged) {
   say(`nothing staged in ${dir}: no update to apply`);
@@ -45,7 +49,7 @@ try {
   process.exit(1);
 }
 
-const page = spawnSync("/bin/sh", ["-c", restart], { cwd: dir, encoding: "utf8" });
+const page = spawnSync("/bin/sh", ["-c", restart], { cwd: dir, encoding: "utf8", timeout: RESTART_TIMEOUT_MS });
 if (page.status !== 0) {
   warn(
     `moved ${name} into ${SERVED}, but could not restart the page (${restart}): ${lastLine(page.stderr || page.stdout)}`,

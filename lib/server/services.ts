@@ -1,5 +1,5 @@
 import { config, type Service } from "./config";
-import { why } from "./http";
+import { fetchWithTimeout, why } from "./http";
 import { once } from "./store";
 
 export const SLOW_SECONDS = 3;
@@ -30,18 +30,20 @@ export function hostFromHeaders(get: (name: string) => string | null | undefined
   return null;
 }
 
-/** One GET of the service URL: online, slow (over SLOW_SECONDS), or down (an error or a 4xx/5xx answer). */
+/** One GET of the service URL: online, slow (over SLOW_SECONDS), or down (an error or a 4xx/5xx answer).
+ * 10 seconds on it, and no retry at all: this call measures the service, so a second try would report a service
+ * that just timed out as online, and would hide exactly the slowness the page is here to show (repo standard S2). */
 export async function check(service: Service): Promise<Checked> {
   const start = Date.now();
   let code: number | null = null;
   let error: string | null = null;
   let hosting: string | null = null;
   try {
-    const r = await fetch(service.url, {
-      headers: { "User-Agent": "collector-health-check", ...(service.headers || {}) },
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
-    });
+    const r = await fetchWithTimeout(
+      service.url,
+      { headers: { "User-Agent": "collector-health-check", ...(service.headers || {}) }, cache: "no-store" },
+      10,
+    );
     code = r.status;
     hosting = hostFromHeaders((n) => r.headers.get(n));
     if (r.status >= 400) error = `HTTP ${r.status}`;
