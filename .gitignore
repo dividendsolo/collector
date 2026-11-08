@@ -1,5 +1,6 @@
 config.json
 network-seen.json
+proposals.json
 __pycache__/
 .DS_Store
 .artifacts/
