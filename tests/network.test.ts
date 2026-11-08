@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -612,18 +611,14 @@ describe("the section one machine reads", () => {
     });
   });
 
-  it("carries the connections and the upload threshold (collector#66)", () => {
-    const out = drive<{ connections: Connection[]; upload_warn_mb: number }>({
+  it("carries the connections a machine has going out (collector#66)", () => {
+    const out = drive<{ connections: Connection[] }>({
       fn: "section",
       sockets: [],
       networks: BARE,
       connections: [{ proto: "tcp", address: "198.51.100.1", port: 443, process: "curl", pid: "1" }],
     });
-    expect(out.upload_warn_mb).toBe(50);
     expect(out.connections).toEqual([{ proto: "tcp", address: "198.51.100.1", port: 443, process: "curl", pid: "1" }]);
-    expect(
-      drive<{ upload_warn_mb: number }>({ fn: "section", sockets: [], networks: BARE, upload_mb: 200 }).upload_warn_mb,
-    ).toBe(200);
   });
 });
 
@@ -952,27 +947,6 @@ describe("the connections one machine reads", () => {
   });
 });
 
-describe("the upload threshold (collector#66)", () => {
-  const mb = (cfg?: any) => drive<number>({ fn: "upload_mb", cfg });
-
-  it("reads config.json's network.uploadWarnMB, and 50 when it says nothing", () => {
-    expect(mb()).toBe(50);
-    expect(mb({})).toBe(50);
-    expect(mb({ allow: [22] })).toBe(50);
-    expect(mb({ uploadWarnMB: 200 })).toBe(200);
-    expect(mb({ uploadWarnMB: 1.5 })).toBe(1.5);
-  });
-
-  it("leaves a value that is not a positive number out rather than obeying it: a typo cannot turn the mark off", () => {
-    expect(mb({ uploadWarnMB: 0 })).toBe(50);
-    expect(mb({ uploadWarnMB: -5 })).toBe(50);
-    expect(mb({ uploadWarnMB: "500" })).toBe(50);
-    expect(mb({ uploadWarnMB: true })).toBe(50);
-    expect(mb({ uploadWarnMB: null })).toBe(50);
-    expect(mb("nonsense")).toBe(50);
-  });
-});
-
 describe("the operating system", () => {
   it("reads macOS from sw_vers and Linux from /etc/os-release, and nothing from nothing", () => {
     expect(
@@ -982,13 +956,5 @@ describe("the operating system", () => {
       drive({ fn: "os", os_release: 'NAME="Ubuntu"\nPRETTY_NAME="Ubuntu 26.04.1 LTS"\nVERSION_ID="26.04"\n' }),
     ).toBe("Ubuntu 26.04.1 LTS");
     expect(drive({ fn: "os" })).toBeNull();
-  });
-});
-
-describe("the machine panel's count pills (collector#66)", () => {
-  it('keep their number and word on one line, so "7 new" does not stack "7" over "new" at 425px', () => {
-    const css = fs.readFileSync(path.join(ROOT, "app", "globals.css"), "utf8");
-    const rule = css.match(/\n\s*\.count\s*\{([^}]*)\}/);
-    expect(rule?.[1]).toMatch(/white-space:\s*nowrap/);
   });
 });

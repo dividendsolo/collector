@@ -1,15 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { type Check, securityChecks, WHY_OPEN, worst } from "@/lib/checks";
 import { bytes } from "@/lib/format";
-import { MARK_LABELS, markText } from "@/lib/network";
 import type {
   Firewall,
   MachineNetwork,
   MachineNetworks,
   NetworkConnection,
-  NetworkMark,
   NetworkSocket,
   ProcessInfo,
 } from "@/lib/server/network";
@@ -159,47 +156,6 @@ function networkFacts(n: MachineNetworks | undefined): string | undefined {
   if (n.lan.length) facts.push(["Local network", n.lan.join(", ")]);
   if (n.tailnet) facts.push(["Tailnet address", n.tailnet]);
   return facts.length ? JSON.stringify(facts) : undefined;
-}
-
-/** One mark's Seen click (collector#66): it drops that mark from the seen-list, so the row leaves Needs attention
- * and does not come back. The mark's own id rides in the query, the same URL the Dashboard's row posts to. */
-function SeenButton({ machine, mark }: { machine: string; mark: NetworkMark }) {
-  const [state, setState] = useState("idle");
-  const click = async () => {
-    setState("busy");
-    try {
-      const r = await fetch(
-        `/api/network/seen?machine=${encodeURIComponent(machine)}&id=${encodeURIComponent(mark.id)}`,
-        { method: "POST" },
-      );
-      const body = await r.json().catch(() => ({}));
-      if (r.ok) setState("done");
-      else setState(body.why || `failed (${r.status})`);
-    } catch (e) {
-      setState((e as Error).message);
-    }
-  };
-  if (state === "done") return <span className="sub">Seen</span>;
-  return (
-    <span className="act">
-      {state !== "idle" && state !== "busy" ? <span className="why">{state}</span> : null}
-      <button className="btn" type="button" onClick={click} disabled={state === "busy"}>
-        {state === "busy" ? "Saving…" : "Seen"}
-      </button>
-    </span>
-  );
-}
-
-/** What is new about this machine's network: a process never seen here, a new destination, a large upload, or a knock
- * from the local network — each with the Seen click that clears it. */
-function MarkRow({ machine, mark }: { machine: string; mark: NetworkMark }) {
-  return (
-    <div className="net-mark">
-      <Pill cls="warning">{MARK_LABELS[mark.kind] || mark.kind}</Pill>
-      <span className="net-mark-text">{markText(mark)}</span>
-      <SeenButton machine={machine} mark={mark} />
-    </div>
-  );
 }
 
 /** The Sent or Received cell. `ss` counts each socket's own bytes; a Mac's nettop counts the process's, the same on
@@ -469,12 +425,11 @@ function MachineSummary({ m }: { m: MachineNetwork }) {
   );
 }
 
-/** One machine's block: what it is sending out and what is new about it, then every port it listens on, with who can
- * connect to each, the most exposed first. */
+/** One machine's block: what it is sending out, then every port it listens on, with who can connect to each, the
+ * most exposed first. */
 function Machine({ m }: { m: MachineNetwork }) {
   const sockets = m.network?.sockets || [];
   const connections = m.network?.connections || [];
-  const marks = m.network?.marks || [];
   const firsts = firstOfProcess(connections);
   const open = sockets.filter((s) => s.reach === "internet").length;
   const facts = networkFacts(m.network?.networks);
@@ -496,25 +451,14 @@ function Machine({ m }: { m: MachineNetwork }) {
         <span className={`count${open ? " hot" : ""}`} title={open ? `${open} ports open to the internet` : undefined}>
           {open || sockets.length}
         </span>
-        {marks.length ? (
-          <span className="count hot" title={`${marks.length} new since the last read`}>
-            {marks.length} new
-          </span>
-        ) : null}
         {m.stale ? <span className="sub">last good read; the newest one failed</span> : null}
       </PanelHead>
       {m.error ? <p className="sub net-note">Could not read this machine: {m.error}</p> : null}
-      {marks.map((mark) => (
-        <MarkRow key={mark.id} machine={m.name} mark={mark} />
-      ))}
       <p className="sub net-note">
         Going out:{" "}
         {connections.length
           ? `${connections.length} ${connections.length === 1 ? "connection" : "connections"}`
           : "nothing is connected out"}
-        {m.network?.upload_warn_mb
-          ? ` · an upload over ${m.network.upload_warn_mb} MB between two reads is marked`
-          : ""}
       </p>
       {connections.length ? (
         <div className="wrap">
@@ -588,11 +532,10 @@ function Machine({ m }: { m: MachineNetwork }) {
   );
 }
 
-/** The Network page (collector#65, collector#66): what each machine listens on and who can reach it, what it is
- * connected out to, and what is new about that — a process never seen there, a new destination, a large upload, or a
- * knock on a listening port from another device on the local network. Read only: nothing here blocks, opens or
- * closes a port, and no port is scanned from outside. A port open to the internet is also an error row, and a mark a
- * warning row, in Needs attention on the Dashboard. */
+/** The Network page (collector#65, collector#66): what each machine listens on and who can reach it, and what it is
+ * connected out to. Read only: nothing here blocks, opens or closes a port, and no port is scanned from outside. A
+ * port open to the internet is also an error row in Needs attention on the Dashboard; nothing about a connection is
+ * (collector#75). */
 export function NetworkPage() {
   const { data } = useApi<{ at: number; machines: MachineNetwork[] }>("/api/network", 15_000);
   const machines = data?.machines || [];
@@ -600,10 +543,7 @@ export function NetworkPage() {
     <div className="page">
       <div className="page-head">
         <h1>Network</h1>
-        <p>
-          Every port each machine listens on and who can connect to it, and what each machine sends out, with what is
-          new flagged.
-        </p>
+        <p>Every port each machine listens on and who can connect to it, and what each machine is connected out to.</p>
       </div>
       {!data ? (
         <section className="panel">

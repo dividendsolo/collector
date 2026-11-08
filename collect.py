@@ -1556,16 +1556,14 @@ def network_rows(sockets, networks, details=None, fw=None, acl=None):
 
 
 def network_section(sockets, networks, ssh_text=None, ssh_source=None, details=None, fw=None, acl=None,
-                    peers=None, os=None, connections=None, upload_mb=None):
+                    peers=None, os=None, connections=None):
     """One machine's Network section: the networks it is on, every listening port with who can connect to it, the
     two sshd settings with where they were read — or null where the machine has nothing to say about ssh — and, since
-    collector#66, the connections it has going out and the megabytes a process may send between two reads before the
-    page marks it."""
+    collector#66, the connections it has going out."""
     ssh = None if ssh_text is None else {"source": ssh_source, **sshd_flags(ssh_text)}
     return {"networks": networks, "firewall": fw, "tailnet_acl": acl, "tailnet_peers": peers or {}, "os": os,
             "sockets": network_rows(sockets, networks, details, fw, acl), "ssh": ssh,
-            "connections": [] if connections is None else connections,
-            "upload_warn_mb": network_upload_mb() if upload_mb is None else upload_mb}
+            "connections": [] if connections is None else connections}
 
 
 def os_name(os_release=None, sw_vers=None):
@@ -1608,25 +1606,12 @@ def network_read():
 # What each machine sends out (collector#66): every established TCP connection with its process, its remote end, and
 # the bytes the OS counts for it — `ss -tnpi` on Linux carries them on each socket, and a Mac needs `lsof` for the
 # ends and `nettop` for the bytes, which a Mac counts per process. Read only, no sudo, nothing installed anywhere, and
-# no traffic content: who connects where, and how much.
-NETWORK = CONFIG.get("network") or {}
+# no traffic content: who connects where, and how much. Nothing about a connection is kept or marked anywhere
+# (collector#75).
 NETTOP = "/usr/bin/nettop" if os.path.exists("/usr/bin/nettop") else "nettop"
 NETTOP_FIELDS = "bytes_in,bytes_out"
 # The info line `ss -i` prints under a socket holds these two counters.
 SS_INFO_FIELDS = ("bytes_sent", "bytes_received")
-# The megabytes a process may send between two reads before the page marks it, when config.json says nothing.
-DEFAULT_UPLOAD_WARN_MB = 50
-
-
-def network_upload_mb(cfg=None):
-    """The megabytes a process may send between two reads before the page marks it (collector#66): config.json's
-    `network.uploadWarnMB`, else 50. A value that is not a positive number is left out rather than obeyed, so a typo
-    cannot turn the mark off; the mark itself is worked out where the last read is kept, not here."""
-    section = NETWORK if cfg is None else cfg
-    raw = section.get("uploadWarnMB") if isinstance(section, dict) else None
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
-        return DEFAULT_UPLOAD_WARN_MB
-    return float(raw)
 
 
 def ss_info_counters(line):
@@ -1738,7 +1723,7 @@ def established_sockets():
 def join_nettop(rows, per_process):
     """lsof's rows with the bytes nettop counted for their process. A Mac counts bytes per process, not per socket,
     so each row carries its process's total with `bytes_scope` "process": the page shows it as the process's total,
-    and the seen-list counts it once per pid however many connections that process has open (collector#66, a
+    and the page counts it once per pid however many connections that process has open (collector#66, a
     process with five connections once counted five times its bytes)."""
     for row in rows:
         counted = per_process.get(str(row.get("pid") or ""))

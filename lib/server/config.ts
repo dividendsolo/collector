@@ -81,11 +81,6 @@ export interface Config {
     max_starts_60s?: number;
   };
   watch?: Watch[];
-  network?: {
-    /** The megabytes a process may send between two reads before the page marks it a large upload (collector#66),
-     * default 50. */
-    uploadWarnMB?: number;
-  };
   verify_label?: string;
   services?: Service[];
   vendors?: Vendor[];
@@ -114,7 +109,6 @@ export const CONFIG_KEYS = [
   "ok_exits",
   "work_script",
   "watch",
-  "network",
   "verify_label",
   "services",
   "vendors",

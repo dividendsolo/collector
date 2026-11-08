@@ -34,8 +34,6 @@ def main():
         out = collect.join_nettop(case["rows"], collect.parse_nettop(case["text"]))
     elif fn == "lan":
         out = collect.is_lan_address(case["address"])
-    elif fn == "upload_mb":
-        out = collect.network_upload_mb(case.get("cfg"))
     elif fn == "connections":
         out = collect.connections_read(rows=case.get("rows"), sockets=case.get("sockets"),
                                        details=collect.ps_details(case["ps"]) if case.get("ps") else None)
@@ -71,7 +69,7 @@ def main():
             details=collect.ps_details(case["ps"]) if case.get("ps") else None,
             fw={"tool": "ufw", **collect.parse_ufw(case["ufw"])} if case.get("ufw") else None,
             acl=case.get("acl"),
-            connections=case.get("connections"), upload_mb=case.get("upload_mb"),
+            connections=case.get("connections"),
         )
     else:
         raise SystemExit(f"unknown fn: {fn}")

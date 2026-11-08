@@ -52,9 +52,8 @@ describe("a clean machine (collector#55)", () => {
     expect(Array.isArray(snap.network.sockets)).toBe(true);
     for (const s of snap.network.sockets) expect(["internet", "lan", "tailnet", "machine"]).toContain(s.reach);
     // What goes out (collector#66) reads the same way: lsof and nettop sit at fixed paths on a Mac, so the rows may
-    // be this machine's own, and a machine with neither tool reads none. The threshold is still the default.
+    // be this machine's own, and a machine with neither tool reads none.
     expect(Array.isArray(snap.network.connections)).toBe(true);
-    expect(snap.network.upload_warn_mb).toBe(50);
   });
 
   it("still names the machine it read, whatever it is", () => {

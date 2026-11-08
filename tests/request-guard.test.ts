@@ -187,7 +187,6 @@ describe("every route in the repo", () => {
       .map((f) => path.relative(process.cwd(), f));
     expect(writes).toEqual([
       "app/api/hermes/route.ts",
-      "app/api/network/seen/route.ts",
       "app/api/projects/route.ts",
       "app/api/tailscale/route.ts",
       "app/api/update/route.ts",

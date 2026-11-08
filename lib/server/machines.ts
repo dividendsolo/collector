@@ -2,9 +2,9 @@ import fs from "node:fs";
 import { swr } from "./cache";
 import { type Config, config, type Machine, type Watch } from "./config";
 import { type JogUsage, jogUsage } from "./jog";
+import { withHostNames } from "./names";
 import { COLLECT, HOME } from "./paths";
 import { run } from "./run";
-import { observeAll } from "./seen";
 
 const SSH = [
   "ssh",
@@ -20,15 +20,7 @@ const SSH = [
   "ControlPersist=300",
 ];
 /** The settings collect.py needs on each machine; the rest stays on the server. */
-const REMOTE_KEYS = [
-  "launchd_prefixes",
-  "ok_exits",
-  "work_script",
-  "watch",
-  "verify_label",
-  "repos_dir",
-  "network",
-] as const;
+const REMOTE_KEYS = ["launchd_prefixes", "ok_exits", "work_script", "watch", "verify_label", "repos_dir"] as const;
 
 export const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
@@ -147,8 +139,8 @@ export const snapshot = swr<Snapshot>("snapshot", READ_SECONDS * 1000, async ():
   // `local`: collect.py ran on this machine, so a button here can act on it (Start Tailscale).
   const read = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, local: !t.ssh, error: results[i][1] }));
   const at = Math.floor(Date.now() / 1000);
-  // What each machine is sending out (collector#66): the read folded into the seen-list, so each machine's Network
-  // section carries the marks that are new about it — once per read, and from the same read every page uses.
-  const marked = await observeAll(read, at);
-  return { at, machines: mergeMachines(snapshot.peek()?.machines, marked, at), github: limit, jog };
+  // The host name of what each machine is connected out to, from reverse DNS (collector#66): the Going out table on
+  // the Network page shows it. Once per read, from the same read every other page uses.
+  const named = await withHostNames(read);
+  return { at, machines: mergeMachines(snapshot.peek()?.machines, named, at), github: limit, jog };
 });
