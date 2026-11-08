@@ -73,22 +73,6 @@ export interface NetworkConnection {
   host?: string | null;
 }
 
-/** One thing that is new about a machine's network (collector#66): a process never seen there, a new destination
- * for a process it knows, an upload over the threshold, or a knock from the local network. It stays until someone
- * clicks Seen (`GET /api/network` carries the marks; `POST /api/network/seen` drops one). */
-export interface NetworkMark {
-  id: string;
-  kind: "process" | "destination" | "upload" | "inbound";
-  process: string | null;
-  pid: string | null;
-  host: string | null;
-  address: string | null;
-  port: number | null;
-  /** The bytes it sent since the last read (an upload), else null. */
-  bytes: number | null;
-  at: number;
-}
-
 /** The two sshd settings that should not be on, and where they were read (or null on a machine that was never asked
  * — a Mac, or one with no sshd). */
 export interface NetworkSsh {
@@ -108,10 +92,6 @@ export interface NetworkRead {
   ssh: NetworkSsh | null;
   /** Every established connection this machine has, with its remote end and its bytes (collector#66). */
   connections?: NetworkConnection[];
-  /** The megabytes a process may send between two reads before it is marked; `network.uploadWarnMB`. */
-  upload_warn_mb?: number;
-  /** What is new about this machine's network, from the seen-list the server keeps (collector#66). */
-  marks?: NetworkMark[];
 }
 
 /** One machine's Network section, with how its read went: a machine whose read failed keeps its last good one, marked

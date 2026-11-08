@@ -1725,47 +1725,6 @@
     margin: 0;
     padding: 10px 16px 12px;
   }
-  /* What is new about a machine's network (collector#66): one row per mark, its Seen click at the right edge, and a
-     connection that came from another device on the local network in the amber the other ask-for-a-look things
-     wear. */
-  .net-mark {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--line);
-  }
-  /* The text takes what room is left and wraps; the pill and the Seen button keep their own width, so on a phone
-     (425px) a long mark wraps its words instead of pushing Seen off the panel's edge. */
-  .net-mark-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .net-mark > .pill {
-    flex-shrink: 0;
-  }
-  .net-mark .act {
-    margin-left: auto;
-    flex-shrink: 0;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-  /* A phone: the pill and Seen share the first line, and the words take the whole line under them. */
-  @media (max-width: 600px) {
-    .net-mark {
-      flex-wrap: wrap;
-      gap: 8px 12px;
-    }
-    .net-mark-text {
-      order: 3;
-      flex-basis: 100%;
-    }
-  }
-  .net-mark .act .why {
-    color: var(--red);
-  }
   .net-total {
     font-size: 11px;
   }

@@ -530,6 +530,63 @@ describe("warnings", () => {
     };
     expect(netWarnings([{ name: "vps", network }, { name: "laptop" }])).toEqual([]);
   });
+  it("says nothing about a machine's connections: a process or a destination never seen before is no row (collector#75)", () => {
+    // The read this row used to come from: two connections out, one of them a process and a site Collector had not
+    // seen before, and the marks the server's fold made of exactly those (collector#66) — "a process not seen here
+    // before" and "connected somewhere new". James, 2026-11-08: the feature he asked for was the page and the
+    // toasts, "not every single thing that's ever connected to the computer", so nothing about a connection is a
+    // Needs attention row now.
+    const connections = [
+      {
+        proto: "tcp",
+        address: "198.51.100.1",
+        port: 443,
+        process: "curl",
+        pid: "1",
+        bytes_sent: 0,
+        bytes_received: 0,
+        host: "downloads.example.com",
+      },
+      {
+        proto: "tcp",
+        address: "203.0.113.9",
+        port: 443,
+        process: "nc",
+        pid: "9",
+        bytes_sent: 0,
+        bytes_received: 0,
+        host: "drop.example.net",
+      },
+    ];
+    const marks = [
+      {
+        id: "process:nc",
+        kind: "process",
+        process: "nc",
+        pid: "9",
+        host: "drop.example.net",
+        address: "203.0.113.9",
+        port: 443,
+        bytes: null,
+        at: 1,
+      },
+      {
+        id: "destination:curl:example.net",
+        kind: "destination",
+        process: "curl",
+        pid: "9",
+        host: "drop.example.net",
+        address: "203.0.113.9",
+        port: 443,
+        bytes: null,
+        at: 1,
+      },
+    ];
+    const network = { networks: { lan: [], internet: [], tailnet: null }, sockets: [], ssh: null, connections, marks };
+    expect(netWarnings([{ name: "ezio", network }])).toEqual([]);
+    // The connections alone are no row either.
+    expect(netWarnings([{ name: "ezio", network: { ...network, marks: [] } }])).toEqual([]);
+  });
   it("puts the month's Actions bill on the right of the Actions row", () => {
     const w = warnings({
       machines: [],
