@@ -1,6 +1,6 @@
 import { billing } from "./billing";
 import { swr } from "./cache";
-import { accountsOf, config, writeConfig } from "./config";
+import { accountsOf, config, projectRepos, projectStage, writeConfig } from "./config";
 import { datafast } from "./datafast";
 import { envFile } from "./env";
 import { ENV_PATH } from "./paths";
@@ -85,7 +85,7 @@ async function project(repo: string): Promise<any> {
 
 /** Project details use about seven REST calls per repo; five minutes keeps that small. */
 const cache = swr<{ at: number; list: any[] }>("projects", 300_000, async () => {
-  const list = await Promise.all((config().projects || []).map(project));
+  const list = await Promise.all(projectRepos(config()).map(project));
   return { at: Math.floor(Date.now() / 1000), list };
 });
 
@@ -93,7 +93,7 @@ export const flat = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "
 
 export async function projects(force = false) {
   const cfg = config();
-  const chosen = cfg.projects || [];
+  const chosen = projectRepos(cfg);
   const [{ at, list }, df, mrr] = await Promise.all([
     cache.get({ key: chosen.join(","), force, wait: force }),
     datafast.get(),
@@ -111,6 +111,8 @@ export async function projects(force = false) {
       ...p,
       live,
       title: site?.name || p.name.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+      // The stage this project is kept at, from config.json (collector#78): a page with no stage shows none.
+      stage: projectStage(cfg, p.repo),
       traffic: df.sites[host] || { error: df.error || "not on DataFast" },
       subscriptions: subs.filter((x) => x.project === p.name || x.project === p.repo),
       billing: mrr[p.repo] ?? null,
@@ -136,15 +138,23 @@ export async function projects(force = false) {
   return { at, projects: out, keys: needed, env_path: ENV_PATH };
 }
 
-/** The repo picker's one write: the chosen repos go into config.json under "projects". */
+/** The repo picker's one write: the chosen repos go into config.json under "projects", each keeping the stage it
+ * already had there (collector#78), so choosing repos never drops one. */
 export function saveProjects(repos: unknown[]) {
   const cfg = config();
+  const before = cfg.projects;
+  const kept = (repo: string) => {
+    const entry = before && !Array.isArray(before) ? before[repo] : undefined;
+    return entry && typeof entry === "object" ? entry : {};
+  };
   const next = {
     ...cfg,
-    projects: repos.filter((r): r is string => typeof r === "string" && /^[\w.-]+\/[\w.-]+$/.test(r)),
+    projects: Object.fromEntries(
+      repos.filter((r): r is string => typeof r === "string" && /^[\w.-]+\/[\w.-]+$/.test(r)).map((r) => [r, kept(r)]),
+    ),
   };
   writeConfig(next);
-  return next.projects;
+  return Object.keys(next.projects);
 }
 
 /** Every repo the gh login can see (own and orgs), for the repo picker. Cached ten minutes. */

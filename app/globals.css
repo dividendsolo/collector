@@ -1216,7 +1216,7 @@
     max-width: 420px;
     color: var(--muted);
   }
-  /* Phones: Project, Status, and Health only; the project page has the rest. Agents: Status, Profile, Machine. */
+  /* Phones: Project, Status, Health, and the hand-set Stage; the project page has the rest. Agents: Status, Profile, Machine. */
   @media (max-width: 700px) {
     table.fit:not(.pool) tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)),
     table.fit .desc {

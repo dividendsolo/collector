@@ -56,7 +56,7 @@ describe("reposToSave", () => {
 });
 
 describe("saveProjects", () => {
-  it("writes owner/repo strings into projects, keeps every other key, and never touches the real config.json", () => {
+  it("writes the chosen repos into projects, keeps every other key, and never touches the real config.json", () => {
     const before = {
       machines: [{ name: "laptop" }],
       projects: ["old/one"],
@@ -69,7 +69,24 @@ describe("saveProjects", () => {
     expect(saveProjects(["acme/a", "bad", 3, "acme/b"])).toEqual(["acme/a", "acme/b"]);
 
     expect(TEST_CONFIG).not.toBe(REAL_CONFIG);
-    expect(JSON.parse(fs.readFileSync(TEST_CONFIG, "utf8"))).toEqual({ ...before, projects: ["acme/a", "acme/b"] });
+    // The map the card names (`projects.<owner/repo>.stage`, collector#78): a repo with no stage of its own yet.
+    expect(JSON.parse(fs.readFileSync(TEST_CONFIG, "utf8"))).toEqual({
+      ...before,
+      projects: { "acme/a": {}, "acme/b": {} },
+    });
     expect(stamp(REAL_CONFIG)).toBe(realBefore);
+  });
+
+  it("keeps the stage a repo already had, so choosing repos never drops one", () => {
+    fs.writeFileSync(
+      TEST_CONFIG,
+      `${JSON.stringify({ projects: { "acme/a": { stage: "production" }, "acme/gone": { stage: "idea" } } }, null, 2)}\n`,
+    );
+
+    expect(saveProjects(["acme/a", "acme/b"])).toEqual(["acme/a", "acme/b"]);
+    expect(JSON.parse(fs.readFileSync(TEST_CONFIG, "utf8")).projects).toEqual({
+      "acme/a": { stage: "production" },
+      "acme/b": {},
+    });
   });
 });

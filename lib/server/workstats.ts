@@ -1,6 +1,6 @@
 import { boardRows, ready, workView } from "./board";
 import { swr } from "./cache";
-import { config } from "./config";
+import { config, projectRepos } from "./config";
 import { isoLocal, isoUtc, localMidnight, ymdLocal } from "./dates";
 import { run } from "./run";
 
@@ -35,7 +35,7 @@ const cache = swr("work-stats", 300_000, async () => {
   await ready();
   const midnight = localMidnight();
   const since = isoUtc(midnight);
-  const repos = new Set(config().projects || []);
+  const repos = new Set(projectRepos(config()));
   for (const t of boardRows() || []) {
     const m = (t.url || "").match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\//);
     if (m) repos.add(m[1]);
