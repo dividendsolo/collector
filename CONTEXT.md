@@ -569,6 +569,9 @@ reads the method itself, so one function covers both rules:
 `tests/request-guard.test.ts` holds the behaviour — a cross-site `POST /api/update` is 403 while the page's own click
 and a curl get the click's own answer, and a foreign `Host` is 403 on a GET route — and the rules that every route
 file calls the guard and that the four state-changing routes are the list, so a new one has to be guarded on purpose.
+The two one-click routes are driven through their own handlers as well (collector#71), their work mocked: a
+cross-site post to `/api/tailscale` or `/api/hermes` is 403 and starts nothing, and the page's own click still starts
+the tailnet or kickstarts the Hermes gateway.
 
 `config.json` and `.env` are gitignored and stay that way: the repo is public and `config.json` holds real host
 names, job names and board ids.
