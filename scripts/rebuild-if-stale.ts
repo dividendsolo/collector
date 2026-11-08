@@ -18,13 +18,28 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lastLine, option, readStamp, rebuildPlan, runGit, SERVED, STAGING, short, writeStamp } from "../lib/rebuild";
+import {
+  fetchOrigin,
+  lastLine,
+  option,
+  readStamp,
+  rebuildPlan,
+  runGit,
+  SERVED,
+  STAGING,
+  short,
+  writeStamp,
+} from "../lib/rebuild";
 import { pendingCommit } from "../lib/update";
 
 const say = (line: string) => console.log(`[rebuild] ${line}`);
 const warn = (line: string) => console.error(`[rebuild] ${line}`);
 
 const argv = process.argv.slice(2);
+/** The ceiling on the job's two long commands, so a hung install or build cannot hold it open (repo standard S2):
+ * five minutes for `bun install`, fifteen for `next build` — both far past anything a healthy machine takes. */
+const INSTALL_TIMEOUT_MS = 5 * 60_000;
+const BUILD_TIMEOUT_MS = 15 * 60_000;
 /** The checkout to keep built: this script's own checkout, which is the folder the serving plist points at. */
 const dir = path.resolve(option(argv, "dir") || path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
 /** Say what a run would do and change nothing. */
@@ -36,7 +51,7 @@ if (!head.ok) {
   process.exit(1);
 }
 if (!check) {
-  const fetched = runGit(dir, "fetch", "--quiet", "origin", "main");
+  const fetched = fetchOrigin(dir);
   if (!fetched.ok) warn(`could not fetch origin/main (${lastLine(fetched.err)}): reading the last fetch`);
 }
 const main = runGit(dir, "rev-parse", "origin/main");
@@ -99,8 +114,13 @@ if (plan.pull) {
 
 // Install what the lockfile asks for before every build: a commit that adds a package fails `next build` with
 // "module not found" until the package is installed (3021658 added @viz-js/viz, 2026-11-02). With nothing new to
-// install this takes a few milliseconds; `--frozen-lockfile` installs exactly what main's lockfile says.
-const installed = spawnSync(process.execPath, ["install", "--frozen-lockfile"], { cwd: dir, encoding: "utf8" });
+// install this takes a few milliseconds; `--frozen-lockfile` installs exactly what main's lockfile says. The
+// timeout is a ceiling nothing normal comes near: it is there so a hung install cannot hold the job (repo standard S2).
+const installed = spawnSync(process.execPath, ["install", "--frozen-lockfile"], {
+  cwd: dir,
+  encoding: "utf8",
+  timeout: INSTALL_TIMEOUT_MS,
+});
 if (installed.status !== 0) {
   warn(
     `bun install failed (${lastLine(`${installed.stdout || ""}${installed.stderr || ""}`)}): the page keeps serving its old build`,
@@ -117,6 +137,7 @@ const since = Date.now();
 const built = spawnSync(process.execPath, ["run", "build"], {
   cwd: dir,
   encoding: "utf8",
+  timeout: BUILD_TIMEOUT_MS,
   env: { ...process.env, COLLECTOR_DIST_DIR: STAGING },
 });
 const secs = Math.round((Date.now() - since) / 1000);

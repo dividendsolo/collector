@@ -604,3 +604,45 @@ file calls the guard and that the five state-changing routes are the list, so a 
 
 `config.json` and `.env` are gitignored and stay that way: the repo is public and `config.json` holds real host
 names, job names and board ids.
+
+## Every outbound call has a deadline, and a bounded retry (repo standard S2)
+
+Collector is a local, read-only page, so "outbound" is narrow and known: the HTTP GETs its readers make, the
+`gh api` calls and the `ssh` machine reads it runs as subprocesses, reverse DNS, the rebuild job's own `git`
+commands, and the one health-check GET. Each one now has a time on it, and the ones where a second try is safe have
+a few tries with a growing, jittered wait between them (collector#73).
+
+The retry policy is one function, `lib/server/retry.ts`: `withRetry` runs a call up to `attempts` times (three by
+default, never more than `MAX_ATTEMPTS`), and `backoffDelay` gives the wait before each retry — exponential from
+250 ms, capped at 2 s, with half jitter, so two readers that fail together do not come back together. Nothing
+retries forever: `attempts` is finite and capped whatever a caller asks for.
+
+- **HTTP.** `lib/server/http.ts`'s `getJson` (every vendor, API, billing, domain, Jog, DataFast and AI-usage read)
+  fetches through `fetchWithTimeout`, which aborts at the timeout and throws a `TimeoutError` naming the limit —
+  our own error rather than `AbortSignal.timeout`, whose rejection is named differently on Node and Bun. A network
+  error, a timeout, a 5xx or a 429 gets another try; any other 4xx does not, because the answer would be the same.
+- **Subprocess reads.** `lib/server/run.ts`'s `runText` kills a hung command with SIGKILL at its timeout (20 s
+  unless the caller names another). `run` — the JSON reads: `gh api`, a machine read over ssh, the Nous portal
+  script — takes one retry by default, since every call through it is a read. The timeout is the important half
+  here: a machine that stops answering ssh used to leave a read open, and the page already handles a failed read by
+  keeping the last good one (stale), so the read failing at 20 s is what it wants.
+- **The health check is not retried, on purpose.** `lib/server/services.ts`'s `check` measures the service; a
+  second try would report a service that just timed out as online and hide exactly the slowness the panel exists
+  to show. It keeps its 10 s timeout.
+- **Nothing that starts something is retried.** `tailscale up`, `launchctl kickstart`, `open -a`, the update
+  restart: each has a timeout and no second try, because a retry would start it twice.
+- **The rebuild job.** `lib/rebuild.ts` gives every `git` command a 60 s ceiling (a hung `fetch` or `pull` used to
+  hold the job open forever) and retries `git fetch origin main` up to three times with backoff; `bun install`
+  (5 min) and `bun run build` (15 min) in `scripts/rebuild-if-stale.ts`, and the restart in
+  `scripts/apply-update.ts` (1 min), all carry their own ceiling.
+- **`collect.py` needs no change**: every `subprocess.run` in it already passes a `timeout=` (10 s, 5 s for
+  `launchctl`), and it makes no HTTP call — it is sent over ssh and runs local, read-only commands.
+
+Concurrency, since the standard asks about pool sizes: there is no database, no queue and no worker pool — one
+Next server process on loopback. Bun's `fetch` has no per-origin pool to size; what bounds concurrent requests is
+the fan-out (2-3 machines, one request per configured service, one per configured domain), each with its own
+deadline. ssh multiplexes (`ControlMaster=auto`, `ControlPersist=300`), so there is one reused connection per
+machine whatever the read interval does. `tests/outbound.test.ts` holds the behaviour: a stub server that never
+answers and the call that times out, a 5xx that is retried until it recovers, a 404 that is not, the cap and the
+jitter, and a hung command under `runText`.
+

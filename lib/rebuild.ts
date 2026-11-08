@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { backoffDelay } from "./server/retry";
 
 /**
  * The live Collector's own build (card #29). `bun run build` records the commit it was made from beside the build
@@ -16,10 +17,43 @@ export interface GitResult {
   err: string;
 }
 
+/** A git command is given up on after this long: `fetch` and `pull` reach the network, and a hung one would hold
+ * the rebuild job open forever (repo standard S2). */
+export const GIT_TIMEOUT_MS = 60_000;
+
 /** One git command in a checkout, its output kept as git wrote it, for the job's log and its checks. */
 export function runGit(dir: string, ...args: string[]): GitResult {
-  const r = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
-  return { ok: r.status === 0, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() };
+  const r = spawnSync("git", ["-C", dir, ...args], {
+    encoding: "utf8",
+    timeout: GIT_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+  // A kill or a spawn failure leaves stderr empty; the timeout's own message is what the log should say instead.
+  const err = (r.stderr || "").trim() || (r.error ? r.error.message : "");
+  return { ok: r.status === 0, out: (r.stdout || "").trim(), err };
+}
+
+/** A synchronous wait, for the one retry a `spawnSync` script does: there is no event loop here to yield to. */
+export function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** How many tries `fetchOrigin` makes. */
+export const FETCH_ATTEMPTS = 3;
+
+/**
+ * `git fetch origin main`, up to `FETCH_ATTEMPTS` tries with capped, jittered backoff — the one network call the
+ * rebuild job makes itself, and a fetch is safe to ask again. The log keeps the last failure when every try fails,
+ * and the caller reads the last fetch it did get, as it always has.
+ */
+export function fetchOrigin(dir: string, attempts = FETCH_ATTEMPTS): GitResult {
+  let last: GitResult = { ok: false, out: "", err: "no fetch made" };
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    last = runGit(dir, "fetch", "--quiet", "origin", "main");
+    if (last.ok) return last;
+    if (attempt < attempts) sleepSync(backoffDelay(attempt + 1, { baseDelayMs: 500, maxDelayMs: 4000 }));
+  }
+  return last;
 }
 
 /** The last line git or a build wrote: what a failure's one log line can carry. */
