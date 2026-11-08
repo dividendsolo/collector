@@ -539,13 +539,17 @@ actions did not come across.
   input audit of 2026-11 (mission-control#1) is the rule set: client and title 1..100 characters, notes up to 1000,
   none of them carrying `<`, `>` or a link; amount a number 0..10,000,000; currency three letters (stored upper case);
   status one of the five; both dates a real day as `YYYY-MM-DD`, so `2026-02-31` is refused. The same schema reads the
-  file back, so a row a hand edit broke is left out rather than shown or crashed on.
+  file back, so a row a hand edit broke is left out rather than shown or crashed on. The file is the only copy, so a
+  write never starts from a guess: only a missing file reads as empty; a file that does not parse, or holds a row the
+  schema refuses, makes every write a 409 whose `why` names the file, the file is left byte for byte, and the page
+  shows that `why` above the table until it is fixed by hand. Writes go through a temp file and a rename.
 - `app/api/proposals/route.ts` is the page's read **and** its one write route, all four handlers behind
   `guard(req)`: `GET` the list (what the route answers, the page renders as text — no `dangerouslySetInnerHTML`),
   `POST` to add, `PUT` to edit, `DELETE ?id=` to remove, each answering the list and the pipeline as they stand after
   the change. A refused field is a 400 with the reason in `why`, and an id that is not there is a 404.
 - The page (`ProposalsPage` in `components/pages.tsx`) shows the open pipeline at the top, the table under it (client,
-  title, amount, status, sent, decided, notes), and one **Add proposal** / Edit form: the `.fields` grid in
+  title, amount, status, sent, decided, notes), and one **Add proposal** / Edit form, keyed by the draft's id so Edit
+  on another row (or Add) mounts a fresh form instead of keeping the last one's values: the `.fields` grid in
   `app/globals.css` is the only CSS the feature added, and Delete asks first, since the file is the only copy.
 
 ## Layout

@@ -839,7 +839,9 @@ export function ProposalsPage() {
   const remove = async (p: Proposal) => {
     if (!confirm(`Delete "${p.title}" for ${p.client}?`)) return;
     const r = await fetch(`/api/proposals?id=${encodeURIComponent(p.id)}`, { method: "DELETE" });
-    if (r.ok) mutate(await r.json(), { revalidate: false });
+    const d = await r.json();
+    if (r.ok) mutate(d, { revalidate: false });
+    else alert(d.why || `HTTP ${r.status}`);
   };
   return (
     <div className="page">
@@ -857,6 +859,11 @@ export function ProposalsPage() {
             </button>
           </div>
         </PanelHead>
+        {data?.why ? (
+          <p className="err wide" role="alert">
+            {data.why}
+          </p>
+        ) : null}
         <div className="spend-total">
           {!data ? null : open.length ? (
             open.map((c) => (
@@ -945,7 +952,10 @@ export function ProposalsPage() {
           </table>
         </div>
       </section>
-      {form ? <ProposalForm draft={form} onSaved={saved} onCancel={() => setForm(null)} /> : null}
+      {/* A key per draft: the form copies its draft once, so Edit on another row (or Add) must mount a fresh one. */}
+      {form ? (
+        <ProposalForm key={form.id ?? "new"} draft={form} onSaved={saved} onCancel={() => setForm(null)} />
+      ) : null}
     </div>
   );
 }

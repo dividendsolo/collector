@@ -213,6 +213,48 @@ describe("adding, editing and deleting (collector#77)", () => {
   });
 });
 
+describe("a proposals.json the route cannot read whole is never written over (PR #79 review)", () => {
+  /** Every write the page can send: add, edit and delete, each refused by name and leaving the file as it was. */
+  const everyWrite = async (id: string) => {
+    for (const r of [await post(valid), await put({ ...valid, id }), await del(id)]) {
+      expect(r.status).toBe(409);
+      expect((await r.json()).why).toContain(FILE);
+    }
+  };
+
+  it("refuses every write while the file does not parse, and leaves it byte for byte", async () => {
+    const { id } = await one();
+    await one({ title: "second" });
+    // One stray comma, typed by hand: the file is still the only copy of both rows.
+    const broken = fs.readFileSync(FILE, "utf8").replace(/}\s*\]\s*$/, "},\n]\n");
+    fs.writeFileSync(FILE, broken);
+    await everyWrite(id);
+    expect(fs.readFileSync(FILE, "utf8")).toBe(broken);
+    // The page is told why, instead of a list that looks empty.
+    const body = await (await read()).json();
+    expect(body.proposals).toEqual([]);
+    expect(body.why).toContain(FILE);
+  });
+
+  it("refuses every write while the file holds a row the schema refuses, and leaves it byte for byte", async () => {
+    const { id } = await one();
+    const odd = JSON.stringify([...stored(), { id: "x", client: "<script>" }], null, 2);
+    fs.writeFileSync(FILE, odd);
+    await everyWrite(id);
+    expect(fs.readFileSync(FILE, "utf8")).toBe(odd);
+    const body = await (await read()).json();
+    expect(body.proposals).toHaveLength(1);
+    expect(body.why).toContain(FILE);
+  });
+
+  it("writes through a temp file, so no half-written file or stray temp is left beside it", async () => {
+    await one();
+    await one({ title: "second" });
+    expect(stored()).toHaveLength(2);
+    expect(fs.readdirSync(dir).filter((f: string) => f.startsWith("proposals"))).toEqual(["proposals.json"]);
+  });
+});
+
 describe("the open pipeline (collector#77)", () => {
   const at = (over: Partial<Proposal>): Proposal => ({
     id: "x",
