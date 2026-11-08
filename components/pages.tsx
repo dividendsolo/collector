@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { daysAgo, money, monthly, prio } from "@/lib/format";
+import { PROPOSAL_STATUSES, type Proposal, type ProposalStatus } from "@/lib/proposals";
 import { AiPanels } from "./ai";
 import { useApi, useLive } from "./data";
-import { BlurToggle, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
+import { BlurToggle, Count, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
 
 // ---- Domains: registrar and expiry from the public registry, soonest first. Amber at 30 days, red at 7.
 
@@ -668,19 +670,282 @@ export function WorkPage() {
   );
 }
 
+// ---- Proposals: what is out with clients, and the open pipeline (collector#77). The rows live in proposals.json
+// beside config.json, and the route parses every field, so this page only has to render text.
+
+const STATUS_PILL: Record<ProposalStatus, [string, string]> = {
+  draft: ["", "Draft"],
+  pending: ["warning", "Pending"],
+  approved: ["ok", "Approved"],
+  rejected: ["failed", "Rejected"],
+  signed: ["signed", "Signed"],
+};
+
+/** The form's own state: a date is the input's empty string until it has a day. */
+interface Draft {
+  id?: string;
+  client: string;
+  title: string;
+  amount: string;
+  currency: string;
+  status: ProposalStatus;
+  sent_at: string;
+  decided_at: string;
+  notes: string;
+}
+
+const BLANK: Draft = {
+  client: "",
+  title: "",
+  amount: "",
+  currency: "USD",
+  status: "draft",
+  sent_at: "",
+  decided_at: "",
+  notes: "",
+};
+
+const asDraft = (p: Proposal): Draft => ({
+  id: p.id,
+  client: p.client,
+  title: p.title,
+  amount: String(p.amount),
+  currency: p.currency,
+  status: p.status,
+  sent_at: p.sent_at || "",
+  decided_at: p.decided_at || "",
+  notes: p.notes,
+});
+
+/** Add a proposal, or change the one being edited: the same form, and the route refuses what it will not store. */
+function ProposalForm({ draft, onSaved, onCancel }: { draft: Draft; onSaved: (d: any) => void; onCancel: () => void }) {
+  const [f, setF] = useState<Draft>(draft);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const box = useRef<HTMLElement>(null);
+  // A block body on purpose: `scrollIntoView` returns an object in Chrome, and an arrow that returns it hands React a
+  // cleanup it then calls as a function (the form is unmounted on save, so that is the crash a reader would see).
+  useEffect(() => {
+    box.current?.scrollIntoView({ block: "start" });
+  }, []);
+  const set = (k: keyof Draft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    setF({ ...f, [k]: e.target.value });
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    const body = {
+      client: f.client,
+      title: f.title,
+      amount: f.amount.trim() === "" ? Number.NaN : Number(f.amount),
+      currency: f.currency,
+      status: f.status,
+      sent_at: f.sent_at || null,
+      decided_at: f.decided_at || null,
+      notes: f.notes,
+    };
+    try {
+      const r = await fetch("/api/proposals", {
+        method: draft.id ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft.id ? { ...body, id: draft.id } : body),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setError(d.why || `HTTP ${r.status}`);
+        return;
+      }
+      onSaved(d);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="panel" id="proposal-form" ref={box}>
+      <PanelHead icon="brief" title={draft.id ? "Edit proposal" : "Add proposal"} />
+      <form
+        className="fields"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <label>
+          Client
+          <input required maxLength={100} value={f.client} onChange={set("client")} />
+        </label>
+        <label>
+          Title
+          <input required maxLength={100} value={f.title} onChange={set("title")} />
+        </label>
+        <label>
+          Amount
+          <input required inputMode="decimal" value={f.amount} onChange={set("amount")} placeholder="5000" />
+        </label>
+        <label>
+          Currency
+          <input required maxLength={3} value={f.currency} onChange={set("currency")} />
+        </label>
+        <label>
+          Status
+          <select value={f.status} onChange={set("status")}>
+            {PROPOSAL_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_PILL[s][1]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sent
+          <input type="date" value={f.sent_at} onChange={set("sent_at")} />
+        </label>
+        <label>
+          Decided
+          <input type="date" value={f.decided_at} onChange={set("decided_at")} />
+        </label>
+        <label className="wide">
+          Notes
+          <textarea maxLength={1000} rows={2} value={f.notes} onChange={set("notes")} />
+        </label>
+        {error ? (
+          <p className="err wide" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="wide actions">
+          <button className="btn ghost" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="btn primary" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save proposal"}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export function ProposalsPage() {
+  const { data, mutate } = useApi("/api/proposals");
+  const [form, setForm] = useState<Draft | null>(null);
+  const list: Proposal[] = data?.proposals || [];
+  const open: { currency: string; total: number }[] = data?.pipeline || [];
+  const saved = (d: any) => {
+    mutate(d, { revalidate: false });
+    setForm(null);
+  };
+  const remove = async (p: Proposal) => {
+    if (!confirm(`Delete "${p.title}" for ${p.client}?`)) return;
+    const r = await fetch(`/api/proposals?id=${encodeURIComponent(p.id)}`, { method: "DELETE" });
+    if (r.ok) mutate(await r.json(), { revalidate: false });
+  };
   return (
     <div className="page">
       <div className="page-head">
         <h1>Proposals</h1>
-        <p>Open client proposals and their value.</p>
+        <p>Open client proposals and their value. Kept on this machine, in proposals.json.</p>
       </div>
       <section className="panel">
-        <div className="soon">
-          <b>No source connected yet.</b>
-          <span>No source is chosen for proposals yet.</span>
+        <PanelHead icon="brief" title="Proposals">
+          <Count n={list.length} />
+          <span className="sub">kept in proposals.json beside config.json</span>
+          <div className="tools">
+            <button className="btn" type="button" onClick={() => setForm(BLANK)}>
+              Add proposal
+            </button>
+          </div>
+        </PanelHead>
+        <div className="spend-total">
+          {!data ? null : open.length ? (
+            open.map((c) => (
+              <span className="value" key={c.currency}>
+                <Money>{money(c.total, c.currency)}</Money>
+                <small>open pipeline in {c.currency}</small>
+              </span>
+            ))
+          ) : (
+            <span className="sub">Nothing open with a client yet.</span>
+          )}
+        </div>
+        <div className="wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Title</th>
+                <th className="num">Amount</th>
+                <th>Status</th>
+                <th>Sent</th>
+                <th>Decided</th>
+                <th>Notes</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {!data ? (
+                <SkelRows n={4} cols={8} />
+              ) : list.length ? (
+                list.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.client}</td>
+                    <td className="wide">{p.title}</td>
+                    <td className="num mono">
+                      <Money>{money(p.amount, p.currency)}</Money>
+                    </td>
+                    <td>
+                      <span className={`pill ${STATUS_PILL[p.status][0]}`.trim()}>
+                        <span className="dot" />
+                        {STATUS_PILL[p.status][1]}
+                      </span>
+                    </td>
+                    <td className="mono">{p.sent_at || "—"}</td>
+                    <td className="mono">{p.decided_at || "—"}</td>
+                    <td className="notes">
+                      {p.notes ? (
+                        <span className="clamp" title={p.notes}>
+                          {p.notes}
+                        </span>
+                      ) : (
+                        <span className="sub">—</span>
+                      )}
+                    </td>
+                    <td className="actions">
+                      <button
+                        className="btn ghost"
+                        type="button"
+                        aria-label={`Edit ${p.title}`}
+                        onClick={() => setForm(asDraft(p))}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn ghost"
+                        type="button"
+                        aria-label={`Delete ${p.title}`}
+                        onClick={() => remove(p)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8}>
+                    <div className="soon">
+                      <b>No proposals yet.</b>
+                      <span>Add the first one: its client, its title and what it is worth.</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
+      {form ? <ProposalForm draft={form} onSaved={saved} onCancel={() => setForm(null)} /> : null}
     </div>
   );
 }
