@@ -1,3 +1,4 @@
+import { webUrl } from "../links";
 import { billing } from "./billing";
 import { swr } from "./cache";
 import { accountsOf, config, projectRepos, projectStage, writeConfig } from "./config";
@@ -71,7 +72,10 @@ async function project(repo: string): Promise<any> {
     name: info.name,
     url: info.html_url,
     description: info.description || "",
-    homepage: info.homepage || "",
+    // Only a web address is a link (collector#86): a repo's homepage belongs to whoever controls the repo, and the
+    // page puts it in an href on Collector's own origin, whose routes restart the server, start the tailnet or the
+    // gateway and write config.json. A homepage that is not one reads like a project with no homepage at all.
+    homepage: webUrl(info.homepage) ?? "",
     private: info.private,
     pushed_at: info.pushed_at,
     archived: info.archived,
@@ -99,13 +103,15 @@ export async function projects(force = false) {
     datafast.get(),
     billing(),
   ]);
-  // A project's live site: the service with the repo's name (zero-phase = ZeroPhase), else its GitHub homepage.
+  // A project's live site: the service with the repo's name (zero-phase = ZeroPhase), else its GitHub homepage. Only
+  // a web address is a link (collector#86) — the homepage was read through webUrl above, and a service url that is
+  // not one is no more a link than a homepage that is not.
   const sites = new Map((cfg.services || []).map((x) => [flat(x.name), x]));
   const subs = cfg.subscriptions || [];
   const out = list.map((p) => {
     if (!("name" in p)) return p;
     const site = sites.get(flat(p.name));
-    const live = site?.url || p.homepage;
+    const live = webUrl(site?.url) || p.homepage;
     const host = (live || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     return {
       ...p,
