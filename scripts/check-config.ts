@@ -6,7 +6,7 @@
  * the file in `COLLECTOR_CONFIG` when that is set.
  */
 import fs from "node:fs";
-import { CONFIG_KEYS, unknownConfigKeys } from "../lib/server/config";
+import { badConfigValues, CONFIG_KEYS, unknownConfigKeys } from "../lib/server/config";
 import { CONFIG_PATH } from "../lib/server/paths";
 
 const where = process.argv[2] || CONFIG_PATH;
@@ -33,6 +33,17 @@ if (unknown.length) {
     `${where}: ${unknown.length === 1 ? "1 key Collector does not read" : `${unknown.length} keys Collector does not read`}: ${unknown.join(", ")}`,
   );
   console.error(`Collector reads: ${CONFIG_KEYS.join(", ")}`);
+  process.exit(1);
+}
+
+// A value Collector would not use (a project's stage, a vendor's criticality, a renewal date: collector#78): the
+// key is right and the setting still does nothing, so it is refused here too.
+const bad = badConfigValues(cfg);
+if (bad.length) {
+  console.error(
+    `${where}: ${bad.length === 1 ? "1 value Collector does not use" : `${bad.length} values Collector does not use`}:`,
+  );
+  for (const b of bad) console.error(`  ${b}`);
   process.exit(1);
 }
 

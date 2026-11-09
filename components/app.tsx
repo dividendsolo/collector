@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { failingJobs } from "@/lib/format";
 import { internetPortCount } from "@/lib/toasts";
+import { vendorHit } from "@/lib/vendors";
 import { acked, useAcks } from "./acks";
 import { AgentPage, AgentsPage } from "./agents";
 import { CardTip } from "./card-tip";
@@ -12,7 +13,7 @@ import { LiveProvider, useLive } from "./data";
 import { FlowPage } from "./flow";
 import { useJump } from "./jump";
 import { NetworkPage } from "./network";
-import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, vendorHit, WorkPage } from "./pages";
+import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, WorkPage } from "./pages";
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
 import { useRunning } from "./running";
 import { ServicesPage, ServicesWatcher } from "./services";

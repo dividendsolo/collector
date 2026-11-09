@@ -194,12 +194,14 @@ export interface VendorRow {
   url: string;
   state: string;
   incidents: Incident[];
+  /** How much we depend on it, from config.json's `vendors[].criticality` (collector#78). */
+  criticality?: string;
 }
 
 /** One vendor's status page: "feed" when set, else the first known feed path that reads. No feed: a link only. */
 async function vendor(v: Vendor): Promise<VendorRow> {
   const url = v.url.replace(/\/+$/, "");
-  const row: VendorRow = { name: v.name, url, state: "no feed", incidents: [] };
+  const row: VendorRow = { name: v.name, url, state: "no feed", incidents: [], criticality: v.criticality };
   if (v.probe) {
     // no status page: one GET of an API that answers without a key
     const c = await check({ name: v.name, url: v.probe });
@@ -244,4 +246,5 @@ const cache = swr<{ at: number; vendors: VendorRow[] }>("vendors", 300_000, asyn
 /** Every vendor in config.json "vendors", checked every five minutes. */
 export const lastVendors = () => cache.peek()?.vendors ?? [];
 
-export const vendors = () => cache.get({ key: (config().vendors || []).map((v) => v.name).join(",") });
+export const vendors = () =>
+  cache.get({ key: (config().vendors || []).map((v) => `${v.name}:${v.criticality || ""}`).join(",") });

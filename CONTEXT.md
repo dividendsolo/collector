@@ -276,6 +276,35 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
+## The three hand-kept fields Mission Control had (card #78)
+
+Mission Control is retired and Collector took the three small fields of it James missed (James, 2026-11-08). Each is a
+setting in `config.json`, the way Collector holds its other hand-kept facts, and each is refused rather than obeyed
+when it holds a value Collector does not know: `bun run check:config` exits 1 over it and Needs attention carries a
+row, the same as an unknown key.
+
+| Field | In `config.json` | Where it shows |
+|---|---|---|
+| A project's stage | `projects["owner/repo"].stage` — `idea`, `development`, `testing`, `production` or `archived` | The Stage column on the Projects page; a project with no stage shows nothing |
+| A vendor's criticality | `vendors[].criticality` — `low`, `medium`, `high` or `critical` | A pill beside the vendor's name on the APIs page |
+| A subscription's renewal | `subscriptions[].renews` — a `YYYY-MM-DD` day | The Renews column on the Subscriptions page, and a `warn` row in Needs attention inside the week before it |
+
+`lib/server/config.ts` holds the vocabularies (`PROJECT_STAGES`, `API_CRITICALITIES`), the one check both callers read
+(`badConfigValues`), and the two readers of the `projects` key. `projects` keeps both shapes: the map above, which the
+repo picker's Save writes (each repo keeping the stage it already had, so choosing repos never drops one), and the
+plain list of `owner/repo` strings a config may already hold — `projectRepos` and `projectStage` read either, so an
+older config.json loses nothing. `lib/server/projects.ts` puts each project's `stage` on its row for the page.
+
+The renewal row reads whole local calendar days (`renewalDays` in `lib/server/warnings.ts`, counted in
+`RENEWS_WARN_DAYS`, 7, at local noon so an hour of daylight saving never shifts the day): a renewal 3 days out makes
+the row, one 30 days out does not, and a past date is not a renewal still to come. Only an active subscription warns,
+the same reading the Subscriptions page has of "active".
+
+The APIs page's order is `vendorOrder` in `lib/vendors.ts`, with `vendorHit` beside it (both moved off the page so
+they can be tested): a vendor whose `criticality` is `high` or `critical` and whose status page lists an incident
+comes first, then the vendors with the worst state, then by name. `tests/config-values.test.ts` holds a test per
+field.
+
 ## The Network page: every open port, who can connect to it, and what each machine sends out (cards #65, #66)
 
 Slices 1 and 2 of the same check: what is open, and what goes out. The Network page (`#/network`) shows one block

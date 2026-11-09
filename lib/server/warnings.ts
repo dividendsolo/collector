@@ -1,6 +1,7 @@
+import { money } from "../format";
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
-import { type Config, unknownConfigKeys } from "./config";
+import { badConfigValues, type Config, isRenewsDate, unknownConfigKeys } from "./config";
 import type { Domain } from "./domains";
 import { TICKER_STALE_S } from "./hermes";
 import type { GithubLimit } from "./machines";
@@ -29,6 +30,18 @@ const START_HERMES = { label: "Start Hermes", post: "/api/hermes" };
 /** A duration in the words a row reads it in: "12 min", "4 h". */
 const ageText = (s: number) => (s < 3600 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
 
+/** How many days before a renewal the row shows: a charge lands before it, not after (collector#78). */
+export const RENEWS_WARN_DAYS = 7;
+
+/** Whole calendar days until a renewal date (`subscriptions[].renews`, `YYYY-MM-DD`), or null for a date that is
+ * not one. Local days, so a renewal at 23:50 is not the day after tomorrow (collector#78). */
+export function renewalDays(renews: unknown, now = Date.now()): number | null {
+  if (!isRenewsDate(renews)) return null;
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  // Local noon: an hour of daylight saving never changes which day the date names.
+  return Math.round((day(new Date(`${renews}T12:00:00`)) - day(new Date(now))) / 86_400_000);
+}
+
 export interface WarningInputs {
   machines: any[];
   github: GithubLimit;
@@ -54,6 +67,14 @@ export function warnings(w: WarningInputs): Warning[] {
     out.push({
       level: "warn",
       text: `config.json has ${unknown.length === 1 ? "a key" : `${unknown.length} keys`} Collector does not read: ${unknown.join(", ")}`,
+    });
+  // A value Collector would not use (a project's stage, a vendor's criticality, a renewal date: collector#78) is
+  // the same kind of setting that does nothing, so it is named here too, and by `bun run check:config`.
+  const bad = badConfigValues(w.cfg);
+  if (bad.length)
+    out.push({
+      level: "warn",
+      text: `config.json has ${bad.length === 1 ? "a value" : `${bad.length} values`} Collector does not use: ${bad.join("; ")}`,
     });
   const what = w.cfg.jobs || {};
   const work = w.cfg.work_script || {};
@@ -169,6 +190,17 @@ export function warnings(w: WarningInputs): Warning[] {
       out.push({
         level: "warn",
         text: `The same script (${script}) starts from ${where.length} jobs on ${machine}: ${where.join(", ")}`,
+      });
+  }
+  // A subscription that renews inside the week (collector#78): the row names the day and the amount, so the charge
+  // is not a surprise. Only an active one, the same reading the Subscriptions page has of "active": an ended
+  // subscription renews nothing.
+  for (const s of Array.isArray(w.cfg.subscriptions) ? w.cfg.subscriptions : []) {
+    const days = renewalDays(s.renews);
+    if ((s.status || "active") === "active" && days != null && days >= 0 && days <= RENEWS_WARN_DAYS)
+      out.push({
+        level: "warn",
+        text: `${s.name} renews on ${s.renews} for ${money(s.amount, s.currency || "USD")}`,
       });
   }
   for (const d of w.domains) {

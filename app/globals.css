@@ -1270,7 +1270,7 @@
     max-width: 420px;
     color: var(--muted);
   }
-  /* Phones: Project, Status, and Health only; the project page has the rest. Agents: Status, Profile, Machine. */
+  /* Phones: Project, Status, Health, and the hand-set Stage; the project page has the rest. Agents: Status, Profile, Machine. */
   @media (max-width: 700px) {
     table.fit:not(.pool) tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)),
     table.fit .desc {
@@ -1278,6 +1278,17 @@
     }
     table.pool tr > :is(th, td):is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(7)) {
       display: none;
+    }
+  }
+  /* Phones: Subscriptions keeps Name, Renews, Charge and Per month, on tighter padding; Billing and Per year go
+     (collector#78). */
+  @media (max-width: 700px) {
+    table.subs tr > :is(th, td):is(:nth-child(2), :nth-child(6)) {
+      display: none;
+    }
+    table.subs :is(th, td) {
+      padding-left: 8px;
+      padding-right: 8px;
     }
   }
   tr.row {
