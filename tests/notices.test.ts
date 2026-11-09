@@ -149,6 +149,21 @@ describe("a job's notice on the page", () => {
     expect(noticeToasts([machine(read(file(line({ href: undefined }))))])[0].href).toBe("#/dashboard?to=attention");
   });
 
+  it("keeps the row and the toast on the Dashboard for a link that is not a web address", () => {
+    // Card #84: the page's own allowlist, not the reader's. A machine whose collect.py is older still sends the line
+    // as it read it, and that href lands in an `<a href>` on this origin, so the row and the toast drop it.
+    const notices = [{ key: "k", level: "info", text: "Situation is listed", href: "javascript:alert(1)", at: null }];
+    expect(warnings({ ...base, machines: [machine(notices)] })[0].url).toBeUndefined();
+    expect(noticeToasts([machine(notices)])[0]).toEqual({
+      key: "k",
+      state: "Situation is listed",
+      level: "warn",
+      title: "Situation is listed",
+      text: "",
+      href: "#/dashboard?to=attention",
+    });
+  });
+
   it("gives neither a toast nor a row once its key is acknowledged", () => {
     const notices = read(file(line()));
     const key = notices[0].key;

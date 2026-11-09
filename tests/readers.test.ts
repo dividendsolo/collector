@@ -19,16 +19,35 @@ describe("readFeed", () => {
         {
           page: {},
           incidents: [
-            { name: "API errors", impact: "major", shortlink: "s", status: "investigating" },
+            {
+              name: "API errors",
+              impact: "major",
+              shortlink: "https://status.example.com/incidents/x",
+              status: "investigating",
+            },
             { name: "old", status: "resolved" },
           ],
         },
         "u",
       ),
-    ).toEqual([{ name: "API errors", impact: "major", url: "s" }]);
+    ).toEqual([{ name: "API errors", impact: "major", url: "https://status.example.com/incidents/x" }]);
     expect(readFeed({ page: {}, incidents: [], status: { indicator: "minor", description: "Slow" } }, "u")).toEqual([
       { name: "Slow", impact: "minor", url: "u" },
     ]);
+  });
+  // Card #84: a feed's own link lands in an `<a href>` on Collector's origin, whose routes restart the server, start
+  // the tailnet or the Hermes gateway and write config.json. React writes a known attribute straight through, so a
+  // scheme that runs script there is not a link: the incident falls back to the vendor's own status page.
+  it("keeps an incident's feed link only when it is a web address", () => {
+    const link = (shortlink: string) =>
+      readFeed(
+        { page: {}, incidents: [{ name: "Incident", impact: "major", status: "investigating", shortlink }] },
+        "https://status.example.com",
+      )?.[0].url;
+    for (const bad of ["javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,<b>x</b>", "/incidents/x"]) {
+      expect([bad, link(bad)]).toEqual([bad, "https://status.example.com"]);
+    }
+    expect(link("http://status.example.com/incidents/y")).toBe("http://status.example.com/incidents/y");
   });
   // Card #46: MongoDB Atlas sat at "major" all week on a 2026-09-03 incident it never updated, in regions we do
   // not use. An incident with no update in 7 days is stale, carries its age and the regions it names, and sits

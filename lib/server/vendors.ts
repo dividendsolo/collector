@@ -1,3 +1,4 @@
+import { webUrl } from "../links";
 import { swr } from "./cache";
 import { config, type Vendor } from "./config";
 import { getJson } from "./http";
@@ -118,7 +119,9 @@ function readShape(d: any, url: string): Incident[] | null {
         return {
           name: i.name,
           impact: i.impact || "none",
-          url: i.shortlink || url,
+          // A feed's own `shortlink` is outside data and lands in an `<a href>`: only a web address is a link, else the
+          // vendor's own status page (collector#84).
+          url: webUrl(i.shortlink) || url,
           opened: iso(i.created_at),
           updated: iso(i.updated_at),
           where: places(
