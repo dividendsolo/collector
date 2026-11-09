@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { daysAgo, money, monthly, prio } from "@/lib/format";
-import { vendorOrder } from "@/lib/vendors";
 import { PROPOSAL_STATUSES, type Proposal, type ProposalStatus } from "@/lib/proposals";
+import { vendorOrder } from "@/lib/vendors";
 import { AiPanels } from "./ai";
 import { useApi, useLive } from "./data";
 import { BlurToggle, Count, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
