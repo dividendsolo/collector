@@ -56,9 +56,10 @@ export interface WarningInputs {
 
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
  * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, the Hermes gateway or its cron
- * ticker on a machine that has one, the agents and jobs the user's own `watch` entries name, tickets that did not
- * list, low AI or X credit, open incidents of the vendors marked "attention" in config.json, and a config.json key
- * Collector does not read. Errors first. Adds `machine` and `what` to each job. */
+ * ticker on a machine that has one, the agents and jobs the user's own `watch` entries name, the good news a machine's
+ * own job wrote a notice for, tickets that did not list, low AI or X credit, open incidents of the vendors marked
+ * "attention" in config.json, and a config.json key Collector does not read. Errors first. Adds `machine` and `what`
+ * to each job. */
 export function warnings(w: WarningInputs): Warning[] {
   const out: Warning[] = [];
   const byScript = new Map<string, string[]>();
@@ -146,6 +147,18 @@ export function warnings(w: WarningInputs): Warning[] {
         out.push({
           level: x.state === "failed" ? "error" : "warn",
           text: `${x.name} on ${m.name}: ${x.detail || x.state}`,
+        });
+    // A job's good news (collector#82): each line of the machine's `~/.hermes/notices/*.jsonl` is one row —
+    // "Situation is listed on App Rater" — linking to the listing and acknowledged by the line's own key, so it
+    // shows once and goes away when acknowledged rather than waiting for a run that will never clear it. Info is a
+    // warning, not an error: nothing is wrong, and the row makes no alarm sound.
+    for (const n of m.notices || [])
+      if (n?.text)
+        out.push({
+          level: n.level === "error" ? "error" : "warn",
+          text: String(n.text),
+          ...(n.href ? { url: String(n.href) } : {}),
+          ack: { key: String(n.key || n.text), next: null },
         });
     // The ports anyone on the internet can connect to (collector#65), one error row per machine naming the first ten:
     // a machine can have twenty, and a row each would bury every other warning on the Dashboard. A port only the

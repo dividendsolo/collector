@@ -476,6 +476,36 @@ fix it but wait for the reset; it shows again when the limit runs out. Needs att
 The sidebar's Network item counts the ports open to the internet across every machine (`internetPortCount`), the
 same number the toast and Needs attention name.
 
+## A job's notices (card #82)
+
+A job's good news has a path into the page now. The weekly `directory-listings` check (agent-stack#306) appends one
+JSON line per newly live listing to `~/.hermes/notices/directory-listings.jsonl` on the machine it runs on, and each
+line shows once: one toast and one Needs attention row, linking to the listing, gone when it is acknowledged.
+Collector had no such path — toasts came only from services and the network, and Needs attention only from failures
+and watch entries.
+
+The line is `{"at": "<ISO time>", "key": "<what an acknowledgement names>", "level": "info", "text": "<the news>",
+"href": "<the listing>"}`. `collect.py`'s `notices_rows` reads every `<home>/.hermes/notices/*.jsonl` on every
+machine, on the same read as everything else, so it costs no extra ssh: the newest 64 KB of each file
+(`NOTICE_TAIL`), oldest first, as `{key, level, text, href, at}` (the `key` falls back to the text, and `href` is null
+when the line has none or is not a web address — a `javascript:` or `data:` URL from outside data would run in the
+page's own origin, whose routes restart the server and write `config.json`, so only `http://`/`https://` is kept as a
+link; the news still shows, without one). A line older than three weeks (`NOTICE_KEEP_S`) is the file's own record of a
+listing, not news; a line that is not JSON, that is not an object, or that carries no `text` is skipped, so another
+job's file cannot take a machine's whole read down (the clean-machine rule of card #55). A line with no readable `at`
+is kept: a job that wrote one meant it.
+
+`lib/server/warnings.ts` turns each row into a `warn` row naming what it read, linked to `href` (an info level is
+never an error, so it makes no alarm sound and draws no red), with the existing Acknowledge: `ack.key` is the line's
+own key, so acknowledging a listing covers it however many times the machine is read again. An acknowledged row with
+no next run reads `Acknowledged.` — the Dashboard only says "Waiting for the next run" when `ack.next` names one.
+
+`lib/toasts.ts`'s `noticeToasts(machines, acks)` is the toast: the line's text is the title and the link (a notice
+with no `href` leads to the Needs attention panel instead), the address is the body, and a `key` already in the
+browser's acknowledgements (`components/acks.ts`) is left out. One Acknowledge on the row clears both, since they
+read the same list; there is no Dismiss, because the news is not a problem that has to wait for a run to clear.
+`tests/notices.test.ts` and `tests/notices.driver.py` drive the real `collect.py` on a fixture home.
+
 ## The Sponsor button (card #52)
 
 Collector stays free and open source, and its own revenue starts with GitHub Sponsors. The button on the repo

@@ -47,6 +47,15 @@ interface MachineIn {
     sockets?: PortIn[];
     ssh?: { source: string | null; passwordauthentication: boolean; permitrootlogin: boolean } | null;
   } | null;
+  /** The machine's own job notices: one line of `~/.hermes/notices/*.jsonl` each (collector#82). */
+  notices?: NoticeIn[];
+}
+
+interface NoticeIn {
+  key?: string;
+  level?: string;
+  text?: string;
+  href?: string | null;
 }
 
 /** A service that is Slow or Down: one toast, its state the status and the error. */
@@ -172,6 +181,32 @@ export function internetPortCount(machines: MachineIn[] | null | undefined): num
     n += seen.size;
   }
   return n;
+}
+
+/** A machine's job notices (collector#82): one amber toast per line a job wrote into `~/.hermes/notices/*.jsonl` —
+ * a new directory listing, say — its title the line's own text, linking to the listing. It is good news, so it is
+ * never an error and makes no alarm sound, and a line whose key is acknowledged makes no toast: the row on the
+ * Dashboard carries the Acknowledge, and both read the same acks, so one click clears the pair. */
+export function noticeToasts(machines: MachineIn[] | null | undefined, acks: string[] = []): Toast[] {
+  const out: Toast[] = [];
+  for (const m of machines || []) {
+    for (const n of m.notices || []) {
+      const text = (n.text || "").trim();
+      if (!text) continue;
+      const key = n.key || text;
+      if (acks.includes(key)) continue;
+      out.push({
+        key,
+        state: text,
+        level: n.level === "error" ? "error" : "warn",
+        title: text,
+        // The title is the link, so the body is the address it goes to; a notice with no link says nothing more.
+        text: n.href || "",
+        href: n.href || jumpHref("dashboard", "attention"),
+      });
+    }
+  }
+  return out;
 }
 
 /** The toasts to show, errors first, then warnings. */
