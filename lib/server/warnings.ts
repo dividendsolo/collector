@@ -226,6 +226,8 @@ export function warnings(w: WarningInputs): Warning[] {
       out.push({
         level: d.days <= 7 ? "error" : "warn",
         text: `${d.name} expires in ${d.days} days (${d.expires}) at ${d.registrar || "its registrar"}`,
+        // Acknowledged once renewed (James, 2026-11-09): the key holds the expiry date, so a new date asks again.
+        ack: { key: `domain|${d.name}|${d.expires}`, next: null },
       });
     if (d.auto_renew === false && d.days != null && d.days <= 60)
       out.push({ level: "warn", text: `${d.name} expires in ${d.days} days and auto-renew is off` });
@@ -279,12 +281,14 @@ export function warnings(w: WarningInputs): Warning[] {
       text: `X API: $${xc.toFixed(2)} of credits left (top up before Situation's X wire stops)`,
       url: "https://console.x.com",
     });
-  for (const a of w.ai)
-    if (a.low)
-      out.push({
-        level: "error",
-        url: a.link,
-        text: a.alert || `${`${a.provider}: ${a.left} left ${a.detail || ""}`.trim()} (top up before the lanes stop)`,
-      });
+  // One row only when every provider with a usage reading is out: a fallback still answers otherwise (James,
+  // 2026-11-09: "one message that says that we are completely out when ... all the fallbacks are drained"). Nous and
+  // Claude running low are toasts (lib/toasts.ts, aiToasts).
+  const metered = w.ai.filter((a) => a.left != null || a.windows?.length);
+  if (metered.length && metered.every((a) => a.low))
+    out.push({
+      level: "error",
+      text: `Every AI plan is out: ${metered.map((a) => a.provider).join(", ")}. The lanes stop until one resets.`,
+    });
   return [...out.filter((x) => x.level === "error"), ...out.filter((x) => x.level === "warn")];
 }
