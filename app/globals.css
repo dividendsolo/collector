@@ -46,6 +46,8 @@
     --blue: oklch(0.76 0.15 var(--hue));
     --claude: #d97757;
     --nous: #000091;
+    --minimax: #ff3763;
+    --kimi: #1a88ff;
     --blue-2: oklch(0.82 0.12 var(--hue));
     --blue-bg: oklch(0.76 0.15 var(--hue) / 0.1);
     --blue-line: oklch(0.76 0.15 var(--hue) / 0.3);
@@ -85,6 +87,8 @@
     --blue: oklch(0.55 0.17 var(--hue));
     --claude: #d97757;
     --nous: #000091;
+    --minimax: #ff3763;
+    --kimi: #1a88ff;
     --blue-2: oklch(0.48 0.16 var(--hue));
     --blue-bg: oklch(0.55 0.17 var(--hue) / 0.08);
     --blue-line: oklch(0.55 0.17 var(--hue) / 0.3);
@@ -2020,6 +2024,14 @@
   .bar.nous span {
     background: var(--nous);
     box-shadow: 0 0 8px var(--nous);
+  }
+  .bar.kimi-coding span {
+    background: var(--kimi);
+    box-shadow: 0 0 8px var(--kimi);
+  }
+  .bar.minimax span {
+    background: var(--minimax);
+    box-shadow: 0 0 8px var(--minimax);
   }
   .bar.low span {
     background: var(--red);

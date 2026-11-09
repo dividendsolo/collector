@@ -7,10 +7,11 @@ const AI_NAMES: Record<string, string> = {
   anthropic: "Anthropic",
   nous: "Nous",
   minimax: "MiniMax",
+  "kimi-coding": "Kimi",
   "xai-oauth": "Grok (xAI)",
 };
 const aiName = (slug: string) => AI_NAMES[slug] || slug;
-const AI_ORDER = ["anthropic", "nous", "minimax", "xai-oauth"];
+const AI_ORDER = ["anthropic", "nous", "kimi-coding", "minimax", "xai-oauth"];
 const aiRank = (slug: string) => {
   const i = AI_ORDER.indexOf(slug);
   return i < 0 ? AI_ORDER.length - 1 : i;
@@ -71,7 +72,9 @@ export function AiPlan({ a }: { a: any }) {
                   {w.left ? ` · ${w.left}` : ""}
                 </small>
               </span>
-              <div className={`bar ${a.provider}${(w.low ?? w.used > 90) ? " low" : ""}`}>
+              {/* A bar keeps its provider's color at any usage (James, 2026-11-09): a low plan is the
+                  notifications' job, not the panel's. */}
+              <div className={`bar ${a.provider}`}>
                 <span style={{ width: `${Math.min(100, w.used)}%` }} />
               </div>
             </div>

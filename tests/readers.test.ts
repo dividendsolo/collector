@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clock, nousTopup, renewsText } from "@/lib/server/ai";
+import { clock, kimiReading, nousTopup, renewsText } from "@/lib/server/ai";
 import { perMonth, polarRevenue, stripeRevenue } from "@/lib/server/billing";
 import { daysLeft, parseRdap, parseWhois } from "@/lib/server/domains";
 import { parseEnv } from "@/lib/server/env";
@@ -703,5 +703,28 @@ describe("nousTopup", () => {
   });
   it("shows a spent top-up as 100% used", () => {
     expect(nousTopup(0)).toMatchObject({ used: 100, left: "$0.00 of $25 left" });
+  });
+});
+
+describe("kimiReading", () => {
+  it("reads the 5-hour and 7-day limits from Kimi's usage endpoint", () => {
+    // The shape of api.kimi.com/coding/v1/usages on 2026-11-09: the 5-hour window used up, 84% of the week.
+    const r = kimiReading({
+      usages: {
+        limit_5h: { used_ratio: 1, reset_time: "2026-11-09T23:48:05Z" },
+        limit_7d: { used_ratio: 0.8449, reset_time: "2026-11-13T18:48:05Z" },
+      },
+    });
+    expect(r).toMatchObject({
+      plan: "Coding plan",
+      left: "0%",
+      detail: "of this 5-hour window, 16% of the week",
+      low: true,
+    });
+    expect(r.windows).toEqual([
+      { label: "5-hour window", used: 100, resets: "2026-11-09T23:48:05Z" },
+      { label: "Week", used: 84, resets: "2026-11-13T18:48:05Z" },
+    ]);
+    expect(kimiReading({})).toEqual({ note: "Kimi returned no plan" });
   });
 });
