@@ -2039,20 +2039,22 @@
 
   /* Briefs (collector#64): the Inbox and the Archived section, and one brief read as Markdown. */
   .briefs th:first-child,
-  .briefs td.mark {
+  .briefs td.unread-dot {
     width: 18px;
     padding-right: 0;
+    text-align: center;
   }
-  .briefs td.mark .dot {
+  .briefs td.unread-dot .dot {
     display: inline-block;
+    vertical-align: middle;
     width: 6px;
     height: 6px;
     border-radius: 50%;
     background: var(--blue);
   }
   /* Unread is the brief's name at full strength with its dot; a read one stays where it is, dimmed. */
-  .briefs td.name a {
-    font-weight: 500;
+  .briefs tr.unread td.name a {
+    font-weight: 600;
   }
   .briefs tr.read td {
     opacity: 0.6;

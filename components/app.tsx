@@ -204,7 +204,8 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
     case "briefs":
       return <BriefsPage />;
     case "brief":
-      return r.brief ? <BriefPage machine={r.brief[0]} file={r.brief[1]} /> : null;
+      // Keyed by the brief, so one brief's Archived button state never carries to the next one opened.
+      return r.brief ? <BriefPage key={r.brief.join("/")} machine={r.brief[0]} file={r.brief[1]} /> : null;
     case "agents":
       return <AgentsPage />;
     case "agent":

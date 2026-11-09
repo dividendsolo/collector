@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { mutate } from "swr";
 import type { Brief } from "@/lib/briefs";
 import { useApi } from "./data";
 import { Markdown } from "./markdown";
@@ -38,12 +39,26 @@ const day = (sent_at: string | null | undefined) => {
     : "—";
 };
 
+/** One click's write (Read on open, or Archive). Its answer is the whole view, handed to the shared `/api/briefs`
+ * read so the sidebar count and the Inbox change on the click rather than at the next minute's refresh. */
+export async function postBrief(machine: string, file: string, change: { read?: boolean; archived?: boolean }) {
+  const r = await fetch("/api/briefs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ machine, file, ...change }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return { ok: false as const, why: (d.why as string) || `HTTP ${r.status}` };
+  mutate("/api/briefs", d, { revalidate: false });
+  return { ok: true as const };
+}
+
 const href = (b: Brief) => `#/briefs/${encodeURIComponent(b.machine)}/${encodeURIComponent(b.file)}`;
 
 /** One row: the dot says Unread, the name opens the brief, and how far down the Inbox it sits is the order itself. */
 const BriefRow = ({ b }: { b: Brief }) => (
   <tr className={b.read ? "read" : "unread"}>
-    <td className="mark">{b.read ? null : <span className="dot" title="Unread" />}</td>
+    <td className="unread-dot">{b.read ? null : <span className="dot" title="Unread" />}</td>
     <td className="name">
       <a className="plain" href={href(b)}>
         {b.brief || b.subject || b.file}
@@ -99,20 +114,23 @@ export function BriefsPage() {
                   </td>
                 </tr>
               )}
-            </tbody>
-          </table>
-        </div>
-        <div className="section-head">Archived</div>
-        <div className="wrap">
-          <table className="briefs">
-            <tbody>
-              {archived.length ? (
-                archived.map((b) => <BriefRow b={b} key={`${b.machine}/${b.file}`} />)
-              ) : (
+              {data ? (
                 <tr>
-                  <td className="sub">Nothing archived yet.</td>
+                  <td colSpan={4} className="section-head">
+                    Archived
+                  </td>
                 </tr>
-              )}
+              ) : null}
+              {data && !archived.length ? (
+                <tr>
+                  <td colSpan={4} className="sub">
+                    Nothing archived yet.
+                  </td>
+                </tr>
+              ) : null}
+              {archived.map((b) => (
+                <BriefRow b={b} key={`${b.machine}/${b.file}`} />
+              ))}
             </tbody>
           </table>
         </div>
@@ -132,22 +150,13 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
   // brief carries it.
   useEffect(() => {
     if (!brief || brief.read) return;
-    void fetch("/api/briefs", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ machine, file, read: true }),
-    });
+    void postBrief(machine, file, { read: true });
   }, [brief, machine, file]);
   const isArchived = archived || Boolean(brief?.archived);
   const archive = async () => {
-    const r = await fetch("/api/briefs", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ machine, file, archived: true }),
-    });
-    const d = await r.json();
+    const r = await postBrief(machine, file, { archived: true });
     if (r.ok) setArchived(true);
-    else alert(d.why || `HTTP ${r.status}`);
+    else alert(r.why);
   };
   return (
     <div className="page">

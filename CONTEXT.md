@@ -578,11 +578,14 @@ is that folder, worked the way an email inbox works.
   a key the page does not know is kept, because its machine may simply not have answered this read.
 - `briefsView()` works the two together from the cached snapshot — no extra ssh — and adds one plain `why` line when a
   machine could not be read, so an empty Inbox is never a lie. `briefBody()` is the one-file read, with its state.
-- The page (`components/briefs.tsx`) is `#/briefs`: the Inbox oldest first, unread in full with its dot and read dimmed
-  where it stands, then the Archived section under it, newest first. `#/briefs/<machine>/<file>` opens one brief as
+- The page (`components/briefs.tsx`) is `#/briefs`: the Inbox oldest first, unread bold with its dot and read in the
+  normal weight, dimmed where it stands, then the Archived rows under a full-width Archived row of the same table (so
+  they share the Inbox's columns), newest first. The dot's cell is `td.unread-dot`: the global `.mark` class is a blue
+  box and must not be reused there. `#/briefs/<machine>/<file>` opens one brief as
   Markdown, and the Archive button sits at its top — the Acknowledge toggle's own button; there is no unarchive in this
   pass. Opening a brief is what makes it Read, and an archived brief still opens. The sidebar's Briefs link carries the
-  Inbox count as a number.
+  Inbox count as a number; both clicks go through `postBrief`, which hands the POST's answer (the whole view) to SWR's
+  `/api/briefs`, so the count changes on the click and not at the next minute's refresh.
 - A brief's Markdown is read as data, never as HTML: `lib/markdown.ts` parses headings, tables, lists, fenced code,
   rules and paragraphs with inline code, bold, italics and links, and `components/markdown.tsx` draws those as React
   nodes. Nothing goes near `dangerouslySetInnerHTML`, so raw HTML in a quoted post prints as the characters it is, and
