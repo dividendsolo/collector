@@ -1,4 +1,4 @@
-import { config } from "./config";
+import { config, projectRepos } from "./config";
 import { run } from "./run";
 import { once } from "./store";
 import { cardText } from "./text";
@@ -14,7 +14,7 @@ export async function card(repo: string, number: number) {
   const key = `${repo}#${number}`;
   const hit = cards.get(key);
   if (hit && Date.now() - hit.at < 600_000) return hit.card;
-  const chosen = config().projects || [];
+  const chosen = projectRepos(config());
   const exact = chosen.filter((p) => p.split("/").pop() === repo);
   const names = exact.length ? exact : [...new Set(chosen.map((p) => p.split("/")[0]))].map((o) => `${o}/${repo}`);
   for (const name of names) {

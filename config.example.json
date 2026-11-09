@@ -71,11 +71,13 @@
   "vendors": [
     {
       "name": "GitHub",
-      "url": "https://www.githubstatus.com"
+      "url": "https://www.githubstatus.com",
+      "criticality": "critical"
     },
     {
       "name": "Vercel",
-      "url": "https://www.vercel-status.com"
+      "url": "https://www.vercel-status.com",
+      "criticality": "medium"
     }
   ],
   "domains": [
@@ -133,15 +135,25 @@
       "name": "Hosting",
       "amount": 20,
       "billing": "monthly",
-      "currency": "USD"
+      "currency": "USD",
+      "renews": "2026-12-01"
     },
     {
       "name": "Domain",
       "amount": 12,
       "billing": "annual",
-      "currency": "USD"
+      "currency": "USD",
+      "renews": "2027-03-14"
     }
   ],
+  "projects": {
+    "owner/a-project": {
+      "stage": "production"
+    },
+    "owner/a-library": {
+      "stage": "idea"
+    }
+  },
   "agent_notes": {
     "builder": "Builds cards",
     "reviewer": "Reviews PRs"

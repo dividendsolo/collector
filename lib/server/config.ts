@@ -17,6 +17,8 @@ export interface Vendor {
   feed?: string;
   probe?: string;
   attention?: boolean;
+  /** How much we depend on it: `low`, `medium`, `high` or `critical` (collector#78). */
+  criticality?: string;
 }
 export interface Subscription {
   name: string;
@@ -25,6 +27,13 @@ export interface Subscription {
   currency?: string;
   status?: string;
   project?: string;
+  /** The day it renews, `YYYY-MM-DD` (collector#78). */
+  renews?: string;
+}
+/** One repo on the Projects page and its own facts (collector#78). */
+export interface ProjectEntry {
+  /** Where the project stands: `idea`, `development`, `testing`, `production` or `archived`. */
+  stage?: string;
 }
 export interface BillingAccount {
   provider: string;
@@ -91,7 +100,10 @@ export interface Config {
   tickets?: { each?: string[]; count?: string[]; all?: string[]; command?: string[] };
   board?: Board;
   subscriptions?: Subscription[];
-  projects?: string[];
+  /** The repos on the Projects page: `owner/repo` strings (what the repo picker writes), or a map of
+   * `owner/repo` to that project's own facts (`{"stage": "production"}`) — collector#78. Read both ways by
+   * `projectRepos` and `projectStage`. */
+  projects?: string[] | Record<string, ProjectEntry>;
   /** Actions minutes a month the GitHub plan includes; read from the plan when left out. */
   actions_minutes?: number;
   agent_notes?: Record<string, string>;
@@ -125,6 +137,71 @@ export const CONFIG_KEYS = [
 ] as const;
 
 const KNOWN_KEYS = new Set<string>(CONFIG_KEYS);
+
+/** A project's stage (Mission Control's ProjectStatus) and how much we depend on a vendor (its ApiCriticality):
+ * the allowed values, in the order the docs write them (collector#78). */
+export const PROJECT_STAGES = ["idea", "development", "testing", "production", "archived"] as const;
+export const API_CRITICALITIES = ["low", "medium", "high", "critical"] as const;
+
+/** A renewal date as config.json writes one: a calendar day, `2026-11-15`. */
+export const RENEWS_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Is this a renewal date Collector can use: `YYYY-MM-DD`, and a day that exists (`2026-02-31` is not one). */
+export function isRenewsDate(v: unknown): v is string {
+  if (typeof v !== "string" || !RENEWS_DATE.test(v)) return false;
+  const d = new Date(`${v}T12:00:00`);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return !Number.isNaN(d.getTime()) && `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === v;
+}
+
+const object = (v: unknown): Record<string, unknown> | null =>
+  v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const who = (n: unknown) => (typeof n === "string" ? n : "?");
+const allowed = (values: readonly string[], v: unknown) => typeof v === "string" && values.includes(v);
+
+/** The repos on the Projects page, in the order the file writes them, from either shape of the key: the list the
+ * repo picker writes, or a map of `owner/repo` to that project's own facts (collector#78). */
+export function projectRepos(cfg: Config = {}): string[] {
+  const p = cfg.projects;
+  if (Array.isArray(p)) return p.filter((r): r is string => typeof r === "string");
+  return p && typeof p === "object" ? Object.keys(p) : [];
+}
+
+/** One project's stage, or undefined for a project with none — and for a config that keeps `projects` a plain
+ * list, where no repo has one (collector#78). */
+export function projectStage(cfg: Config, repo: string): string | undefined {
+  const stage = object(object(cfg.projects)?.[repo])?.stage;
+  return typeof stage === "string" ? stage : undefined;
+}
+
+/** The config.json values Collector would never use — a stage, a criticality or a renewal date outside the
+ * allowed ones (collector#78) — each named the way a reader finds it in the file. Reported rather than obeyed,
+ * as `unknownConfigKeys` is: `bun run check:config` and the Needs attention row both name them, since a setting
+ * that does nothing should not be silent. A config of the wrong shape is reported, never thrown: this runs on a
+ * stranger's config.json, inside the page's own read. */
+export function badConfigValues(cfg: unknown): string[] {
+  const c = object(cfg) ?? {};
+  const out: string[] = [];
+  for (const [repo, v] of Object.entries(object(c.projects) ?? {})) {
+    const stage = object(v)?.stage;
+    if (stage != null && !allowed(PROJECT_STAGES, stage))
+      out.push(`projects["${repo}"].stage ${JSON.stringify(stage)} is not one of ${PROJECT_STAGES.join(", ")}`);
+  }
+  for (const [i, v] of list(c.vendors).entries()) {
+    const { name, criticality } = object(v) ?? {};
+    if (criticality != null && !allowed(API_CRITICALITIES, criticality))
+      out.push(
+        `vendors[${i}] (${who(name)}).criticality ${JSON.stringify(criticality)} is not one of ${API_CRITICALITIES.join(", ")}`,
+      );
+  }
+  for (const [i, v] of list(c.subscriptions).entries()) {
+    const { name, renews } = object(v) ?? {};
+    if (renews != null && !isRenewsDate(renews))
+      out.push(`subscriptions[${i}] (${who(name)}).renews ${JSON.stringify(renews)} is not a date (YYYY-MM-DD)`);
+  }
+  return out;
+}
 
 /** The top-level keys in a candidate config that Collector would never read. Reported rather than obeyed (as a row in
  * Needs attention, by `bun run check:config`, and by SETUP.md's prompt), since such a key is a setting that does nothing. */

@@ -76,15 +76,22 @@ What to look at — read-only, and only what exists on this machine
     should print 200 or 308) and leave out anything that does not.
   - `domains`: the domains those sites serve, one string each (`["example.com"]`). The Domains page reads the
     registrar, the expiry date and the certificate from there.
-  - `vendors`: the outside services the repos depend on, `{"name": "Stripe", "url": "https://status.stripe.com"}` — the
-    vendor's public status page, which you can confirm with one GET. Add `"attention": true` only on the ones whose
-    outage the person would want at the top of the page, the ones the product cannot live without; the rest stay
-    listed without it.
-  - `projects`: the repos worth a row on the Projects page, as `owner/repo`: the ones the person runs, not every clone.
-    Get the exact name from inside the repo: `gh repo view --json nameWithOwner`.
-  - `subscriptions`: what the person pays for, `{"name": "Vercel", "amount": 20, "billing": "monthly"}` — only from
-    something you can read on this machine (an invoice, a receipts folder, a billing note in a repo). Never guess an
-    amount: leave the key out and say what you would need to fill it.
+  - `vendors`: the outside services the repos depend on, `{"name": "Stripe", "url": "https://status.stripe.com",
+    "criticality": "high"}` — the vendor's public status page, which you can confirm with one GET. `criticality` is
+    how much the person depends on it (`low`, `medium`, `high` or `critical`): the APIs page shows it, and a `high`
+    or `critical` one that is showing an incident sorts to the top. Set it only where you can tell; leave it out
+    otherwise. Add `"attention": true` only on the ones whose outage the person would want at the top of the page,
+    the ones the product cannot live without; the rest stay listed without it.
+  - `projects`: the repos worth a row on the Projects page, the ones the person runs, not every clone:
+    `{"owner/repo": {"stage": "production"}}`. `stage` is where each one stands — `idea`, `development`, `testing`,
+    `production` or `archived` — taken from what you read (the repo's own README, the person's words), never
+    guessed; a repo with no stage shows nothing on the page. Get the exact name from inside the repo:
+    `gh repo view --json nameWithOwner`. The "Choose repos" button writes this map too, keeping each stage; a plain
+    list of `owner/repo` strings is still read, with no stages.)
+  - `subscriptions`: what the person pays for, `{"name": "Vercel", "amount": 20, "billing": "monthly", "renews":
+    "2026-12-01"}` — only from something you can read on this machine (an invoice, a receipts folder, a billing note
+    in a repo). `renews` is the day it next charges, from that invoice; leave it out when the invoice does not say.
+    Never guess an amount: leave the key out and say what you would need to fill it.
   - `billing`: a payment provider of one of those repos whose read-only key the person already keeps in `.env`:
     `{"owner/repo": [{"provider": "stripe", "key": "MYAPP_STRIPE_KEY"}]}`. `provider` is `stripe` or `polar`, and `key`
     is the name of the `.env` line, never its value. Nothing in `.env`: leave it out.
@@ -109,7 +116,7 @@ What to look at — read-only, and only what exists on this machine
 
 Then
 1. Write `config.json` in this folder: JSON, two-space indent, only the keys you found, in the order the README table
-   lists them. Run `bun run check:config` and fix every key it names.
+   lists them. Run `bun run check:config` and fix every key and value it names.
 2. Start it: `bun install` if `node_modules` is missing, then `bun run build`, then `bun start` (or
    `COLLECTOR_PORT=<a free port> bun start` if 4000 is taken). Run it in the background and leave it running.
 3. Look at what the page found, through its API: `curl -s http://127.0.0.1:<port>/api/state`, then `/api/tickets` if

@@ -211,18 +211,19 @@ export function ProjectsPage() {
                 <th>Hosting</th>
                 <th>URL</th>
                 <th>Health</th>
+                <th>Stage</th>
               </tr>
             </thead>
             <tbody>
               {!data ? (
-                <SkelRows n={6} cols={7} />
+                <SkelRows n={6} cols={8} />
               ) : list.length ? (
                 list.map((p) => {
                   if (p.error)
                     return (
                       <tr key={p.repo}>
                         <td className="mono">{p.repo}</td>
-                        <td colSpan={6} className="err">
+                        <td colSpan={7} className="err">
                           {p.error}
                         </td>
                       </tr>
@@ -269,12 +270,15 @@ export function ProjectsPage() {
                       <td>
                         <Health svc={live.svc} />
                       </td>
+                      {/* Where the project stands, hand-set in config.json (`projects.<owner/repo>.stage`,
+                          collector#78): a project with no stage shows nothing. */}
+                      <td>{p.stage || null}</td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div className="soon">
                       <b>No projects chosen yet.</b>
                       <span>Choose the repos to show. Collector reads them through your gh login.</span>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { daysAgo, money, monthly, prio } from "@/lib/format";
 import { PROPOSAL_STATUSES, type Proposal, type ProposalStatus } from "@/lib/proposals";
+import { vendorOrder } from "@/lib/vendors";
 import { AiPanels } from "./ai";
 import { useApi, useLive } from "./data";
 import { BlurToggle, Count, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
@@ -164,17 +165,12 @@ const VENDOR_PILL: Record<string, [string, string]> = {
   minor: ["warning", "Minor incident"],
   ok: ["ok", "Operational"],
 };
-const VENDOR_RANK: Record<string, number> = { critical: 0, major: 1, minor: 2, ok: 3, "no feed": 4 };
-/** A vendor with a live incident. An "ok" vendor can still list a notice (impact "none", e.g. planned maintenance). */
-export const vendorHit = (v: any) => VENDOR_RANK[v.state] <= VENDOR_RANK.minor;
 
 export const useVendors = () => {
   const { data } = useApi("/api/vendors");
-  return data
-    ? ([...data.vendors].sort(
-        (a, b) => VENDOR_RANK[a.state] - VENDOR_RANK[b.state] || a.name.localeCompare(b.name),
-      ) as any[])
-    : null;
+  // A vendor we depend heavily on that is showing an incident first, then the worst state, then by name
+  // (collector#78). `vendorOrder` and `vendorHit` live in lib/vendors so the order can be tested.
+  return data ? (vendorOrder(data.vendors) as any[]) : null;
 };
 
 /** An incident's age and where it is, from the vendor's own feed: "opened Sep 3, 2026 · last update Sep 3, 2026 ·
@@ -371,7 +367,17 @@ export function ApisPage() {
               return (
                 <li key={v.name}>
                   <div>
-                    <div className="name">{v.name}</div>
+                    <div className="name">
+                      {v.name}
+                      {/* How much we depend on it, from config.json (collector#78): the page puts a high or critical
+                          one with an incident first, and the pill is the reason why. */}
+                      {v.criticality ? (
+                        <>
+                          {" "}
+                          <span className="pill">{v.criticality}</span>
+                        </>
+                      ) : null}
+                    </div>
                     <div className="sub">
                       <a href={v.url} target="_blank" rel="noopener">
                         {v.url.replace(/^https?:\/\//, "")}
@@ -464,11 +470,12 @@ export function SubscriptionsPage() {
           </div>
         </PanelHead>
         <div className="wrap">
-          <table>
+          <table className="subs">
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Billing</th>
+                <th>Renews</th>
                 <th className="num">Charge</th>
                 <th className="num">Per month</th>
                 <th className="num">Per year</th>
@@ -476,12 +483,15 @@ export function SubscriptionsPage() {
             </thead>
             <tbody>
               {!state ? (
-                <SkelRows n={6} cols={5} />
+                <SkelRows n={6} cols={6} />
               ) : sorted.length ? (
                 sorted.map((x, i) => (
                   <tr key={`${x.name}-${i}`}>
                     <td>{x.name}</td>
                     <td>{x.billing === "annual" ? "Annual" : "Monthly"}</td>
+                    {/* The day it renews, as config.json writes it (`subscriptions[].renews`, collector#78).
+                        Collector warns in Needs attention inside the last week before it. */}
+                    <td className="mono">{x.renews || <span className="sub">—</span>}</td>
                     <td className="num mono">
                       <M n={x.amount} cur={x.currency} />
                     </td>
@@ -495,7 +505,7 @@ export function SubscriptionsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="soon">
                       <b>No subscriptions yet.</b>
                       <span>Add them to config.json under &quot;subscriptions&quot;.</span>
@@ -508,6 +518,7 @@ export function SubscriptionsPage() {
               {Object.entries(totals).map(([cur, n]) => (
                 <tr className="total" key={cur}>
                   <td>Total{Object.keys(totals).length > 1 ? ` (${cur})` : ""}</td>
+                  <td />
                   <td />
                   <td />
                   <td className="num mono">
