@@ -61,6 +61,11 @@ describe("a vendor's criticality (collector#78)", () => {
     ).toEqual(["Stripe", "Railway", "Vercel"]);
   });
 
+  it("keeps a heavy vendor whose only incident is stale below a live outage", () => {
+    const github = { ...vendor("GitHub", "critical"), incidents: [{ name: "Old notice", impact: "none", url: "" }] };
+    expect(names([github, vendor("Stripe", "medium", true)])).toEqual(["Stripe", "GitHub"]);
+  });
+
   it("refuses a criticality outside the allowed values", () => {
     expect(badConfigValues({ vendors: [{ name: "GitHub", url: "u", criticality: "urgent" }] })).toEqual([
       `vendors[0] (GitHub).criticality "urgent" is not one of ${API_CRITICALITIES.join(", ")}`,

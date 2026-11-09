@@ -470,7 +470,7 @@ export function SubscriptionsPage() {
           </div>
         </PanelHead>
         <div className="wrap">
-          <table>
+          <table className="subs">
             <thead>
               <tr>
                 <th>Name</th>

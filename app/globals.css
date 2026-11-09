@@ -1280,6 +1280,17 @@
       display: none;
     }
   }
+  /* Phones: Subscriptions keeps Name, Renews, Charge and Per month, on tighter padding; Billing and Per year go
+     (collector#78). */
+  @media (max-width: 700px) {
+    table.subs tr > :is(th, td):is(:nth-child(2), :nth-child(6)) {
+      display: none;
+    }
+    table.subs :is(th, td) {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+  }
   tr.row {
     cursor: pointer;
   }

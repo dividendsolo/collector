@@ -15,10 +15,8 @@ export const vendorHit = (v: { state: string }) => VENDOR_RANK[v.state] <= VENDO
 
 /** The APIs page's order: a vendor we depend heavily on whose status page shows an incident first, then the vendors
  * with the worst state, then by name. */
-export function vendorOrder<T extends { name: string; state: string; incidents?: unknown[]; criticality?: string }>(
-  rows: T[],
-): T[] {
-  const heavy = (v: T) => Number(HEAVY_CRITICALITY.has(v.criticality || "") && (v.incidents || []).length > 0);
+export function vendorOrder<T extends { name: string; state: string; criticality?: string }>(rows: T[]): T[] {
+  const heavy = (v: T) => Number(HEAVY_CRITICALITY.has(v.criticality || "") && vendorHit(v));
   return [...rows].sort(
     (a, b) => heavy(b) - heavy(a) || VENDOR_RANK[a.state] - VENDOR_RANK[b.state] || a.name.localeCompare(b.name),
   );

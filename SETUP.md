@@ -86,8 +86,8 @@ What to look at — read-only, and only what exists on this machine
     `{"owner/repo": {"stage": "production"}}`. `stage` is where each one stands — `idea`, `development`, `testing`,
     `production` or `archived` — taken from what you read (the repo's own README, the person's words), never
     guessed; a repo with no stage shows nothing on the page. Get the exact name from inside the repo:
-    `gh repo view --json nameWithOwner`. (A plain list of `owner/repo` strings works too, and that is what the
-    "Choose repos" button writes.)
+    `gh repo view --json nameWithOwner`. The "Choose repos" button writes this map too, keeping each stage; a plain
+    list of `owner/repo` strings is still read, with no stages.)
   - `subscriptions`: what the person pays for, `{"name": "Vercel", "amount": 20, "billing": "monthly", "renews":
     "2026-12-01"}` — only from something you can read on this machine (an invoice, a receipts folder, a billing note
     in a repo). `renews` is the day it next charges, from that invoice; leave it out when the invoice does not say.
