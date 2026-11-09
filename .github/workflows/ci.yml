@@ -4,13 +4,14 @@ name: CI
 # (James, 2026-11-09: "the CI should run before merge, not after"). It starts
 # by hand: agent-stack/vps/scripts/ci-merge.py starts it on the PR branch and
 # merges only when it passes, and refuses a repo with no such workflow.
+# A public repo runs on GitHub's free runners (Jog takes private repos only).
 # Pushes do not run it (James, 2026-10-04: Actions minutes).
 on:
   workflow_dispatch:
 
 jobs:
   check:
-    runs-on: jog
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 15
