@@ -1,4 +1,5 @@
 import { money } from "../format";
+import { webUrl } from "../links";
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
 import { badConfigValues, type Config, isRenewsDate, unknownConfigKeys } from "./config";
@@ -152,14 +153,18 @@ export function warnings(w: WarningInputs): Warning[] {
     // "Situation is listed on App Rater" — linking to the listing and acknowledged by the line's own key, so it
     // shows once and goes away when acknowledged rather than waiting for a run that will never clear it. Info is a
     // warning, not an error: nothing is wrong, and the row makes no alarm sound.
-    for (const n of m.notices || [])
+    for (const n of m.notices || []) {
+      // The line's href is outside data, like a feed's incident link: only a web address goes in the row's href
+      // (collector#84).
+      const href = webUrl(n?.href);
       if (n?.text)
         out.push({
           level: n.level === "error" ? "error" : "warn",
           text: String(n.text),
-          ...(n.href ? { url: String(n.href) } : {}),
+          ...(href ? { url: href } : {}),
           ack: { key: String(n.key || n.text), next: null },
         });
+    }
     // The ports anyone on the internet can connect to (collector#65), one error row per machine naming the first ten:
     // a machine can have twenty, and a row each would bury every other warning on the Dashboard. A port only the
     // local network, the tailnet or the machine itself can reach is no warning. The Network page has each port with

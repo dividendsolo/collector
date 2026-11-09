@@ -12,6 +12,7 @@
 
 import type { Check } from "./checks";
 import { jumpHref } from "./jump";
+import { webUrl } from "./links";
 
 export interface Toast {
   /** Which thing it is about: `service:<url>` or `network:<machine>`. */
@@ -195,14 +196,16 @@ export function noticeToasts(machines: MachineIn[] | null | undefined, acks: str
       if (!text) continue;
       const key = n.key || text;
       if (acks.includes(key)) continue;
+      // The line's href is outside data, and the title above it is the link: only a web address is one (collector#84).
+      const href = webUrl(n.href);
       out.push({
         key,
         state: text,
         level: n.level === "error" ? "error" : "warn",
         title: text,
         // The title is the link, so the body is the address it goes to; a notice with no link says nothing more.
-        text: n.href || "",
-        href: n.href || jumpHref("dashboard", "attention"),
+        text: href || "",
+        href: href || jumpHref("dashboard", "attention"),
       });
     }
   }

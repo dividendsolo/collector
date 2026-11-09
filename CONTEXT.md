@@ -506,6 +506,17 @@ browser's acknowledgements (`components/acks.ts`) is left out. One Acknowledge o
 read the same list; there is no Dismiss, because the news is not a problem that has to wait for a run to clear.
 `tests/notices.test.ts` and `tests/notices.driver.py` drive the real `collect.py` on a fixture home.
 
+## Only a web address is an href (collector#84)
+
+The page takes a few links from outside data — a vendor's status feed gives an incident's own link, a machine's notice
+line gives its listing — and puts them in an `<a href>` on Collector's own origin, whose routes restart the server,
+start the tailnet or the Hermes gateway and write `config.json`. React does not help: it writes a known attribute
+straight through, so a `javascript:` or `data:` URL would run there when it is clicked. `lib/links.ts`'s `webUrl` is
+the one allowlist — only `http://`/`https://` is a link (the same rule `collect.py`'s notices read keeps on the
+machine). A feed's incident link that is not one falls back to the vendor's own status page
+(`lib/server/vendors.ts`); a notice line's href is dropped rather than obeyed in the row and in the toast
+(`lib/server/warnings.ts`, `lib/toasts.ts`), and the news still shows.
+
 ## The Sponsor button (card #52)
 
 Collector stays free and open source, and its own revenue starts with GitHub Sponsors. The button on the repo
