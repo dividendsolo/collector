@@ -370,6 +370,20 @@
   .btn:hover {
     background: var(--hover);
   }
+  /* A link drawn as a button: centered like one, never underlined. */
+  a.btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  .btn.danger {
+    background: var(--red-bg);
+    border-color: var(--red-line);
+    color: var(--red);
+  }
+  .btn.danger:hover {
+    background: oklch(0.55 0.14 25 / 0.2);
+  }
   .btn.primary {
     background: var(--blue-bg);
     border-color: var(--blue-line);
@@ -1837,6 +1851,12 @@
   }
   .toast.error {
     border-color: var(--red-line);
+  }
+  .toast.no-dot {
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 12px 12px 16px;
   }
   .toast.warn {
     border-color: var(--amber-line);
