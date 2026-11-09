@@ -7,10 +7,12 @@ import {
   forgetFixed,
   githubToasts,
   newAlarms,
+  noticeToasts,
   serviceToasts,
   sortToasts,
   visibleToasts,
 } from "@/lib/toasts";
+import { useAcks } from "./acks";
 import { useLive } from "./data";
 import { useServices } from "./services";
 
@@ -105,17 +107,24 @@ export function Toasts() {
   // Until both reads are in, a thing that is fine cannot be told from one not read yet: no alarm before then.
   const ready = services !== null && state !== null;
   const gone = useSyncExternalStore(onDismiss, dismissed, () => NONE);
+  const acks = useAcks();
   const machines = useMemo(
     () =>
       (state?.machines || []).map((m: any) => ({
         name: m.name,
         checks: securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall"),
+        notices: m.notices,
       })),
     [state?.machines],
   );
   const all = useMemo(
-    () => [...githubToasts(state?.github), ...serviceToasts(services), ...checkToasts(machines)],
-    [state?.github, services, machines],
+    () => [
+      ...githubToasts(state?.github),
+      ...noticeToasts(machines, acks),
+      ...serviceToasts(services),
+      ...checkToasts(machines),
+    ],
+    [state?.github, services, machines, acks],
   );
   // A fixed check forgets its dismissal, so the next time it breaks the toast shows again.
   useEffect(() => {

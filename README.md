@@ -228,6 +228,10 @@ reads `<work script> on <machine> started N times in 60 s: it is starting itself
   (`session`), a launchd label and its last exit code (`launchd`), a log file's last line and age (`log`, with
   `fail_on`), or a heartbeat file's age (`heartbeat`, with `idle_after`). Failing is an error in Needs attention; idle
   too long — no process, no session, no file, or a file older than `idle_after` (default 900 seconds) — is a warning.
+- **Job notices (card #82):** a job of yours appends one JSON line per piece of good news to
+  `~/.hermes/notices/<job>.jsonl` — `{"at", "key", "level", "text", "href"}` — and each line shows once: one toast
+  and one Needs attention row, linking to the thing it names, until you acknowledge it. A line older than three
+  weeks, and one that is not JSON or carries no text, is left out; so is a link that is not a web address.
 - **Open ports (card #65):** every listening TCP and UDP socket each machine reports — `ss -tulnp` on Linux,
   `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -nP -iUDP` on a Mac — with the process and pid that own it, where this
   user may read one (no `sudo`, so a root socket shows its address and port and no name). Each port says who it

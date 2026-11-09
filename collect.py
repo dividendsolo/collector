@@ -2295,6 +2295,61 @@ def watch_rows(now, entries=None, ps_out=None, jobs=None, self_pid=None):
             for e in entries]
 
 
+# Job notices (collector#82): a job appends one JSON line per piece of good news — a new directory listing, say — to
+# a file under this folder, and the page shows each line as one toast and one Needs attention row until it is
+# acknowledged. `{"at": ..., "key": ..., "level": "info", "text": ..., "href": ...}` is the line; `key` is what an
+# acknowledgement names, so one listing acknowledged on the page stays acknowledged while its line is in the file.
+NOTICES = os.path.join(".hermes", "notices")
+# How far back a notice is news. An older line is the job's own record of a listing it already found.
+NOTICE_KEEP_S = 21 * 86400
+# The newest bytes of each file: a notices file is appended to forever, and its newest lines are what is new.
+NOTICE_TAIL = 64 * 1024
+# Only a web address is a link. A line's `href` comes from outside data — the directory listing's own URL — and the
+# page puts it in an `<a href>` on an origin whose own routes restart the server and write config.json, so a scheme
+# that runs script there is not a link (collector#82). The news still shows; it just shows without one.
+NOTICE_SCHEMES = ("http://", "https://")
+
+
+def notice_time(at):
+    """The epoch second a notice line's `at` names, or None when it is missing or unreadable."""
+    try:
+        return datetime.fromisoformat(str(at).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
+    """One row per notice line under `<home>/.hermes/notices/*.jsonl` (collector#82), oldest first.
+
+    Nothing here is another job's failure: a file that is not there, a line that is not JSON, a line that is not an
+    object, a line with no `text` and a line older than `keep_s` are each skipped, so one bad file cannot take a
+    machine's whole read down. A line with no readable `at` is kept — a job that wrote one meant it.
+    """
+    rows = []
+    for path in sorted(glob.glob(os.path.join(home, NOTICES, "*.jsonl"))):
+        for line in tail_text(path, NOTICE_TAIL).splitlines():
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict) or not str(entry.get("text") or "").strip():
+                continue
+            at = notice_time(entry.get("at"))
+            if at is not None and now.timestamp() - at > keep_s:
+                continue
+            href = str(entry["href"]) if entry.get("href") else ""
+            if not href.lower().startswith(NOTICE_SCHEMES):
+                href = None
+            rows.append({
+                "key": str(entry.get("key") or entry["text"]),
+                "level": str(entry.get("level") or "info"),
+                "text": str(entry["text"]),
+                "href": href,
+                "at": at,
+            })
+    return sorted(rows, key=lambda r: r["at"] or 0)
+
+
 def main():
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
@@ -2308,6 +2363,7 @@ def main():
         "hermes_gateway": hermes_gateway(now),
         "network": network_read(),
         "watch": watch_rows(now),
+        "notices": notices_rows(now),
         "running": running_agents(),
         "host_broken": host_broken(),
         "profiles": hermes_profiles(),

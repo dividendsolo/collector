@@ -121,7 +121,7 @@ function NeedsAttention() {
                 <span>
                   {x.text}
                   <span className="note">
-                    Acknowledged. Waiting for the next run{x.ack.next ? `, ${nextRun(x.ack.next)}` : ""}.
+                    Acknowledged{x.ack.next ? `. Waiting for the next run, ${nextRun(x.ack.next)}` : ""}.
                   </span>
                 </span>
                 <span className="act">
