@@ -430,6 +430,60 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  /* The proposal form (collector#77): a field grid over the table, in the page's own controls and tokens. */
+  .fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px 16px;
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .fields label {
+    display: grid;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .fields input,
+  .fields select,
+  .fields textarea {
+    font: 12px var(--sans);
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line-2);
+    background: var(--bg);
+    color: var(--text);
+  }
+  .fields textarea {
+    height: 52px;
+    padding: 6px 10px;
+    resize: vertical;
+  }
+  .fields :is(input, select, textarea):focus {
+    outline: none;
+    border-color: var(--blue-line);
+    box-shadow: var(--glow);
+  }
+  .fields .wide {
+    grid-column: 1 / -1;
+  }
+  .fields .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  /* A proposal's notes: two lines in the cell, the whole note on hover, so one long note cannot make the row. */
+  td.notes .clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-width: 360px;
+  }
+  td.actions {
+    white-space: nowrap;
+  }
   a.plain {
     color: inherit;
     text-decoration: none;
@@ -1559,6 +1613,15 @@
     border-color: var(--green-line);
   }
   .pill.net-tailnet .dot {
+    background: var(--green);
+  }
+  /* A proposal the client signed is the one state past approved: the page's green, the tailnet pill's colour. */
+  .pill.signed {
+    color: var(--green);
+    background: var(--green-bg);
+    border-color: var(--green-line);
+  }
+  .pill.signed .dot {
     background: var(--green);
   }
   /* Each machine's table sizes to its own rows: the port list wraps inside its cell, so one machine with a long list

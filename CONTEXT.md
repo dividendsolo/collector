@@ -550,6 +550,37 @@ date stays plain — no reason, no tooltip. Read the two facts apart: `holdText`
   `lib/server/ai.ts`); a balance over $25 says how many more full top-ups wait behind it. The Nous API has no
   top-up history, so the count of top-ups this month is not shown.
 
+## Proposals, and the open pipeline (card #77)
+
+Mission Control is retired, so Collector took the one page it was still missing: proposals. Its own data was demo
+data, so nothing was imported — the page starts empty. The records come from what Mission Control's `lib/types.ts`
+(`Proposal`, `ProposalStatus`) and `lib/repo/proposals.ts` (`pipelineValue`) had; the SQLite store and its server
+actions did not come across.
+
+- The rows live in `proposals.json`, **beside `config.json`** — `PROPOSALS_PATH` in `lib/server/paths.ts` is
+  `path.dirname(CONFIG_PATH)` plus that name, so a test that points `COLLECTOR_CONFIG` at a temp folder writes its
+  proposals there too, and the repo's own `proposals.json` (gitignored, like `config.json`) never holds real clients.
+- `lib/proposals.ts` is the shared rule set: the five statuses (`draft`, `pending`, `approved`, `rejected`, `signed`),
+  `pipelineValue` (draft + pending + approved, added up per currency: a rejected or signed proposal is already lost or
+  won, so it is not in the number) and `newestFirst` (the newest that went out first, the unsent after them). It is
+  client-safe, so the page and the server read the same list.
+- `lib/server/proposals.ts` is the file, and the zod schema every field is parsed with before anything is stored — the
+  input audit of 2026-11 (mission-control#1) is the rule set: client and title 1..100 characters, notes up to 1000,
+  none of them carrying `<`, `>` or a link; amount a number 0..10,000,000; currency three letters (stored upper case);
+  status one of the five; both dates a real day as `YYYY-MM-DD`, so `2026-02-31` is refused. The same schema reads the
+  file back, so a row a hand edit broke is left out rather than shown or crashed on. The file is the only copy, so a
+  write never starts from a guess: only a missing file reads as empty; a file that does not parse, or holds a row the
+  schema refuses, makes every write a 409 whose `why` names the file, the file is left byte for byte, and the page
+  shows that `why` above the table until it is fixed by hand. Writes go through a temp file and a rename.
+- `app/api/proposals/route.ts` is the page's read **and** its one write route, all four handlers behind
+  `guard(req)`: `GET` the list (what the route answers, the page renders as text — no `dangerouslySetInnerHTML`),
+  `POST` to add, `PUT` to edit, `DELETE ?id=` to remove, each answering the list and the pipeline as they stand after
+  the change. A refused field is a 400 with the reason in `why`, and an id that is not there is a 404.
+- The page (`ProposalsPage` in `components/pages.tsx`) shows the open pipeline at the top, the table under it (client,
+  title, amount, status, sent, decided, notes), and one **Add proposal** / Edit form, keyed by the draft's id so Edit
+  on another row (or Add) mounts a fresh form instead of keeping the last one's values: the `.fields` grid in
+  `app/globals.css` is the only CSS the feature added, and Delete asks first, since the file is the only copy.
+
 ## Layout
 
 - `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.
@@ -567,6 +598,7 @@ date stays plain — no reason, no tooltip. Read the two facts apart: `holdText`
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
 | `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; and every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's), the knocks from its local network among them — the read an agent asks to answer "is anything open that should not be?" |
 | `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
+| `/api/proposals` | The client proposals, newest first, and the open pipeline per currency worked out from them (`GET`); the page's one write route adds (`POST`), edits (`PUT`) and removes (`DELETE ?id=`) one, every field parsed on the server, and answers the list and the pipeline as they stand after the change. |
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,
 `/api/card`, `/api/repos`, `/api/work`, `/api/work-stats`, `/api/version`); the board's server-sent events are
@@ -597,7 +629,12 @@ reads the method itself, so one function covers both rules:
 
 `tests/request-guard.test.ts` holds the behaviour — a cross-site `POST /api/update` is 403 while the page's own click
 and a curl get the click's own answer, and a foreign `Host` is 403 on a GET route — and the rules that every route
-file calls the guard and that the four state-changing routes are the list, so a new one has to be guarded on purpose.
+file calls the guard and that the five state-changing routes are the list (`/api/hermes`, `/api/projects`,
+`/api/proposals` — the fifth, added by collector#77 — `/api/tailscale`, `/api/update`), so a new one has to be guarded
+on purpose.
+The two one-click routes are driven through their own handlers as well (collector#71), their work mocked: a
+cross-site post to `/api/tailscale` or `/api/hermes` is 403 and starts nothing, and the page's own click still starts
+the tailnet or kickstarts the Hermes gateway.
 
 `config.json` and `.env` are gitignored and stay that way: the repo is public and `config.json` holds real host
 names, job names and board ids.
