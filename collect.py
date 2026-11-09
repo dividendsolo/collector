@@ -4,8 +4,9 @@
 The server runs it locally and on each remote machine over `ssh <host> python3 - '<config>' < collect.py`,
 so it uses the standard library only. It reads Hermes's cron files (~/.hermes), the foreman's host-broken
 markers, launchd (macOS), this user's plain crontab, systemd timers, ps, docker, git, the session files Claude
-Code and Codex keep on this machine, and the agents and jobs a config.json `watch` entry names (a process, a
-coding-agent session, a launchd label, a log or a heartbeat file), and changes nothing.
+Code and Codex keep on this machine, the Briefs folder a cron job's emailed briefs are kept in, and the agents and
+jobs a config.json `watch` entry names (a process, a coding-agent session, a launchd label, a log or a heartbeat
+file), and changes nothing. With `brief <file>` as a second argument it prints one brief of that folder whole.
 """
 import glob
 import hashlib
@@ -2102,6 +2103,85 @@ def hermes_gateway(now, home=HOME, pid=launchctl_pid):
     }
 
 
+# The Briefs folder (collector#64): every brief a cron job emails is kept here too, as one Markdown file with front
+# matter (agent-stack#286; the terms are in GLOSSARY.md), and this is where Collector's Briefs page reads them. The
+# folder's rows ride the machine snapshot, read every 10 seconds; one brief's body is read on its own when it opens,
+# since the folder only ever grows. Read only, and nothing here writes to the machine.
+BRIEFS_DIR = os.path.join(HERMES, "briefs")
+# The front matter's keys. `resend_id` is the writer's own business, so it is not read.
+BRIEF_KEYS = ("brief", "subject", "sent_at")
+# How much of a file the snapshot reads for the front matter, which is a few short lines, and the most of one brief's
+# body the page is handed.
+BRIEF_HEAD = 4096
+BRIEF_MAX_BODY = 2_000_000
+
+
+def brief_parts(text):
+    """(front matter, body) of one brief file: the `key: value` lines between the first two `---` lines, and the
+    Markdown under them. A file that opens with no front matter is all body, with no keys — an older brief, or a file
+    someone wrote by hand, is read for what it is rather than dropped. A value is everything after the first colon, so
+    a subject carrying one of its own is not cut short.
+    """
+    lines = (text or "").splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return ({}, text or "")
+    for end, line in enumerate(lines[1:], start=1):
+        if line.strip() != "---":
+            continue
+        meta = {}
+        for row in lines[1:end]:
+            key, colon, value = row.partition(":")
+            if colon and key.strip() in BRIEF_KEYS:
+                meta[key.strip()] = value.strip()
+        return (meta, "".join(lines[end + 1 :]))
+    return ({}, text or "")
+
+
+def briefs_read(directory=BRIEFS_DIR, head=BRIEF_HEAD):
+    """One row per brief in the folder, oldest first: its file name, the brief's name, its subject and when it went
+    out. The file name starts with the UTC stamp the writer saved it at, so sorting the names is sorting by time. A
+    dot-file is one being written (the writer renames into place) and anything that is not `.md` is not a brief: both
+    are skipped. No folder is no briefs rather than an error, as every other read here is without its file. This
+    rides the machine snapshot, so it reads only the head of each file: the front matter is a few short lines.
+    """
+    rows = []
+    try:
+        names = sorted(os.listdir(directory))
+    except OSError:
+        return rows
+    for name in names:
+        if name.startswith(".") or not name.endswith(".md"):
+            continue
+        try:
+            with open(os.path.join(directory, name), errors="replace") as f:
+                text = f.read(head)
+        except OSError:
+            continue
+        meta, _ = brief_parts(text)
+        rows.append({"file": name, **{key: meta.get(key) for key in BRIEF_KEYS}})
+    return rows
+
+
+def brief_file(name, directory=BRIEFS_DIR, limit=BRIEF_MAX_BODY):
+    """One brief read whole: its front matter, and the Markdown under it. None when the name is not a plain brief
+    file name in this folder — a path, a dot-file, anything that is not `.md` — or the file is not there, which is a
+    brief that has since been removed rather than an error. The body is capped: a brief is a few pages, and the page
+    must not be handed a file of megabytes.
+    """
+    if not name or os.path.basename(name) != name or name.startswith(".") or not name.endswith(".md"):
+        return None
+    path = os.path.join(directory, name)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, errors="replace") as f:
+            text = f.read(limit)
+    except OSError:
+        return None
+    meta, body = brief_parts(text)
+    return {"file": name, **{key: meta.get(key) for key in BRIEF_KEYS}, "body": body.strip()}
+
+
 # The agents and jobs Collector watches (collector#54): the Hermes jobs, the launchd jobs, `crontab -l`'s lines,
 # the systemd timers, the Hermes gateway and its ticker, and the Claude Code and Codex sessions are read with no
 # setting at all — they are the list. `watch` in config.json adds a user's own: one entry names one thing and the
@@ -2296,6 +2376,11 @@ def watch_rows(now, entries=None, ps_out=None, jobs=None, self_pid=None):
 
 
 def main():
+    # One brief's body, on demand: the same script over the same ssh, asked for one file instead of the whole machine
+    # (`python3 - '<config>' brief '<file>'`), so a brief opens without the snapshot carrying every brief's Markdown.
+    if len(sys.argv) > 2 and sys.argv[2] == "brief":
+        print(json.dumps(brief_file(sys.argv[3] if len(sys.argv) > 3 else "")))
+        return
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
     tailnet = tailscale_state()
@@ -2306,6 +2391,7 @@ def main():
         "jobs": tailnet_reasons(hermes_jobs(now) + launchd_jobs() + crontab_jobs(now) + systemd_jobs(now), tailnet),
         "tailscale": tailnet,
         "hermes_gateway": hermes_gateway(now),
+        "briefs": briefs_read(),
         "network": network_read(),
         "watch": watch_rows(now),
         "running": running_agents(),

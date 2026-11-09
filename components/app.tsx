@@ -5,6 +5,7 @@ import { failingJobs } from "@/lib/format";
 import { internetPortCount } from "@/lib/toasts";
 import { acked, useAcks } from "./acks";
 import { AgentPage, AgentsPage } from "./agents";
+import { BriefPage, BriefsPage, useBriefs } from "./briefs";
 import { CardTip } from "./card-tip";
 import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
@@ -22,6 +23,7 @@ import { UpdateButton } from "./update";
 
 const NAV: { page: string; href: string; icon: IconName; label: string; tag?: string; sep?: boolean }[] = [
   { page: "dashboard", href: "#/", icon: "dash", label: "Dashboard", tag: "attention" },
+  { page: "briefs", href: "#/briefs", icon: "inbox", label: "Briefs", tag: "briefs" },
   { page: "agents", href: "#/agents", icon: "bot", label: "Agents", tag: "running" },
   { page: "work", href: "#/work", icon: "list", label: "Work", tag: "work" },
   { page: "cron", href: "#/cron", icon: "clock", label: "Cron Jobs", tag: "cron" },
@@ -36,6 +38,7 @@ const NAV: { page: string; href: string; icon: IconName; label: string; tag?: st
 ];
 const PAGES = new Set([
   "dashboard",
+  "briefs",
   "agents",
   "work",
   "cron",
@@ -74,25 +77,39 @@ export function route(hash: string) {
   const repo = name.match(/^projects\/([\w.-]+\/[\w.-]+)$/);
   const agent = name.match(/^agents\/([\w.-]+)\/([\w.-]+)$/);
   const job = name.match(/^cron\/([^/]+)\/([^/]+)$/);
-  const page = repo ? "project" : agent ? "agent" : job ? "job" : PAGES.has(name) ? name : "dashboard";
-  const lit = repo || page === "keys" ? "projects" : agent ? "agents" : job ? "cron" : page;
+  // One brief open: `#/briefs/<machine>/<file>` (collector#64), the way a job's own page is addressed.
+  const brief = name.match(/^briefs\/([^/]+)\/([^/]+)$/);
+  const page = repo
+    ? "project"
+    : agent
+      ? "agent"
+      : job
+        ? "job"
+        : brief
+          ? "brief"
+          : PAGES.has(name)
+            ? name
+            : "dashboard";
+  const lit = repo || page === "keys" ? "projects" : agent ? "agents" : job ? "cron" : brief ? "briefs" : page;
   return {
     page,
     lit,
     repo: repo?.[1] ?? null,
     agent: agent ? ([agent[1], agent[2]] as const) : null,
     job: job ? ([decodeURIComponent(job[1]), decodeURIComponent(job[2])] as const) : null,
+    brief: brief ? ([decodeURIComponent(brief[1]), decodeURIComponent(brief[2])] as const) : null,
   };
 }
 
-/** The sidebar's counts: Needs attention, running agents, P0s waiting (red), failing jobs (red), ports open to the
- * internet (red), vendor incidents. */
+/** The sidebar's counts: Needs attention, briefs in the inbox, running agents, P0s waiting (red), failing jobs
+ * (red), ports open to the internet (red), vendor incidents. */
 function useTags(): Record<string, { text: string; hot: boolean }> {
   const { state } = useLive();
   const running = useRunning();
   const waiting = useWaiting();
   const vendors = useVendors();
   const acks = useAcks();
+  const { data: briefs } = useBriefs();
   const w: any[] = (state?.warnings || []).filter((x: any) => !acked(x, acks));
   // An acknowledged failed run leaves the count until the job runs again (James, 2026-11-06).
   const failing = state
@@ -105,6 +122,7 @@ function useTags(): Record<string, { text: string; hot: boolean }> {
   const open = internetPortCount(state?.machines);
   return {
     attention: { text: w.length ? String(w.length) : "", hot: w.length > 0 && w.some((x) => x.level === "error") },
+    briefs: { text: briefs?.inbox?.length ? String(briefs.inbox.length) : "", hot: false },
     running: { text: running?.length ? String(running.length) : "", hot: false },
     work: { text: waiting?.p0 ? String(waiting.p0) : "", hot: Boolean(waiting?.p0) },
     cron: { text: failing ? String(failing) : "", hot: failing > 0 },
@@ -183,6 +201,10 @@ function Topbar({ r }: { r: ReturnType<typeof route> }) {
 
 function Page({ r }: { r: ReturnType<typeof route> }) {
   switch (r.page) {
+    case "briefs":
+      return <BriefsPage />;
+    case "brief":
+      return r.brief ? <BriefPage machine={r.brief[0]} file={r.brief[1]} /> : null;
     case "agents":
       return <AgentsPage />;
     case "agent":
