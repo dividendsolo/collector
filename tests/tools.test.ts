@@ -570,3 +570,32 @@ describe("pi_model", () => {
     expect(drive({ fn: "pi_model", home: home({}), cwd: "/home/me/nowhere" })).toEqual({});
   });
 });
+
+/** The subscriptions panel shows one row per provider a profile can call (James, 2026-11-09: "I need to have a Mini
+ * Max section in the panel"). MiniMax is never a profile's main provider, only its last fallback, so the reader takes
+ * the fallback list from config.yaml as well. */
+describe("profile_fallbacks", () => {
+  it("reads every fallback provider from a Hermes config.yaml, in order", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fallbacks-"));
+    const file = path.join(dir, "config.yaml");
+    fs.writeFileSync(
+      file,
+      [
+        "model:",
+        "  default: deepseek/deepseek-v4.1-flash",
+        "  provider: nous",
+        "fallback_providers:",
+        "  - provider: kimi-coding",
+        "    model: kimi-k3",
+        "  - provider: minimax",
+        "    model: MiniMax-M3",
+        "toolsets:",
+        "  - hermes-cli",
+        "",
+      ].join("\n"),
+    );
+    expect(drive<string[]>({ fn: "profile_fallbacks", path: file })).toEqual(["kimi-coding", "minimax"]);
+    fs.writeFileSync(file, "model:\n  provider: nous\nfallback_providers: []\n");
+    expect(drive<string[]>({ fn: "profile_fallbacks", path: file })).toEqual([]);
+  });
+});

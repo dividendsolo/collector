@@ -1973,6 +1973,16 @@ def profile_model(config_path):
     return get("default"), get("provider")
 
 
+def profile_fallbacks(config_path):
+    """The fallback providers of a Hermes config.yaml, in order (`fallback_providers:` list), read with a regex."""
+    try:
+        text = open(config_path).read()
+    except OSError:
+        return []
+    block = re.search(r"^fallback_providers:[ \t]*\n((?:[ \t]+.*\n?)*)", text, re.M)
+    return re.findall(r"^[ \t]*-[ \t]*provider:[ \t]*(\S+)", block.group(1), re.M) if block else []
+
+
 def hermes_profiles():
     """Every Hermes agent profile on this machine (and the default one), with its role, model, and last session."""
     dirs = [("default", HERMES)] + [(d.rstrip("/").split("/")[-1], d) for d in sorted(glob.glob(os.path.join(HERMES, "profiles/*/")))]
@@ -1996,7 +2006,8 @@ def hermes_profiles():
                     last = con.execute("SELECT MAX(started_at) FROM sessions").fetchone()[0]
             except sqlite3.Error:
                 pass
-        out.append({"name": name, "model": model, "provider": provider, "role": role, "last_session": last})
+        out.append({"name": name, "model": model, "provider": provider, "role": role, "last_session": last,
+                    "fallbacks": profile_fallbacks(os.path.join(d, "config.yaml"))})
     return out
 
 
