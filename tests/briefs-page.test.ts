@@ -172,3 +172,23 @@ describe("Briefs says its name once, in the top bar (James, 2026-11-10)", () => 
     expect(html).not.toMatch(/<th>Brief<\/th>/);
   });
 });
+
+describe("the Briefs dot on the closed sidebar (James, 2026-11-10)", () => {
+  const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
+
+  it("gives the Briefs tag the inbox count and a dot while the inbox has a brief", async () => {
+    const { briefsTag, tagClass } = await import("@/components/app");
+    expect(briefsTag(3)).toEqual({ text: "3", hot: false, dot: true });
+    expect(tagClass(briefsTag(3))).toBe("tag dot");
+  });
+
+  it("draws no dot and no number when the inbox is empty", async () => {
+    const { briefsTag, tagClass } = await import("@/components/app");
+    expect(briefsTag(0)).toEqual({ text: "", hot: false, dot: false });
+    expect(tagClass(briefsTag(0))).toBe("tag");
+  });
+
+  it("draws the dot on the icon while the sidebar is closed, like the red one", () => {
+    expect(css).toMatch(/\.rail a\.item:has\(\.tag\.dot\)::after/);
+  });
+});

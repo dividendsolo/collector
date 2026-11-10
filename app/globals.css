@@ -261,6 +261,19 @@
     box-shadow: 0 0 6px var(--red);
     transition: opacity 0.12s ease;
   }
+  /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
+  .rail a.item:has(.tag.dot)::after {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    box-shadow: 0 0 6px var(--blue);
+    transition: opacity 0.12s ease;
+  }
   .rail:hover a.item::after,
   .rail:focus-within a.item::after {
     opacity: 0;

@@ -103,7 +103,14 @@ export function route(hash: string) {
 
 /** The sidebar's counts: Needs attention, briefs in the inbox, running agents, P0s waiting (red), failing jobs
  * (red), ports open to the internet (red), vendor incidents. */
-function useTags(): Record<string, { text: string; hot: boolean }> {
+type Tag = { text: string; hot: boolean; dot?: boolean };
+
+/** Briefs: the inbox count, and a dot on the closed sidebar's icon while the inbox holds a brief (James, 2026-11-10). */
+export const briefsTag = (n: number): Tag => ({ text: n ? String(n) : "", hot: false, dot: n > 0 });
+
+export const tagClass = (t?: Tag) => `tag${t?.hot ? " hot" : ""}${t?.dot ? " dot" : ""}`;
+
+function useTags(): Record<string, Tag> {
   const { state } = useLive();
   const running = useRunning();
   const waiting = useWaiting();
@@ -122,7 +129,7 @@ function useTags(): Record<string, { text: string; hot: boolean }> {
   const open = internetPortCount(state?.machines);
   return {
     attention: { text: w.length ? String(w.length) : "", hot: w.length > 0 && w.some((x) => x.level === "error") },
-    briefs: { text: briefs?.inbox?.length ? String(briefs.inbox.length) : "", hot: false },
+    briefs: briefsTag(briefs?.inbox?.length ?? 0),
     running: { text: running?.length ? String(running.length) : "", hot: false },
     work: { text: waiting?.p0 ? String(waiting.p0) : "", hot: Boolean(waiting?.p0) },
     cron: { text: failing ? String(failing) : "", hot: failing > 0 },
@@ -149,7 +156,7 @@ function Sidebar({ lit }: { lit: string }) {
             <a className="item" href={n.href} aria-current={lit === n.page ? "page" : undefined}>
               <Icon name={n.icon} />
               <span className="label">{n.label}</span>
-              {n.tag ? <span className={`tag${tags[n.tag]?.hot ? " hot" : ""}`}>{tags[n.tag]?.text}</span> : null}
+              {n.tag ? <span className={tagClass(tags[n.tag])}>{tags[n.tag]?.text}</span> : null}
             </a>
           </span>
         ))}
