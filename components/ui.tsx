@@ -22,6 +22,7 @@ export type IconName =
   | "inbox"
   | "list"
   | "chev"
+  | "back"
   | "eye"
   | "eye-off"
   | "shield"
@@ -106,6 +107,9 @@ export function Sprite() {
         <path d="M9 6h11M9 12h11M9 18h11" />
         <path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2" />
       </symbol>
+      <symbol id="i-back" viewBox="0 0 24 24">
+        <path d="M19 12H5m6-6-6 6 6 6" />
+      </symbol>
       <symbol id="i-chev" viewBox="0 0 24 24">
         <path d="m9 6 6 6-6 6" />
       </symbol>
@@ -135,7 +139,8 @@ export function PanelHead({
   iconClass,
 }: {
   icon: IconName;
-  title: string;
+  /** Left out on a page with one panel: the top bar already names the page (James, 2026-11-10). */
+  title?: string;
   children?: ReactNode;
   /** A class on the icon, for a panel whose icon carries a status colour (the Network page's machine summaries). */
   iconClass?: string;
@@ -143,7 +148,7 @@ export function PanelHead({
   return (
     <div className="panel-head">
       <Icon name={icon} className={iconClass ? `i ${iconClass}` : undefined} />
-      <h2>{title}</h2>
+      {title ? <h2>{title}</h2> : null}
       {children}
     </div>
   );

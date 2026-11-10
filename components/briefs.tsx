@@ -5,7 +5,7 @@ import { mutate } from "swr";
 import type { Brief } from "@/lib/briefs";
 import { useApi } from "./data";
 import { Markdown } from "./markdown";
-import { Count, PanelHead, SkelRows } from "./ui";
+import { Count, Icon, PanelHead, SkelRows } from "./ui";
 
 /**
  * The Briefs page (collector#64): the reports the cron jobs wrote for James, the way his email inbox works. The
@@ -55,10 +55,14 @@ export async function postBrief(machine: string, file: string, change: { read?: 
 
 const href = (b: Brief) => `#/briefs/${encodeURIComponent(b.machine)}/${encodeURIComponent(b.file)}`;
 
-/** One row: the dot says Unread, the name opens the brief, and how far down the Inbox it sits is the order itself. */
-const BriefRow = ({ b }: { b: Brief }) => (
-  <tr className={b.read ? "read" : "unread"}>
-    <td className="unread-dot">{b.read ? null : <span className="dot" title="Unread" />}</td>
+/** One row: bold says Unread, a click anywhere opens the brief, and how far down the Inbox it sits is the order itself. */
+export const BriefRow = ({ b }: { b: Brief }) => (
+  <tr
+    className={`row ${b.read ? "read" : "unread"}`}
+    onClick={(e) => {
+      if (!(e.target as HTMLElement).closest("a")) location.hash = href(b);
+    }}
+  >
     <td className="name">
       <a className="plain" href={href(b)}>
         {b.brief || b.subject || b.file}
@@ -75,12 +79,8 @@ export function BriefsPage() {
   const archived: Brief[] = data?.archived || [];
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Briefs</h1>
-        <p>What your cron jobs wrote for you, oldest first. Open one to read it, then archive it when you are done.</p>
-      </div>
-      <section className="panel">
-        <PanelHead icon="inbox" title="Briefs">
+      <section className="panel briefs-panel">
+        <PanelHead icon="inbox">
           <Count n={inbox.length} title={`${inbox.length} in the inbox`} />
           <span className="sub">in the inbox</span>
         </PanelHead>
@@ -93,8 +93,7 @@ export function BriefsPage() {
           <table className="briefs">
             <thead>
               <tr>
-                <th />
-                <th>Brief</th>
+                <th>From</th>
                 <th>Subject</th>
                 <th>Date</th>
               </tr>
@@ -106,7 +105,7 @@ export function BriefsPage() {
                 inbox.map((b) => <BriefRow b={b} key={`${b.machine}/${b.file}`} />)
               ) : (
                 <tr>
-                  <td colSpan={4}>
+                  <td colSpan={3}>
                     <div className="soon">
                       <b>No briefs.</b>
                       <span>Nothing has been written for you yet.</span>
@@ -116,14 +115,14 @@ export function BriefsPage() {
               )}
               {data ? (
                 <tr>
-                  <td colSpan={4} className="section-head">
+                  <td colSpan={3} className="section-head">
                     Archived
                   </td>
                 </tr>
               ) : null}
               {data && !archived.length ? (
                 <tr>
-                  <td colSpan={4} className="sub">
+                  <td colSpan={3} className="sub">
                     Nothing archived yet.
                   </td>
                 </tr>
@@ -160,11 +159,12 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
   };
   return (
     <div className="page">
-      <section className="panel">
+      <section className="panel briefs-panel">
         <PanelHead icon="inbox" title={brief?.brief || "Brief"}>
           <span className="sub">{brief ? `${brief.machine} · ${day(brief.sent_at)}` : ""}</span>
           <div className="tools">
-            <a className="btn ghost" href="#/briefs">
+            <a className="btn ghost back" href="#/briefs">
+              <Icon name="back" />
               Inbox
             </a>
             <button className="btn" type="button" disabled={isArchived} onClick={archive}>
