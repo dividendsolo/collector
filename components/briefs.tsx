@@ -53,6 +53,13 @@ export async function postBrief(machine: string, file: string, change: { read?: 
   return { ok: true as const };
 }
 
+/** Archive, then back to the Inbox: a brief done with is a brief left (James, 2026-11-10). A refused write stays put. */
+export async function archiveBrief(machine: string, file: string) {
+  const r = await postBrief(machine, file, { archived: true });
+  if (r.ok) location.hash = "#/briefs";
+  return r;
+}
+
 const href = (b: Brief) => `#/briefs/${encodeURIComponent(b.machine)}/${encodeURIComponent(b.file)}`;
 
 /** One row: bold says Unread, a click anywhere opens the brief, and how far down the Inbox it sits is the order itself. */
@@ -153,7 +160,7 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
   }, [brief, machine, file]);
   const isArchived = archived || Boolean(brief?.archived);
   const archive = async () => {
-    const r = await postBrief(machine, file, { archived: true });
+    const r = await archiveBrief(machine, file);
     if (r.ok) setArchived(true);
     else alert(r.why);
   };

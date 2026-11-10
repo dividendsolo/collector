@@ -192,3 +192,31 @@ describe("the Briefs dot on the closed sidebar (James, 2026-11-10)", () => {
     expect(css).toMatch(/\.rail a\.item:has\(\.tag\.inbox-dot\)::after/);
   });
 });
+
+describe("Archive goes back to the Inbox (James, 2026-11-10)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sets the hash to the Inbox once the archive is saved", async () => {
+    const { archiveBrief } = await import("@/components/briefs");
+    const loc = { hash: "#/briefs/ezio/a.md" };
+    vi.stubGlobal("location", loc);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ at: 1, inbox: [], archived: [] }), { status: 200 })),
+    );
+    expect(await archiveBrief("ezio", "a.md")).toEqual({ ok: true });
+    expect(loc.hash).toBe("#/briefs");
+  });
+
+  it("stays on the brief when the archive is refused", async () => {
+    const { archiveBrief } = await import("@/components/briefs");
+    const loc = { hash: "#/briefs/ezio/a.md" };
+    vi.stubGlobal("location", loc);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ why: "no" }), { status: 409 })),
+    );
+    expect(await archiveBrief("ezio", "a.md")).toEqual({ ok: false, why: "no" });
+    expect(loc.hash).toBe("#/briefs/ezio/a.md");
+  });
+});
