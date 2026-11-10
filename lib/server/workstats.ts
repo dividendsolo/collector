@@ -1,3 +1,4 @@
+import { closedRows } from "../work";
 import { boardRows, ready, workView } from "./board";
 import { swr } from "./cache";
 import { config, projectRepos } from "./config";
@@ -41,18 +42,20 @@ const cache = swr("work-stats", 300_000, async () => {
     if (m) repos.add(m[1]);
   }
   const owners = [...new Set([...repos].map((r) => r.split("/")[0]))].sort();
-  const closed = async (day: string) => {
+  const search = async (day: string, perPage: number) => {
     const q = `is:issue is:closed reason:completed closed:>=${day} ${owners.map((o) => `user:${o}`).join(" ")}`;
-    const [data] = await run(["gh", "api", "-X", "GET", "search/issues", "-f", `q=${q}`, "-f", "per_page=1"], {
-      timeout: 20,
-    });
-    return (data?.total_count as number | undefined) ?? null;
+    const [data] = await run(
+      ["gh", "api", "-X", "GET", "search/issues", "-f", `q=${q}`, "-f", `per_page=${perPage}`, "-f", "sort=updated"],
+      { timeout: 20 },
+    );
+    return data;
   };
+  const closed = async (day: string) => ((await search(day, 1))?.total_count as number | undefined) ?? null;
   const names = [...repos].sort();
   const month = new Date(midnight);
   month.setDate(month.getDate() - 30);
-  const [today, thirty, counts, [cal]] = await Promise.all([
-    closed(isoLocal(midnight)),
+  const [todays, thirty, counts, [cal]] = await Promise.all([
+    search(isoLocal(midnight), 100),
     closed(ymdLocal(month)),
     Promise.all(names.map((r) => deploysToday(r, since))),
     run(["gh", "api", "graphql", "-f", CAL], { timeout: 20 }),
@@ -60,7 +63,9 @@ const cache = swr("work-stats", 300_000, async () => {
   const c = cal?.data?.viewer?.contributionsCollection?.contributionCalendar;
   return {
     at: Date.now() / 1000,
-    closed_today: today,
+    closed_today: (todays?.total_count as number | undefined) ?? null,
+    // The cards behind that number, for the Closed today page (James, 2026-11-10). Search answers 100 at most.
+    closed_today_cards: closedRows(todays?.items || []),
     closed_30d: thirty,
     contributions: c
       ? {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { daysAgo, money, monthly, prio } from "@/lib/format";
 import { PROPOSAL_STATUSES, type Proposal, type ProposalStatus } from "@/lib/proposals";
 import { vendorOrder } from "@/lib/vendors";
+import type { ClosedRow } from "@/lib/work";
 import { AiPanels } from "./ai";
 import { useApi, useLive } from "./data";
 import { BlurToggle, Count, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
@@ -948,6 +949,65 @@ export function ProposalsPage() {
       {form ? (
         <ProposalForm key={form.id ?? "new"} draft={form} onSaved={saved} onCancel={() => setForm(null)} />
       ) : null}
+    </div>
+  );
+}
+
+/** Closed today: every card closed as done since midnight, newest first (James, 2026-11-10). Reached from the
+ * Dashboard's Closed today number; the same five-minute read as that number. */
+export function ClosedPage() {
+  const { data: d } = useApi<{ closed_today?: number | null; closed_today_cards?: ClosedRow[] }>("/api/work-stats");
+  const cards = d?.closed_today_cards || [];
+  const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return (
+    <div className="page">
+      <section className="panel">
+        <PanelHead icon="check">
+          <Count n={d?.closed_today ?? cards.length} />
+          <span className="sub">closed today</span>
+          <div className="tools">
+            <a className="more" href="#/work">
+              All open cards &rarr;
+            </a>
+          </div>
+        </PanelHead>
+        <div className="wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Repo</th>
+                <th>Card</th>
+                <th>Title</th>
+                <th className="num">Closed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!d ? (
+                <SkelRows n={8} cols={4} />
+              ) : cards.length ? (
+                cards.map((c) => (
+                  <tr key={c.url}>
+                    <td>{c.repo.split("/").pop()}</td>
+                    <td className="mono">
+                      <a className="plain card-tip" href={c.url} target="_blank" rel="noopener">
+                        #{c.number}
+                      </a>
+                    </td>
+                    <td className="wide">{c.title}</td>
+                    <td className="num mono">{time(c.closed_at)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="sub">
+                    No card closed today yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

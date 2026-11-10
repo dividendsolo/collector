@@ -169,11 +169,13 @@ export const cardState = (
 ) =>
   row.run
     ? null
-    : row.local
-      ? "session"
-      : working.includes(row.state)
-        ? (staleText(row.card ?? null, stale) ?? row.state)
-        : row.state;
+    : row.state === "closed"
+      ? "closed in the last hour"
+      : row.local
+        ? "session"
+        : working.includes(row.state)
+          ? (staleText(row.card ?? null, stale) ?? row.state)
+          : row.state;
 
 /** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent,
  * scheduled. A card in any other status is in progress: only the agent stack's own queue and scheduled statuses sit
@@ -275,3 +277,26 @@ export function holdTip(h: WorkCard["hold"]): { title: string; text: string } | 
 
 /** A scheduled card that says neither what it waits on nor why it waits for its date (James, 2026-11-04). */
 export const holdLacksReason = (h: WorkCard["hold"]) => !!h && !h.after.length && !h.why?.trim();
+
+export interface ClosedRow {
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  closed_at: string;
+}
+
+/** GitHub's search hits for the cards closed today, as rows for the Closed today page, newest first. A pull request
+ * is not a card, so it is dropped (James, 2026-11-10). */
+export function closedRows(items: any[]): ClosedRow[] {
+  return (items || [])
+    .filter((i) => /\/issues\/\d+$/.test(i?.html_url || ""))
+    .map((i) => ({
+      repo: (i.html_url.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\//) || [])[1] || "",
+      number: i.number,
+      title: i.title,
+      url: i.html_url,
+      closed_at: i.closed_at,
+    }))
+    .sort((a, b) => b.closed_at.localeCompare(a.closed_at));
+}

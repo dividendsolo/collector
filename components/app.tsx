@@ -14,7 +14,7 @@ import { LiveProvider, useLive } from "./data";
 import { FlowPage } from "./flow";
 import { useJump } from "./jump";
 import { NetworkPage } from "./network";
-import { ApisPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, WorkPage } from "./pages";
+import { ApisPage, ClosedPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, WorkPage } from "./pages";
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
 import { useRunning } from "./running";
 import { ServicesPage, ServicesWatcher } from "./services";
@@ -42,6 +42,7 @@ const PAGES = new Set([
   "briefs",
   "agents",
   "work",
+  "closed",
   "cron",
   "projects",
   "domains",
@@ -91,7 +92,18 @@ export function route(hash: string) {
           : PAGES.has(name)
             ? name
             : "dashboard";
-  const lit = repo || page === "keys" ? "projects" : agent ? "agents" : job ? "cron" : brief ? "briefs" : page;
+  const lit =
+    repo || page === "keys"
+      ? "projects"
+      : agent
+        ? "agents"
+        : job
+          ? "cron"
+          : brief
+            ? "briefs"
+            : page === "closed"
+              ? "work"
+              : page;
   return {
     page,
     lit,
@@ -170,6 +182,7 @@ function Crumb({ r }: { r: ReturnType<typeof route> }) {
   const { state } = useLive();
   const label = NAV.find((n) => n.page === r.lit)?.label ?? "Dashboard";
   if (r.page === "keys") return <>Projects / Payment keys</>;
+  if (r.page === "closed") return <>Work / Closed today</>;
   if (r.agent) return <>Agents / {r.agent[1]}</>;
   if (r.job) {
     const j = state?.machines.find((m: any) => m.name === r.job?.[0])?.jobs?.find((x: any) => x.id === r.job?.[1]);
@@ -220,6 +233,8 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
       return r.agent ? <AgentPage machine={r.agent[0]} name={r.agent[1]} /> : null;
     case "work":
       return <WorkPage />;
+    case "closed":
+      return <ClosedPage />;
     case "cron":
       return <CronPage />;
     case "job":
