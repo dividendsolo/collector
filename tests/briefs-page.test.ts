@@ -128,7 +128,7 @@ describe("the brief page's way back to the Inbox (James, 2026-11-10)", () => {
     swr.data = { brief: brief("a.md", true), markdown: "# Hi" };
     const html = renderToStaticMarkup(createElement(BriefPage, { machine: "ezio", file: "a.md" }));
     expect(html).toMatch(
-      /<a class="btn ghost back" href="#\/briefs"><svg[^>]*><use href="#i-back"><\/use><\/svg>Inbox<\/a>/,
+      /<a class="btn ghost back" href="#\/briefs" title="Back to the inbox \(Esc\)"><svg[^>]*><use href="#i-back"><\/use><\/svg>Inbox<\/a>/,
     );
   });
 
@@ -218,5 +218,55 @@ describe("Archive goes back to the Inbox (James, 2026-11-10)", () => {
     );
     expect(await archiveBrief("ezio", "a.md")).toEqual({ ok: false, why: "no" });
     expect(loc.hash).toBe("#/briefs/ezio/a.md");
+  });
+});
+
+describe("the brief's bar stays in reach (James, 2026-11-10)", () => {
+  const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
+  const block = css.slice(css.indexOf("/* Briefs (collector#64)"), css.indexOf("/* Outside the layers on purpose"));
+
+  it("pins the open brief's head under the top bar while the brief scrolls", () => {
+    const at = block.indexOf(".brief-panel > .panel-head {");
+    expect(at).toBeGreaterThan(-1);
+    const rule = block.slice(at, block.indexOf("}", at));
+    expect(rule).toMatch(/position:\s*sticky/);
+    expect(rule).toMatch(/top:\s*48px/);
+  });
+
+  it("lets the open brief's panel overflow, so the sticky head can stick", () => {
+    expect(block).toMatch(/\.brief-panel \{[^}]*overflow:\s*visible/);
+  });
+
+  it("draws the open brief in a .brief-panel", async () => {
+    const { BriefPage } = await import("@/components/briefs");
+    swr.data = { brief: brief("a.md", true), markdown: "# Hi" };
+    const html = renderToStaticMarkup(createElement(BriefPage, { machine: "ezio", file: "a.md" }));
+    expect(html).toMatch(/<section class="panel briefs-panel brief-panel">/);
+  });
+});
+
+describe("the brief's keys: E archives, Esc goes back (James, 2026-11-10)", () => {
+  it("reads E and Esc", async () => {
+    const { briefKey } = await import("@/components/briefs");
+    expect(briefKey({ key: "e" })).toBe("archive");
+    expect(briefKey({ key: "E" })).toBe("archive");
+    expect(briefKey({ key: "Escape" })).toBe("inbox");
+  });
+
+  it("leaves a key with a modifier, or typed in a field, alone", async () => {
+    const { briefKey } = await import("@/components/briefs");
+    expect(briefKey({ key: "e", metaKey: true })).toBeNull();
+    expect(briefKey({ key: "e", ctrlKey: true })).toBeNull();
+    expect(briefKey({ key: "e", target: { tagName: "INPUT" } })).toBeNull();
+    expect(briefKey({ key: "e", target: { tagName: "TEXTAREA" } })).toBeNull();
+    expect(briefKey({ key: "x" })).toBeNull();
+  });
+
+  it("names the keys on the buttons, for the pointer's title", async () => {
+    const { BriefPage } = await import("@/components/briefs");
+    swr.data = { brief: brief("a.md", true), markdown: "# Hi" };
+    const html = renderToStaticMarkup(createElement(BriefPage, { machine: "ezio", file: "a.md" }));
+    expect(html).toMatch(/title="Archive \(E\)"/);
+    expect(html).toMatch(/title="Back to the inbox \(Esc\)"/);
   });
 });

@@ -2062,6 +2062,18 @@
   .briefs-panel .count {
     font-size: 16px;
   }
+  /* An open brief's head stays under the top bar while the brief scrolls, so Inbox and Archive are always in reach
+     (James, 2026-11-10). A sticky head needs its panel to let it out, so this panel keeps its corners itself. */
+  .brief-panel {
+    overflow: visible;
+  }
+  .brief-panel > .panel-head {
+    position: sticky;
+    top: 48px;
+    z-index: 1;
+    background: var(--panel);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
   /* Inbox, back from a brief: a button-shaped link with an arrow, on the Archive button's line, never underlined. */
   .briefs-panel a.back {
     display: inline-flex;

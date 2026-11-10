@@ -53,6 +53,19 @@ export async function postBrief(machine: string, file: string, change: { read?: 
   return { ok: true as const };
 }
 
+type KeyLike = { key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; target?: unknown };
+
+/** An open brief's keys (James, 2026-11-10): E archives, Esc goes back to the Inbox. A key with a modifier, or one typed
+ * in a field, is left to the page. */
+export function briefKey(e: KeyLike): "archive" | "inbox" | null {
+  if (e.metaKey || e.ctrlKey || e.altKey) return null;
+  const tag = (e.target as { tagName?: string } | undefined)?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return null;
+  if (e.key === "e" || e.key === "E") return "archive";
+  if (e.key === "Escape") return "inbox";
+  return null;
+}
+
 /** Archive, then back to the Inbox: a brief done with is a brief left (James, 2026-11-10). A refused write stays put. */
 export async function archiveBrief(machine: string, file: string) {
   const r = await postBrief(machine, file, { archived: true });
@@ -164,17 +177,26 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
     if (r.ok) setArchived(true);
     else alert(r.why);
   };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = briefKey(e);
+      if (k === "inbox") location.hash = "#/briefs";
+      else if (k === "archive" && !isArchived) void archive();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
   return (
     <div className="page">
-      <section className="panel briefs-panel">
+      <section className="panel briefs-panel brief-panel">
         <PanelHead icon="inbox" title={brief?.brief || "Brief"}>
           <span className="sub">{brief ? `${brief.machine} · ${day(brief.sent_at)}` : ""}</span>
           <div className="tools">
-            <a className="btn ghost back" href="#/briefs">
+            <a className="btn ghost back" href="#/briefs" title="Back to the inbox (Esc)">
               <Icon name="back" />
               Inbox
             </a>
-            <button className="btn" type="button" disabled={isArchived} onClick={archive}>
+            <button className="btn" type="button" disabled={isArchived} onClick={archive} title="Archive (E)">
               {isArchived ? "Archived" : "Archive"}
             </button>
           </div>
