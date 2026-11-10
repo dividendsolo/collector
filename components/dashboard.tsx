@@ -158,7 +158,7 @@ function WorkPanel() {
         ) : (
           <>
             <Stat label="Open cards" value={num(open)} />
-            <Stat label="Closed today" value={num(d.closed_today)} />
+            <Stat label="Closed today" value={num(d.closed_today)} href="#/closed" />
             <Stat label="Closed in 30 days" value={num(d.closed_30d)} />
             <Stat
               label="Deploys today"
@@ -183,13 +183,22 @@ function WorkPanel() {
   );
 }
 
-const Stat = ({ label, value, sub }: { label: string; value: string; sub?: React.ReactNode }) => (
-  <div className="stat">
-    <span className="label">{label}</span>
-    <span className="value">{value}</span>
-    {sub ? <span className="sub">{sub}</span> : null}
-  </div>
-);
+const Stat = ({ label, value, sub, href }: { label: string; value: string; sub?: React.ReactNode; href?: string }) => {
+  const inner = (
+    <>
+      <span className="label">{label}</span>
+      <span className="value">{value}</span>
+      {sub ? <span className="sub">{sub}</span> : null}
+    </>
+  );
+  return href ? (
+    <a className="stat" href={href}>
+      {inner}
+    </a>
+  ) : (
+    <div className="stat">{inner}</div>
+  );
+};
 
 export function useWaiting() {
   const { board } = useLive();

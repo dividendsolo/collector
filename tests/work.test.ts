@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { type Diff, keepClosed, parseHold, type Row } from "@/lib/server/board";
 import {
@@ -445,5 +447,48 @@ describe("keepClosed", () => {
     keepClosed(m, diff({ removed: [row(3, "merging")] }), WAITING, 0);
     keepClosed(m, diff({}), WAITING, 3_600_001);
     expect(m.size).toBe(0);
+  });
+});
+
+describe("closed today (James, 2026-11-10)", () => {
+  it("labels a closed row in Current work 'closed in the last hour'", () => {
+    expect(cardState({ state: "closed", local: false, run: null })).toBe("closed in the last hour");
+  });
+
+  it("turns GitHub's search hits into rows, newest first", async () => {
+    const { closedRows } = await import("@/lib/work");
+    const items = [
+      { html_url: "https://github.com/o/a/issues/3", number: 3, title: "Three", closed_at: "2026-11-10T09:00:00Z" },
+      { html_url: "https://github.com/o/b/issues/7", number: 7, title: "Seven", closed_at: "2026-11-10T15:00:00Z" },
+      { html_url: "https://github.com/o/a/pull/9", number: 9, title: "A PR", closed_at: "2026-11-10T16:00:00Z" },
+    ];
+    expect(closedRows(items)).toEqual([
+      {
+        repo: "o/b",
+        number: 7,
+        title: "Seven",
+        url: "https://github.com/o/b/issues/7",
+        closed_at: "2026-11-10T15:00:00Z",
+      },
+      {
+        repo: "o/a",
+        number: 3,
+        title: "Three",
+        url: "https://github.com/o/a/issues/3",
+        closed_at: "2026-11-10T09:00:00Z",
+      },
+    ]);
+  });
+
+  it("opens the closed-today page at #/closed, lit under Work", async () => {
+    const { route } = await import("@/components/app");
+    const r = route("#/closed");
+    expect(r.page).toBe("closed");
+    expect(r.lit).toBe("work");
+  });
+
+  it("makes the Closed today number a link to that page", () => {
+    const src = readFileSync(path.join(process.cwd(), "components", "dashboard.tsx"), "utf8");
+    expect(src).toMatch(/label="Closed today"[^>]*href="#\/closed"/);
   });
 });
