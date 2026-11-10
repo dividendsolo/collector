@@ -470,6 +470,13 @@ toast goes to its row on Services (`service:<url>`), a Security check to its row
 the open-ports check to the machine's first port open to the internet (`ports:<machine>:internet`), and a GitHub
 limit to the GitHub limits panel on APIs (`github-limit`).
 
+Every Slow or Down check also writes one line to `collector.log` (`serviceLogLines` in `lib/server/services.ts`):
+`[services] <time> <name> <status> <ms> ms [<error>]` (no url: one may carry a key in its query), so how many checks were slow and when is in the log
+(`grep '\[services\]' ~/Library/Logs/collector.log`), not only the newest check the page shows. An online check
+writes nothing. On 2026-11-10 (collector#94) the two Slow toasts were the sites themselves, not the check: a quiet
+process timing the same GET beside the live server's own check read the same numbers (Situation 1.95 s against
+1.95 s, RepSheet 1.0 s against 1.0 s), so the check stays one plain GET with no second chance.
+
 A GitHub API limit (REST or GraphQL) with under 500 calls left raises an amber toast with Dismiss, since nobody can
 fix it but wait for the reset; it shows again when the limit runs out. Needs attention lists both limits too.
 
