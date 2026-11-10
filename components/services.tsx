@@ -115,12 +115,8 @@ export function ServicesPage() {
   const svc = useServices();
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Services</h1>
-        <p>Your own services and whether they are up.</p>
-      </div>
       <section className="panel">
-        <PanelHead icon="server" title="Service health">
+        <PanelHead icon="server">
           <span className="count">{svc?.length ?? 0}</span>
         </PanelHead>
         <ul className="health">{svc ? <ServiceRows list={sortServices(svc)} /> : <SkelItems n={5} />}</ul>

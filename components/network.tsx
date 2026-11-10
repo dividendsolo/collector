@@ -541,10 +541,6 @@ export function NetworkPage() {
   const machines = data?.machines || [];
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Network</h1>
-        <p>Every port each machine listens on and who can connect to it, and what each machine is connected out to.</p>
-      </div>
       {!data ? (
         <section className="panel">
           <PanelHead icon="shield" title="Ports" />

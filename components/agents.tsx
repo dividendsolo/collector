@@ -65,10 +65,6 @@ export function AgentsPage() {
   const pool = useAgents();
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Agents</h1>
-        <p>What runs now, then every agent you can use.</p>
-      </div>
       <RunningNow />
       <section className="panel">
         <PanelHead icon="bot" title="All agents">
@@ -166,7 +162,6 @@ export function AgentPage({ machine, name }: { machine: string; name: string }) 
         <div className="crumbs">
           <a href="#/agents">&larr; All agents</a>
         </div>
-        <h1 className="mono-title">{name}</h1>
         <p>{a ? a.note || "" : "Loading…"}</p>
       </div>
       <section className="panel">

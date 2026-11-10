@@ -130,7 +130,8 @@ export function PanelHead({
   iconClass,
 }: {
   icon: IconName;
-  title: string;
+  /** Left out on a page with one panel: the top bar already names the page (James, 2026-11-10). */
+  title?: string;
   children?: ReactNode;
   /** A class on the icon, for a panel whose icon carries a status colour (the Network page's machine summaries). */
   iconClass?: string;
@@ -138,7 +139,7 @@ export function PanelHead({
   return (
     <div className="panel-head">
       <Icon name={icon} className={iconClass ? `i ${iconClass}` : undefined} />
-      <h2>{title}</h2>
+      {title ? <h2>{title}</h2> : null}
       {children}
     </div>
   );
