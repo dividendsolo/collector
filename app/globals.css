@@ -2163,6 +2163,10 @@
   .brief-body td {
     white-space: normal;
   }
+  /* At 16px a short head (Impr., Clicks, Pos.) broke inside its word; a head keeps one line, its cells wrap. */
+  .brief-body th {
+    white-space: nowrap;
+  }
 }
 
 /* Outside the layers on purpose: React Flow's own stylesheet is unlayered, so a layered rule loses to its white

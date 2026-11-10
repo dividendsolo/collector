@@ -270,3 +270,12 @@ describe("the brief's keys: E archives, Esc goes back (James, 2026-11-10)", () =
     expect(html).toMatch(/title="Back to the inbox \(Esc\)"/);
   });
 });
+
+describe("a brief's table heads never break inside a word (2026-11-10)", () => {
+  const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
+  const block = css.slice(css.indexOf("/* Briefs (collector#64)"), css.indexOf("/* Outside the layers on purpose"));
+
+  it("keeps each head on one line, while the cells still wrap", () => {
+    expect(block).toMatch(/\.brief-body th \{[^}]*white-space:\s*nowrap/);
+  });
+});
