@@ -262,7 +262,7 @@
     transition: opacity 0.12s ease;
   }
   /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
-  .rail a.item:has(.tag.dot)::after {
+  .rail a.item:has(.tag.inbox-dot)::after {
     content: "";
     position: absolute;
     left: 21px;

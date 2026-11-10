@@ -179,7 +179,7 @@ describe("the Briefs dot on the closed sidebar (James, 2026-11-10)", () => {
   it("gives the Briefs tag the inbox count and a dot while the inbox has a brief", async () => {
     const { briefsTag, tagClass } = await import("@/components/app");
     expect(briefsTag(3)).toEqual({ text: "3", hot: false, dot: true });
-    expect(tagClass(briefsTag(3))).toBe("tag dot");
+    expect(tagClass(briefsTag(3))).toBe("tag inbox-dot");
   });
 
   it("draws no dot and no number when the inbox is empty", async () => {
@@ -189,6 +189,6 @@ describe("the Briefs dot on the closed sidebar (James, 2026-11-10)", () => {
   });
 
   it("draws the dot on the icon while the sidebar is closed, like the red one", () => {
-    expect(css).toMatch(/\.rail a\.item:has\(\.tag\.dot\)::after/);
+    expect(css).toMatch(/\.rail a\.item:has\(\.tag\.inbox-dot\)::after/);
   });
 });

@@ -108,7 +108,7 @@ type Tag = { text: string; hot: boolean; dot?: boolean };
 /** Briefs: the inbox count, and a dot on the closed sidebar's icon while the inbox holds a brief (James, 2026-11-10). */
 export const briefsTag = (n: number): Tag => ({ text: n ? String(n) : "", hot: false, dot: n > 0 });
 
-export const tagClass = (t?: Tag) => `tag${t?.hot ? " hot" : ""}${t?.dot ? " dot" : ""}`;
+export const tagClass = (t?: Tag) => `tag${t?.hot ? " hot" : ""}${t?.dot ? " inbox-dot" : ""}`;
 
 function useTags(): Record<string, Tag> {
   const { state } = useLive();
