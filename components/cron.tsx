@@ -50,12 +50,8 @@ export function CronPage() {
   const filters = [["all", "All"], ...names.map((n) => [n, n]), ["problems", "Problems"]];
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Cron Jobs</h1>
-        <p>Every scheduled job on every machine.</p>
-      </div>
       <section className="panel" id="cron-jobs">
-        <PanelHead icon="clock" title="Cron jobs">
+        <PanelHead icon="clock">
           <span className="count">{rows?.length ?? 0}</span>
           <div className="tools">
             <div className="seg" id="filter">
@@ -72,7 +68,7 @@ export function CronPage() {
             <thead>
               <tr>
                 <th>Status</th>
-                <th>Job</th>
+                <th>Name</th>
                 <th>Machine</th>
                 <th>What it does</th>
                 <th>Schedule</th>
@@ -156,7 +152,6 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
     const widest = Math.max(0, ...boxes.map((b) => b.offsetWidth));
     for (const b of boxes) b.style.minWidth = `${widest}px`;
   });
-  const title = j ? j.name : id;
   if (!state)
     return (
       <div className="page">
@@ -164,7 +159,6 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
           <div className="crumbs">
             <a href="#/cron">&larr; All cron jobs</a>
           </div>
-          <h1 className="mono-title">{id}</h1>
         </div>
       </div>
     );
@@ -188,7 +182,6 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
         <div className="crumbs">
           <a href="#/cron">&larr; All cron jobs</a>
         </div>
-        <h1 className="mono-title">{title}</h1>
         <p>{j ? j.what || "" : "This job is not on that machine now."}</p>
       </div>
       <div className="kv-cards">

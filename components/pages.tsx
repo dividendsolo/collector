@@ -25,12 +25,8 @@ export function DomainsPage() {
   const [cls, word] = cf.error ? ["failed", "Refused"] : cf.present ? ["ok", "Added"] : ["warning", "Missing"];
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Domains</h1>
-        <p>Each domain, its registrar, and when it expires.</p>
-      </div>
       <section className="panel">
-        <PanelHead icon="globe" title="Domains">
+        <PanelHead icon="globe">
           <span className="count">{list.length}</span>
           <span className="sub">from the public registry (RDAP or whois), checked every 12 hours</span>
         </PanelHead>
@@ -38,7 +34,7 @@ export function DomainsPage() {
           <table>
             <thead>
               <tr>
-                <th>Domain</th>
+                <th>Name</th>
                 <th>Registrar</th>
                 <th>Registered</th>
                 <th>Expires</th>
@@ -347,10 +343,6 @@ export function ApisPage() {
   const { state } = useLive();
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>APIs</h1>
-        <p>The outside services your jobs depend on: whether they are up, and how much of each is left.</p>
-      </div>
       <section className="panel">
         <PanelHead icon="server" title="Vendor status">
           <span className="count">{list?.length ?? 0}</span>
@@ -456,10 +448,6 @@ export function SubscriptionsPage() {
   const sorted = [...active].sort((a, b) => monthly(b) - monthly(a));
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Subscriptions</h1>
-        <p>What you pay for, largest first. Annual charges count as one twelfth a month.</p>
-      </div>
       <AiPanels />
       <section className="panel">
         <PanelHead icon="receipt" title="Subscriptions">
@@ -608,9 +596,6 @@ export function WorkPage() {
     : [];
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Work</h1>
-      </div>
       <HeatMap />
       <section className="panel">
         <PanelHead icon="list" title="Open cards">
@@ -856,12 +841,8 @@ export function ProposalsPage() {
   };
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Proposals</h1>
-        <p>Open client proposals and their value. Kept on this machine, in proposals.json.</p>
-      </div>
       <section className="panel">
-        <PanelHead icon="brief" title="Proposals">
+        <PanelHead icon="brief">
           <Count n={list.length} />
           <span className="sub">kept in proposals.json beside config.json</span>
           <div className="tools">

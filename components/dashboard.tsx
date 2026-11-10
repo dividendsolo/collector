@@ -374,9 +374,6 @@ function ServiceHealth() {
 export function Dashboard() {
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Dashboard</h1>
-      </div>
       <CurrentWork />
       <NeedsAttention />
       <WorkPanel />

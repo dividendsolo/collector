@@ -186,12 +186,8 @@ export function ProjectsPage() {
   const list: any[] = data?.projects || [];
   return (
     <div className="page">
-      <div className="page-head">
-        <h1>Projects</h1>
-        <p>Each repo you chose and its live site. Open a project for its own page.</p>
-      </div>
       <section className="panel">
-        <PanelHead icon="layers" title="Projects">
+        <PanelHead icon="layers">
           <span className="count">{list.length}</span>
           <span className="sub">{data?.at ? `read ${ago(new Date(data.at * 1000))}` : ""}</span>
           <div className="tools">
@@ -204,7 +200,7 @@ export function ProjectsPage() {
           <table className="fit">
             <thead>
               <tr>
-                <th>Project</th>
+                <th>Name</th>
                 <th>Repo</th>
                 <th>Type</th>
                 <th>Status</th>
@@ -354,7 +350,6 @@ export function ProjectPage({ repo }: { repo: string }) {
       <div className="crumbs">
         <a href="#/projects">&larr; All projects</a>
       </div>
-      <h1>{p ? p.title || p.name : repo}</h1>
       <p>{p ? p.description || "" : "Loading…"}</p>
     </div>
   );
@@ -594,7 +589,6 @@ export function KeysPage() {
         <div className="crumbs">
           <a href="#/projects">&larr; All projects</a>
         </div>
-        <h1>Payment keys</h1>
         <p>
           MRR and total revenue come from each project&apos;s payment provider. Each provider needs one read-only key.
         </p>
