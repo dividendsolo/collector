@@ -74,6 +74,8 @@ def main():
         out = collect.codex_model(case["cwd"], case["home"])
     elif fn == "pi_model":
         out = collect.pi_model(case["cwd"], case["home"])
+    elif fn == "profile_fallbacks":
+        out = collect.profile_fallbacks(case["path"])
     else:
         raise SystemExit(f"unknown fn: {fn}")
     json.dump(out, sys.stdout)

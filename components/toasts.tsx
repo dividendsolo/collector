@@ -3,14 +3,18 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { securityChecks } from "@/lib/checks";
 import {
+  aiToasts,
   checkToasts,
   forgetFixed,
   githubToasts,
   newAlarms,
+  noticeToasts,
   serviceToasts,
   sortToasts,
   visibleToasts,
 } from "@/lib/toasts";
+import { useAcks } from "./acks";
+import { useAi } from "./ai";
 import { useLive } from "./data";
 import { useServices } from "./services";
 
@@ -105,17 +109,26 @@ export function Toasts() {
   // Until both reads are in, a thing that is fine cannot be told from one not read yet: no alarm before then.
   const ready = services !== null && state !== null;
   const gone = useSyncExternalStore(onDismiss, dismissed, () => NONE);
+  const acks = useAcks();
+  const { data: ai } = useAi();
   const machines = useMemo(
     () =>
       (state?.machines || []).map((m: any) => ({
         name: m.name,
         checks: securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall"),
+        notices: m.notices,
       })),
     [state?.machines],
   );
   const all = useMemo(
-    () => [...githubToasts(state?.github), ...serviceToasts(services), ...checkToasts(machines)],
-    [state?.github, services, machines],
+    () => [
+      ...githubToasts(state?.github),
+      ...noticeToasts(machines, acks),
+      ...serviceToasts(services),
+      ...checkToasts(machines),
+      ...aiToasts(ai?.providers),
+    ],
+    [state?.github, services, machines, acks, ai],
   );
   // A fixed check forgets its dismissal, so the next time it breaks the toast shows again.
   useEffect(() => {
@@ -139,14 +152,23 @@ export function Toasts() {
   return (
     <section className="toasts" aria-live="polite" aria-label="Alerts">
       {shown.map((t) => (
-        <div key={t.key} className={`toast ${t.level}`} role={t.level === "error" ? "alert" : "status"}>
-          <span className="toast-dot" />
+        <div
+          key={t.key}
+          className={`toast ${t.level}${t.noDot ? " no-dot" : ""}`}
+          role={t.level === "error" ? "alert" : "status"}
+        >
+          {t.noDot ? null : <span className="toast-dot" />}
           <div className="toast-body">
             <a className="toast-title plain" href={t.href}>
               {t.title}
             </a>
             <div className="toast-text">{t.text}</div>
           </div>
+          {t.action ? (
+            <a className="btn danger" href={t.action.url} target="_blank" rel="noopener">
+              {t.action.label}
+            </a>
+          ) : null}
           {t.dismissible ? (
             <button className="btn ghost" type="button" onClick={() => dismiss(t.key, t.state)}>
               Dismiss

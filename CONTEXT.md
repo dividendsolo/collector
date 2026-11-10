@@ -276,6 +276,35 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
+## The three hand-kept fields Mission Control had (card #78)
+
+Mission Control is retired and Collector took the three small fields of it James missed (James, 2026-11-08). Each is a
+setting in `config.json`, the way Collector holds its other hand-kept facts, and each is refused rather than obeyed
+when it holds a value Collector does not know: `bun run check:config` exits 1 over it and Needs attention carries a
+row, the same as an unknown key.
+
+| Field | In `config.json` | Where it shows |
+|---|---|---|
+| A project's stage | `projects["owner/repo"].stage` — `idea`, `development`, `testing`, `production` or `archived` | The Stage column on the Projects page; a project with no stage shows nothing |
+| A vendor's criticality | `vendors[].criticality` — `low`, `medium`, `high` or `critical` | A pill beside the vendor's name on the APIs page |
+| A subscription's renewal | `subscriptions[].renews` — a `YYYY-MM-DD` day | The Renews column on the Subscriptions page, and a `warn` row in Needs attention inside the week before it |
+
+`lib/server/config.ts` holds the vocabularies (`PROJECT_STAGES`, `API_CRITICALITIES`), the one check both callers read
+(`badConfigValues`), and the two readers of the `projects` key. `projects` keeps both shapes: the map above, which the
+repo picker's Save writes (each repo keeping the stage it already had, so choosing repos never drops one), and the
+plain list of `owner/repo` strings a config may already hold — `projectRepos` and `projectStage` read either, so an
+older config.json loses nothing. `lib/server/projects.ts` puts each project's `stage` on its row for the page.
+
+The renewal row reads whole local calendar days (`renewalDays` in `lib/server/warnings.ts`, counted in
+`RENEWS_WARN_DAYS`, 7, at local noon so an hour of daylight saving never shifts the day): a renewal 3 days out makes
+the row, one 30 days out does not, and a past date is not a renewal still to come. Only an active subscription warns,
+the same reading the Subscriptions page has of "active".
+
+The APIs page's order is `vendorOrder` in `lib/vendors.ts`, with `vendorHit` beside it (both moved off the page so
+they can be tested): a vendor whose `criticality` is `high` or `critical` and whose status page lists an incident
+comes first, then the vendors with the worst state, then by name. `tests/config-values.test.ts` holds a test per
+field.
+
 ## The Network page: every open port, who can connect to it, and what each machine sends out (cards #65, #66)
 
 Slices 1 and 2 of the same check: what is open, and what goes out. The Network page (`#/network`) shows one block
@@ -441,11 +470,65 @@ toast goes to its row on Services (`service:<url>`), a Security check to its row
 the open-ports check to the machine's first port open to the internet (`ports:<machine>:internet`), and a GitHub
 limit to the GitHub limits panel on APIs (`github-limit`).
 
+Every Slow or Down check also writes one line to `collector.log` (`serviceLogLines` in `lib/server/services.ts`):
+`[services] <time> <name> <status> <ms> ms [<error>]` (no url: one may carry a key in its query), so how many checks were slow and when is in the log
+(`grep '\[services\]' ~/Library/Logs/collector.log`), not only the newest check the page shows. An online check
+writes nothing. On 2026-11-10 (collector#94) the two Slow toasts were the sites themselves, not the check: a quiet
+process timing the same GET beside the live server's own check read the same numbers (Situation 1.95 s against
+1.95 s, RepSheet 1.0 s against 1.0 s), so the check stays one plain GET with no second chance.
+
 A GitHub API limit (REST or GraphQL) with under 500 calls left raises an amber toast with Dismiss, since nobody can
 fix it but wait for the reset; it shows again when the limit runs out. Needs attention lists both limits too.
 
 The sidebar's Network item counts the ports open to the internet across every machine (`internetPortCount`), the
 same number the toast and Needs attention name.
+
+## A job's notices (card #82)
+
+A job's good news has a path into the page now. The weekly `directory-listings` check (agent-stack#306) appends one
+JSON line per newly live listing to `~/.hermes/notices/directory-listings.jsonl` on the machine it runs on, and each
+line shows once: one toast and one Needs attention row, linking to the listing, gone when it is acknowledged.
+Collector had no such path — toasts came only from services and the network, and Needs attention only from failures
+and watch entries.
+
+The line is `{"at": "<ISO time>", "key": "<what an acknowledgement names>", "level": "info", "text": "<the news>",
+"href": "<the listing>"}`. `collect.py`'s `notices_rows` reads every `<home>/.hermes/notices/*.jsonl` on every
+machine, on the same read as everything else, so it costs no extra ssh: the newest 64 KB of each file
+(`NOTICE_TAIL`), oldest first, as `{key, level, text, href, at}` (the `key` falls back to the text, and `href` is null
+when the line has none or is not a web address — a `javascript:` or `data:` URL from outside data would run in the
+page's own origin, whose routes restart the server and write `config.json`, so only `http://`/`https://` is kept as a
+link; the news still shows, without one). A line older than three weeks (`NOTICE_KEEP_S`) is the file's own record of a
+listing, not news; a line that is not JSON, that is not an object, or that carries no `text` is skipped, so another
+job's file cannot take a machine's whole read down (the clean-machine rule of card #55). A line with no readable `at`
+is kept: a job that wrote one meant it.
+
+`lib/server/warnings.ts` turns each row into a `warn` row naming what it read, linked to `href` (an info level is
+never an error, so it makes no alarm sound and draws no red), with the existing Acknowledge: `ack.key` is the line's
+own key, so acknowledging a listing covers it however many times the machine is read again. An acknowledged row with
+no next run reads `Acknowledged.` — the Dashboard only says "Waiting for the next run" when `ack.next` names one.
+
+`lib/toasts.ts`'s `noticeToasts(machines, acks)` is the toast: the line's text is the title and the link (a notice
+with no `href` leads to the Needs attention panel instead), the address is the body, and a `key` already in the
+browser's acknowledgements (`components/acks.ts`) is left out. One Acknowledge on the row clears both, since they
+read the same list; there is no Dismiss, because the news is not a problem that has to wait for a run to clear.
+`tests/notices.test.ts` and `tests/notices.driver.py` drive the real `collect.py` on a fixture home.
+
+## Only a web address is an href (collector#84, #86)
+
+The page takes a few links from outside data — a vendor's status feed gives an incident's own link, a machine's notice
+line gives its listing, a project's row gives the repo's GitHub `homepage` — and puts them in an `<a href>` on
+Collector's own origin, whose routes restart the server, start the tailnet or the Hermes gateway and write
+`config.json`. React does not help: it writes a known attribute straight through, so a `javascript:` or `data:` URL
+would run there when it is clicked. `lib/links.ts`'s `webUrl` is the one allowlist — only `http://`/`https://` is a
+link (the same rule `collect.py`'s notices read keeps on the machine). A feed's incident link that is not one falls
+back to the vendor's own status page (`lib/server/vendors.ts`); a notice line's href is dropped rather than obeyed in
+the row and in the toast (`lib/server/warnings.ts`, `lib/toasts.ts`), and the news still shows.
+
+A project's live site is the fourth (collector#86): `lib/server/projects.ts` reads the repo's `homepage` through
+`webUrl` where the gh api answer comes in and the service's own url beside it, so `homepage` and `live` on the row are
+a web address or empty — the value a repo with no homepage already had — and `components/projects.tsx`'s `liveSite`
+(the href's `p.live || p.homepage` fallback) has nothing left to obey. A homepage is a field of a repo the user may
+not own, so it is outside data whatever `config.json` says.
 
 ## The Sponsor button (card #52)
 

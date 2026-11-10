@@ -44,6 +44,7 @@ const LINKS: Record<string, string> = {
   anthropic: "https://claude.ai/settings/usage",
   nous: "https://portal.nousresearch.com",
   minimax: "https://platform.minimax.io/user-center/payment/coding-plan",
+  "kimi-coding": "https://www.kimi.com/code",
   "xai-oauth": "https://grok.com",
 };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -124,6 +125,37 @@ async function minimax(): Promise<Reading> {
   };
 }
 
+/** The Kimi coding plan's 5-hour and 7-day limits, from Kimi's own usage endpoint (James, 2026-11-09). */
+export function kimiReading(d: any): Reading {
+  const u = d?.usages || {};
+  const five = u.limit_5h,
+    week = u.limit_7d;
+  if (!five && !week) return { note: "Kimi returned no plan" };
+  const pct = (r: unknown) => (isNum(r) ? Math.round(r * 100) : 0);
+  const now = 100 - pct(five?.used_ratio);
+  const wk = 100 - pct(week?.used_ratio);
+  return {
+    plan: "Coding plan",
+    left: `${now}%`,
+    windows: [
+      { label: "5-hour window", used: pct(five?.used_ratio), resets: five?.reset_time ?? null },
+      { label: "Week", used: pct(week?.used_ratio), resets: week?.reset_time ?? null },
+    ],
+    detail: `of this 5-hour window, ${wk}% of the week`,
+    low: Math.min(now, wk) < AI_LOW_PERCENT,
+  };
+}
+
+async function kimi(): Promise<Reading> {
+  const key = hermesEnv().KIMI_API_KEY;
+  if (!key) return { note: "No KIMI_API_KEY in ~/.hermes/.env" };
+  try {
+    return kimiReading(await getJson("https://api.kimi.com/coding/v1/usages", bearer(key)));
+  } catch (e) {
+    return { note: `Could not read the Kimi plan: ${why(e).slice(0, 80)}` };
+  }
+}
+
 /** "3:15 PM" or "Thu 9 AM", in local time, like the old strftime with leading zeros dropped. */
 export function clock(iso: string | null | undefined, withDay: boolean): string {
   const t = new Date(iso || "");
@@ -201,7 +233,7 @@ async function grok(): Promise<Reading> {
   return { plan: "Grok subscription", note: "Login OK (xAI has no usage API for subscriptions)" };
 }
 
-const READERS: Record<string, () => Promise<Reading>> = { nous, minimax, anthropic, xai: grok };
+const READERS: Record<string, () => Promise<Reading>> = { nous, minimax, anthropic, xai: grok, "kimi-coding": kimi };
 const KIND: Record<string, "usage"> = { nous: "usage" };
 
 /** One row per AI provider the Hermes profiles use (each profile's config.yaml), read from the provider. */
@@ -210,10 +242,14 @@ async function readAll(): Promise<{ at: number; providers: AiRow[] }> {
   const users = new Map<string, string[]>();
   for (const m of snap.machines)
     for (const prof of m.profiles || []) {
-      if (!prof.provider) continue;
-      // One account, one row: the Claude SDK login is the same Claude subscription as "anthropic".
-      const slug = prof.provider.startsWith("claude") ? "anthropic" : prof.provider;
-      users.set(slug, [...(users.get(slug) || []), `${m.name}:${prof.name}`]);
+      // A fallback provider is a subscription the profile can call too (MiniMax is only ever a fallback), so it
+      // gets its own row (James, 2026-11-09).
+      for (const provider of new Set([prof.provider, ...(prof.fallbacks || [])])) {
+        if (!provider) continue;
+        // One account, one row: the Claude SDK login is the same Claude subscription as "anthropic".
+        const slug = provider.startsWith("claude") ? "anthropic" : provider;
+        users.set(slug, [...(users.get(slug) || []), `${m.name}:${prof.name}`]);
+      }
     }
   const sorted = [...users].sort((a, b) => b[1].length - a[1].length);
   const providers = await Promise.all(

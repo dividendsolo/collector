@@ -46,6 +46,8 @@
     --blue: oklch(0.76 0.15 var(--hue));
     --claude: #d97757;
     --nous: #000091;
+    --minimax: #ff3763;
+    --kimi: #1a88ff;
     --blue-2: oklch(0.82 0.12 var(--hue));
     --blue-bg: oklch(0.76 0.15 var(--hue) / 0.1);
     --blue-line: oklch(0.76 0.15 var(--hue) / 0.3);
@@ -85,6 +87,8 @@
     --blue: oklch(0.55 0.17 var(--hue));
     --claude: #d97757;
     --nous: #000091;
+    --minimax: #ff3763;
+    --kimi: #1a88ff;
     --blue-2: oklch(0.48 0.16 var(--hue));
     --blue-bg: oklch(0.55 0.17 var(--hue) / 0.08);
     --blue-line: oklch(0.55 0.17 var(--hue) / 0.3);
@@ -378,6 +382,20 @@
   }
   .btn:hover {
     background: var(--hover);
+  }
+  /* A link drawn as a button: centered like one, never underlined. */
+  a.btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+  }
+  .btn.danger {
+    background: var(--red-bg);
+    border-color: var(--red-line);
+    color: var(--red);
+  }
+  .btn.danger:hover {
+    background: oklch(0.55 0.14 25 / 0.2);
   }
   .btn.primary {
     background: var(--blue-bg);
@@ -1283,7 +1301,7 @@
     max-width: 420px;
     color: var(--muted);
   }
-  /* Phones: Project, Status, and Health only; the project page has the rest. Agents: Status, Profile, Machine. */
+  /* Phones: Project, Status, Health, and the hand-set Stage; the project page has the rest. Agents: Status, Profile, Machine. */
   @media (max-width: 700px) {
     table.fit:not(.pool) tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)),
     table.fit .desc {
@@ -1291,6 +1309,17 @@
     }
     table.pool tr > :is(th, td):is(:nth-child(3), :nth-child(4), :nth-child(5), :nth-child(7)) {
       display: none;
+    }
+  }
+  /* Phones: Subscriptions keeps Name, Renews, Charge and Per month, on tighter padding; Billing and Per year go
+     (collector#78). */
+  @media (max-width: 700px) {
+    table.subs tr > :is(th, td):is(:nth-child(2), :nth-child(6)) {
+      display: none;
+    }
+    table.subs :is(th, td) {
+      padding-left: 8px;
+      padding-right: 8px;
     }
   }
   tr.row {
@@ -1836,6 +1865,12 @@
   .toast.error {
     border-color: var(--red-line);
   }
+  .toast.no-dot {
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 12px 12px 16px;
+  }
   .toast.warn {
     border-color: var(--amber-line);
   }
@@ -2022,6 +2057,14 @@
   .bar.nous span {
     background: var(--nous);
     box-shadow: 0 0 8px var(--nous);
+  }
+  .bar.kimi-coding span {
+    background: var(--kimi);
+    box-shadow: 0 0 8px var(--kimi);
+  }
+  .bar.minimax span {
+    background: var(--minimax);
+    box-shadow: 0 0 8px var(--minimax);
   }
   .bar.low span {
     background: var(--red);

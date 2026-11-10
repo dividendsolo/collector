@@ -1,6 +1,8 @@
+import { money } from "../format";
+import { webUrl } from "../links";
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
-import { type Config, unknownConfigKeys } from "./config";
+import { badConfigValues, type Config, isRenewsDate, unknownConfigKeys } from "./config";
 import type { Domain } from "./domains";
 import { TICKER_STALE_S } from "./hermes";
 import type { GithubLimit } from "./machines";
@@ -29,6 +31,18 @@ const START_HERMES = { label: "Start Hermes", post: "/api/hermes" };
 /** A duration in the words a row reads it in: "12 min", "4 h". */
 const ageText = (s: number) => (s < 3600 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
 
+/** How many days before a renewal the row shows: a charge lands before it, not after (collector#78). */
+export const RENEWS_WARN_DAYS = 7;
+
+/** Whole calendar days until a renewal date (`subscriptions[].renews`, `YYYY-MM-DD`), or null for a date that is
+ * not one. Local days, so a renewal at 23:50 is not the day after tomorrow (collector#78). */
+export function renewalDays(renews: unknown, now = Date.now()): number | null {
+  if (!isRenewsDate(renews)) return null;
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  // Local noon: an hour of daylight saving never changes which day the date names.
+  return Math.round((day(new Date(`${renews}T12:00:00`)) - day(new Date(now))) / 86_400_000);
+}
+
 export interface WarningInputs {
   machines: any[];
   github: GithubLimit;
@@ -43,9 +57,10 @@ export interface WarningInputs {
 
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
  * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, the Hermes gateway or its cron
- * ticker on a machine that has one, the agents and jobs the user's own `watch` entries name, tickets that did not
- * list, low AI or X credit, open incidents of the vendors marked "attention" in config.json, and a config.json key
- * Collector does not read. Errors first. Adds `machine` and `what` to each job. */
+ * ticker on a machine that has one, the agents and jobs the user's own `watch` entries name, the good news a machine's
+ * own job wrote a notice for, tickets that did not list, low AI or X credit, open incidents of the vendors marked
+ * "attention" in config.json, and a config.json key Collector does not read. Errors first. Adds `machine` and `what`
+ * to each job. */
 export function warnings(w: WarningInputs): Warning[] {
   const out: Warning[] = [];
   const byScript = new Map<string, string[]>();
@@ -54,6 +69,14 @@ export function warnings(w: WarningInputs): Warning[] {
     out.push({
       level: "warn",
       text: `config.json has ${unknown.length === 1 ? "a key" : `${unknown.length} keys`} Collector does not read: ${unknown.join(", ")}`,
+    });
+  // A value Collector would not use (a project's stage, a vendor's criticality, a renewal date: collector#78) is
+  // the same kind of setting that does nothing, so it is named here too, and by `bun run check:config`.
+  const bad = badConfigValues(w.cfg);
+  if (bad.length)
+    out.push({
+      level: "warn",
+      text: `config.json has ${bad.length === 1 ? "a value" : `${bad.length} values`} Collector does not use: ${bad.join("; ")}`,
     });
   const what = w.cfg.jobs || {};
   const work = w.cfg.work_script || {};
@@ -126,6 +149,22 @@ export function warnings(w: WarningInputs): Warning[] {
           level: x.state === "failed" ? "error" : "warn",
           text: `${x.name} on ${m.name}: ${x.detail || x.state}`,
         });
+    // A job's good news (collector#82): each line of the machine's `~/.hermes/notices/*.jsonl` is one row —
+    // "Situation is listed on App Rater" — linking to the listing and acknowledged by the line's own key, so it
+    // shows once and goes away when acknowledged rather than waiting for a run that will never clear it. Info is a
+    // warning, not an error: nothing is wrong, and the row makes no alarm sound.
+    for (const n of m.notices || []) {
+      // The line's href is outside data, like a feed's incident link: only a web address goes in the row's href
+      // (collector#84).
+      const href = webUrl(n?.href);
+      if (n?.text)
+        out.push({
+          level: n.level === "error" ? "error" : "warn",
+          text: String(n.text),
+          ...(href ? { url: href } : {}),
+          ack: { key: String(n.key || n.text), next: null },
+        });
+    }
     // The ports anyone on the internet can connect to (collector#65), one error row per machine naming the first ten:
     // a machine can have twenty, and a row each would bury every other warning on the Dashboard. A port only the
     // local network, the tailnet or the machine itself can reach is no warning. The Network page has each port with
@@ -171,11 +210,24 @@ export function warnings(w: WarningInputs): Warning[] {
         text: `The same script (${script}) starts from ${where.length} jobs on ${machine}: ${where.join(", ")}`,
       });
   }
+  // A subscription that renews inside the week (collector#78): the row names the day and the amount, so the charge
+  // is not a surprise. Only an active one, the same reading the Subscriptions page has of "active": an ended
+  // subscription renews nothing.
+  for (const s of Array.isArray(w.cfg.subscriptions) ? w.cfg.subscriptions : []) {
+    const days = renewalDays(s.renews);
+    if ((s.status || "active") === "active" && days != null && days >= 0 && days <= RENEWS_WARN_DAYS)
+      out.push({
+        level: "warn",
+        text: `${s.name} renews on ${s.renews} for ${money(s.amount, s.currency || "USD")}`,
+      });
+  }
   for (const d of w.domains) {
     if (d.registered && d.days != null && d.days <= 30)
       out.push({
         level: d.days <= 7 ? "error" : "warn",
         text: `${d.name} expires in ${d.days} days (${d.expires}) at ${d.registrar || "its registrar"}`,
+        // Acknowledged once renewed (James, 2026-11-09): the key holds the expiry date, so a new date asks again.
+        ack: { key: `domain|${d.name}|${d.expires}`, next: null },
       });
     if (d.auto_renew === false && d.days != null && d.days <= 60)
       out.push({ level: "warn", text: `${d.name} expires in ${d.days} days and auto-renew is off` });
@@ -229,12 +281,14 @@ export function warnings(w: WarningInputs): Warning[] {
       text: `X API: $${xc.toFixed(2)} of credits left (top up before Situation's X wire stops)`,
       url: "https://console.x.com",
     });
-  for (const a of w.ai)
-    if (a.low)
-      out.push({
-        level: "error",
-        url: a.link,
-        text: a.alert || `${`${a.provider}: ${a.left} left ${a.detail || ""}`.trim()} (top up before the lanes stop)`,
-      });
+  // One row only when every provider with a usage reading is out: a fallback still answers otherwise (James,
+  // 2026-11-09: "one message that says that we are completely out when ... all the fallbacks are drained"). Nous and
+  // Claude running low are toasts (lib/toasts.ts, aiToasts).
+  const metered = w.ai.filter((a) => a.left != null || a.windows?.length);
+  if (metered.length && metered.every((a) => a.low))
+    out.push({
+      level: "error",
+      text: `Every AI plan is out: ${metered.map((a) => a.provider).join(", ")}. The lanes stop until one resets.`,
+    });
   return [...out.filter((x) => x.level === "error"), ...out.filter((x) => x.level === "warn")];
 }

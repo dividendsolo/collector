@@ -1974,6 +1974,16 @@ def profile_model(config_path):
     return get("default"), get("provider")
 
 
+def profile_fallbacks(config_path):
+    """The fallback providers of a Hermes config.yaml, in order (`fallback_providers:` list), read with a regex."""
+    try:
+        text = open(config_path).read()
+    except OSError:
+        return []
+    block = re.search(r"^fallback_providers:[ \t]*\n((?:[ \t]+.*\n?)*)", text, re.M)
+    return re.findall(r"^[ \t]*-[ \t]*provider:[ \t]*(\S+)", block.group(1), re.M) if block else []
+
+
 def hermes_profiles():
     """Every Hermes agent profile on this machine (and the default one), with its role, model, and last session."""
     dirs = [("default", HERMES)] + [(d.rstrip("/").split("/")[-1], d) for d in sorted(glob.glob(os.path.join(HERMES, "profiles/*/")))]
@@ -1997,7 +2007,8 @@ def hermes_profiles():
                     last = con.execute("SELECT MAX(started_at) FROM sessions").fetchone()[0]
             except sqlite3.Error:
                 pass
-        out.append({"name": name, "model": model, "provider": provider, "role": role, "last_session": last})
+        out.append({"name": name, "model": model, "provider": provider, "role": role, "last_session": last,
+                    "fallbacks": profile_fallbacks(os.path.join(d, "config.yaml"))})
     return out
 
 
@@ -2375,6 +2386,61 @@ def watch_rows(now, entries=None, ps_out=None, jobs=None, self_pid=None):
             for e in entries]
 
 
+# Job notices (collector#82): a job appends one JSON line per piece of good news — a new directory listing, say — to
+# a file under this folder, and the page shows each line as one toast and one Needs attention row until it is
+# acknowledged. `{"at": ..., "key": ..., "level": "info", "text": ..., "href": ...}` is the line; `key` is what an
+# acknowledgement names, so one listing acknowledged on the page stays acknowledged while its line is in the file.
+NOTICES = os.path.join(".hermes", "notices")
+# How far back a notice is news. An older line is the job's own record of a listing it already found.
+NOTICE_KEEP_S = 21 * 86400
+# The newest bytes of each file: a notices file is appended to forever, and its newest lines are what is new.
+NOTICE_TAIL = 64 * 1024
+# Only a web address is a link. A line's `href` comes from outside data — the directory listing's own URL — and the
+# page puts it in an `<a href>` on an origin whose own routes restart the server and write config.json, so a scheme
+# that runs script there is not a link (collector#82). The news still shows; it just shows without one.
+NOTICE_SCHEMES = ("http://", "https://")
+
+
+def notice_time(at):
+    """The epoch second a notice line's `at` names, or None when it is missing or unreadable."""
+    try:
+        return datetime.fromisoformat(str(at).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
+    """One row per notice line under `<home>/.hermes/notices/*.jsonl` (collector#82), oldest first.
+
+    Nothing here is another job's failure: a file that is not there, a line that is not JSON, a line that is not an
+    object, a line with no `text` and a line older than `keep_s` are each skipped, so one bad file cannot take a
+    machine's whole read down. A line with no readable `at` is kept — a job that wrote one meant it.
+    """
+    rows = []
+    for path in sorted(glob.glob(os.path.join(home, NOTICES, "*.jsonl"))):
+        for line in tail_text(path, NOTICE_TAIL).splitlines():
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict) or not str(entry.get("text") or "").strip():
+                continue
+            at = notice_time(entry.get("at"))
+            if at is not None and now.timestamp() - at > keep_s:
+                continue
+            href = str(entry["href"]) if entry.get("href") else ""
+            if not href.lower().startswith(NOTICE_SCHEMES):
+                href = None
+            rows.append({
+                "key": str(entry.get("key") or entry["text"]),
+                "level": str(entry.get("level") or "info"),
+                "text": str(entry["text"]),
+                "href": href,
+                "at": at,
+            })
+    return sorted(rows, key=lambda r: r["at"] or 0)
+
+
 def main():
     # One brief's body, on demand: the same script over the same ssh, asked for one file instead of the whole machine
     # (`python3 - '<config>' brief '<file>'`), so a brief opens without the snapshot carrying every brief's Markdown.
@@ -2394,6 +2460,7 @@ def main():
         "briefs": briefs_read(),
         "network": network_read(),
         "watch": watch_rows(now),
+        "notices": notices_rows(now),
         "running": running_agents(),
         "host_broken": host_broken(),
         "profiles": hermes_profiles(),

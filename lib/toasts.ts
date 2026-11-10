@@ -12,6 +12,7 @@
 
 import type { Check } from "./checks";
 import { jumpHref } from "./jump";
+import { webUrl } from "./links";
 
 export interface Toast {
   /** Which thing it is about: `service:<url>` or `network:<machine>`. */
@@ -23,6 +24,10 @@ export interface Toast {
   text: string;
   /** Where the details are: the Services page, or the Network page. */
   href: string;
+  /** Drawn without the colored dot (James, 2026-11-09, on the Nous toast: "No dot"). */
+  noDot?: boolean;
+  /** A button that does the fix, opened in a new tab: the Nous top-up page (James, 2026-11-09). */
+  action?: { label: string; url: string };
   /** An amber Security check the user may dismiss (James, 2026-11-06: "if they're okay with it, that's fine"). A
    * red one, a Down service and an open port stay until fixed. */
   dismissible?: boolean;
@@ -47,6 +52,15 @@ interface MachineIn {
     sockets?: PortIn[];
     ssh?: { source: string | null; passwordauthentication: boolean; permitrootlogin: boolean } | null;
   } | null;
+  /** The machine's own job notices: one line of `~/.hermes/notices/*.jsonl` each (collector#82). */
+  notices?: NoticeIn[];
+}
+
+interface NoticeIn {
+  key?: string;
+  level?: string;
+  text?: string;
+  href?: string | null;
 }
 
 /** A service that is Slow or Down: one toast, its state the status and the error. */
@@ -174,6 +188,34 @@ export function internetPortCount(machines: MachineIn[] | null | undefined): num
   return n;
 }
 
+/** A machine's job notices (collector#82): one amber toast per line a job wrote into `~/.hermes/notices/*.jsonl` —
+ * a new directory listing, say — its title the line's own text, linking to the listing. It is good news, so it is
+ * never an error and makes no alarm sound, and a line whose key is acknowledged makes no toast: the row on the
+ * Dashboard carries the Acknowledge, and both read the same acks, so one click clears the pair. */
+export function noticeToasts(machines: MachineIn[] | null | undefined, acks: string[] = []): Toast[] {
+  const out: Toast[] = [];
+  for (const m of machines || []) {
+    for (const n of m.notices || []) {
+      const text = (n.text || "").trim();
+      if (!text) continue;
+      const key = n.key || text;
+      if (acks.includes(key)) continue;
+      // The line's href is outside data, and the title above it is the link: only a web address is one (collector#84).
+      const href = webUrl(n.href);
+      out.push({
+        key,
+        state: text,
+        level: n.level === "error" ? "error" : "warn",
+        title: text,
+        // The title is the link, so the body is the address it goes to; a notice with no link says nothing more.
+        text: href || "",
+        href: href || jumpHref("dashboard", "attention"),
+      });
+    }
+  }
+  return out;
+}
+
 /** The toasts to show, errors first, then warnings. */
 export function sortToasts(all: Toast[]): Toast[] {
   const rank = { error: 0, warn: 1 };
@@ -220,6 +262,50 @@ export function githubToasts(
       title: `GitHub ${GITHUB_NAMES[k]} limit ${left === 0 ? "used up" : "nearly gone"}`,
       text: `${left.toLocaleString("en-US")} of ${l.limit.toLocaleString("en-US")} left. Resets ${time(l.reset)}.`,
       href: jumpHref("apis", "github-limit"),
+      dismissible: true,
+    });
+  }
+  return out;
+}
+
+/** Nous and Claude running low (James, 2026-11-09: "noose, we want to see that one show up. And we want to see the
+ * clawed one show up in the bottom right, too"). The other providers are fallbacks and get no toast. Amber and
+ * dismissible; its state is what is left, so a new low shows again. */
+const AI_TOASTS: Record<string, { name: string; out: string; low: string; action?: { label: string; url: string } }> = {
+  // The billing page Hermes itself sends people to (hermes_cli/portal_cli.py, SUBSCRIPTION_URL).
+  nous: {
+    name: "Nous",
+    out: "Nous credits are out",
+    low: "Nous credits are nearly out",
+    action: { label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" },
+  },
+  anthropic: { name: "Claude", out: "Claude is out", low: "Claude is nearly out" },
+};
+
+interface AiIn {
+  provider: string;
+  low?: boolean;
+  left?: string | null;
+  detail?: string | null;
+  link?: string;
+}
+
+export function aiToasts(ai: AiIn[] | null | undefined): Toast[] {
+  const out: Toast[] = [];
+  for (const a of ai || []) {
+    const t = AI_TOASTS[a.provider];
+    if (!t || !a.low) continue;
+    const empty = a.left === "$0.00" || a.left === "0%";
+    out.push({
+      key: `ai:${a.provider}`,
+      state: a.left || "low",
+      // Red-bordered (James, 2026-11-09: "make it red bordered").
+      level: "error",
+      noDot: true,
+      title: empty ? t.out : t.low,
+      text: `${a.left ?? "?"} left${a.detail ? ` ${a.detail}` : ""}`,
+      href: a.link || jumpHref("dashboard", "ai-plans"),
+      ...(t.action ? { action: t.action } : {}),
       dismissible: true,
     });
   }

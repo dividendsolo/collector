@@ -64,6 +64,24 @@ export async function check(service: Service): Promise<Checked> {
   };
 }
 
+/** One `[services]` log line per Slow or Down check, so collector.log keeps how many there were and when
+ * (collector#94: the page only ever shows the newest check). An online check writes nothing. The url stays out:
+ * a service url may carry a key in its query, and the log never holds a key. */
+export function serviceLogLines(list: Checked[]): string[] {
+  return list
+    .filter((s) => s.status !== "online")
+    .map((s) =>
+      [
+        "[services]",
+        new Date(s.checked_at * 1000).toISOString(),
+        s.name,
+        s.status,
+        `${s.ms} ms`,
+        ...(s.error ? [s.error] : []),
+      ].join(" "),
+    );
+}
+
 const state = once("services", () => ({ list: [] as Checked[], busy: null as Promise<Checked[]> | null }));
 
 /** Check every service now (the page asks once a minute). Two asks at once share one check. */
@@ -71,6 +89,7 @@ export function checkServices(): Promise<Checked[]> {
   if (!state.busy) {
     state.busy = Promise.all((config().services || []).map(check))
       .then((list) => {
+        for (const line of serviceLogLines(list)) console.log(line);
         state.list = list;
         return list;
       })
