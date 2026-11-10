@@ -635,6 +635,47 @@ actions did not come across.
   on another row (or Add) mounts a fresh form instead of keeping the last one's values: the `.fields` grid in
   `app/globals.css` is the only CSS the feature added, and Delete asks first, since the file is the only copy.
 
+## The Briefs inbox (card #64)
+
+Every brief a cron job emails is also kept as one Markdown file in `~/.hermes/briefs/` on the machine that sent it
+(agent-stack's own `## Briefs folder`; the terms are in `GLOSSARY.md`: Brief, Inbox, Read, Archived). The Briefs page
+is that folder, worked the way an email inbox works.
+
+- `collect.py`'s `briefs_read` reads the folder's front matter on every machine read (the same 10-second one, so the
+  list costs no extra ssh) and puts one row per file on the snapshot: the file, the brief's name, its subject, when it
+  went out. The file name starts with the UTC stamp the writer saved it at, so sorting the names is sorting by time; a
+  dot-file is one being written (the writer renames into place) and anything that is not `.md` is not a brief, so both
+  are skipped. No folder is no briefs rather than an error, as every other read here is without its file.
+- One brief's Markdown is read on demand: `collect(machine, cfg, file)` runs the same script over the same ssh with
+  one more argument — `python3 - '<config>' brief '<file>'` — which `collect.py`'s `brief_file` answers with that one
+  file (front matter and body), or `null` for a name that is not a plain file name or a file that is gone. The folder
+  only ever grows, so a snapshot never carries every brief's body.
+- `lib/briefs.ts` is the shared rule set: `inbox()` is every brief that is not archived, oldest first by the file
+  name; `archived()` is newest first (the last one he filed on top); `keyOf` is the machine and the file, which is one
+  brief's whole identity; and `isBriefFile` refuses anything that is not the writer's own file name, so a name off the
+  page never reaches a path.
+- Read and Archived live on this machine, in `briefs.json` beside `config.json` (`BRIEFS_PATH`; the proposals file's
+  pattern, a temp file then a rename), so a browser reset and a Collector restart both leave them in place — and
+  nothing prunes it, since the file it names stays in the folder. A file that does not parse refuses a write with a
+  409 whose `why` names it and stays byte for byte; a file it cannot read loses the flags rather than the briefs, and
+  a key the page does not know is kept, because its machine may simply not have answered this read.
+- `briefsView()` works the two together from the cached snapshot — no extra ssh — and adds one plain `why` line when a
+  machine could not be read, so an empty Inbox is never a lie. `briefBody()` is the one-file read, with its state.
+- The page (`components/briefs.tsx`) is `#/briefs`: the Inbox oldest first, unread bold with its dot and read in the
+  normal weight, dimmed where it stands, then the Archived rows under a full-width Archived row of the same table (so
+  they share the Inbox's columns), newest first. The dot's cell is `td.unread-dot`: the global `.mark` class is a blue
+  box and must not be reused there. `#/briefs/<machine>/<file>` opens one brief as
+  Markdown, and the Archive button sits at its top — the Acknowledge toggle's own button; there is no unarchive in this
+  pass. Opening a brief is what makes it Read, and an archived brief still opens. The sidebar's Briefs link carries the
+  Inbox count as a number; both clicks go through `postBrief`, which hands the POST's answer (the whole view) to SWR's
+  `/api/briefs`, so the count changes on the click and not at the next minute's refresh.
+- A brief's Markdown is read as data, never as HTML: `lib/markdown.ts` parses headings, tables, lists, fenced code,
+  rules and paragraphs with inline code, bold, italics and links, and `components/markdown.tsx` draws those as React
+  nodes. Nothing goes near `dangerouslySetInnerHTML`, so raw HTML in a quoted post prints as the characters it is, and
+  the only link that exists is an `http`/`https` one. Two deliberate simplifications, both reading better for these
+  briefs: a line break inside a paragraph or a list item is drawn as a line break (the briefs write one fact per line),
+  and a list nested inside an item is read as a list of its own.
+
 ## Layout
 
 - `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.
@@ -653,6 +694,8 @@ actions did not come across.
 | `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; and every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's), the knocks from its local network among them — the read an agent asks to answer "is anything open that should not be?" |
 | `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
 | `/api/proposals` | The client proposals, newest first, and the open pipeline per currency worked out from them (`GET`); the page's one write route adds (`POST`), edits (`PUT`) and removes (`DELETE ?id=`) one, every field parsed on the server, and answers the list and the pipeline as they stand after the change. |
+| `/api/briefs` | The Briefs page: the Inbox (every brief that is not archived, oldest first) and the Archived section (newest first), read off the machine snapshot every other page already reads (`GET`); the page's one write (`POST`) sets one brief's read or archived state, on this machine, and answers both lists as they stand after it. |
+| `/api/brief` | One brief read whole, over the ssh the snapshot uses (`GET ?machine=&file=`): its front matter, its Markdown and whether it is read or archived here. |
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,
 `/api/card`, `/api/repos`, `/api/work`, `/api/work-stats`, `/api/version`); the board's server-sent events are
