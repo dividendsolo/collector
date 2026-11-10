@@ -227,3 +227,20 @@ describe("workCards blocked", () => {
     expect(workCards(rows, ["blocked"], ["closed"])[0].blockers).toEqual(blockers);
   });
 });
+
+describe("the label repos come from status (James, 2026-11-10)", () => {
+  it("takes the repo list status prints, so a new repo shows without a config edit", async () => {
+    const { labelReposFrom } = await import("@/lib/server/board");
+    const board = { label_repos: ["dividendsolo/situation"] } as unknown as Board;
+    expect(
+      labelReposFrom(board, ["dividendsolo/situation", "dividendsolo/darndest", "dividendsolo/pageroast"]),
+    ).toEqual(["dividendsolo/situation", "dividendsolo/darndest", "dividendsolo/pageroast"]);
+  });
+
+  it("falls back to config.json when status cannot answer", async () => {
+    const { labelReposFrom } = await import("@/lib/server/board");
+    const board = { label_repos: ["dividendsolo/situation"] } as unknown as Board;
+    expect(labelReposFrom(board, null)).toEqual(["dividendsolo/situation"]);
+    expect(labelReposFrom(board, [])).toEqual(["dividendsolo/situation"]);
+  });
+});

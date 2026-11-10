@@ -93,6 +93,28 @@ export function boardQuery(items: boolean, search: boolean): string {
 
 const short = (r: string) => r.split("/").pop() as string;
 
+/** The label repos to read: the list `status repos` prints, its one home, so a repo added there shows here with no
+ * edit (James, 2026-11-10: Collector showed 21 needs-triage cards to status's 24, missing darndest and pageroast).
+ * `config.json`'s `board.label_repos` is the fallback when status cannot answer. */
+export function labelReposFrom(board: Board, fromStatus: string[] | null): string[] {
+  return fromStatus?.length ? fromStatus : board.label_repos || [];
+}
+
+let statusRepos: { at: number; repos: string[] | null } = { at: 0, repos: null };
+
+/** `status repos --json`, read at most once a minute; null when status is missing or fails. */
+async function readStatusRepos(): Promise<string[] | null> {
+  if (Date.now() - statusRepos.at < 60_000) return statusRepos.repos;
+  const [repos] = await run<string[]>([expandHome("~/.local/bin/status"), "repos", "--json"], { timeout: 15 });
+  statusRepos = { at: Date.now(), repos: Array.isArray(repos) && repos.length ? repos : statusRepos.repos };
+  return statusRepos.repos;
+}
+
+/** The board settings with the label repos from status. */
+async function boardWithRepos(board: Board): Promise<Board> {
+  return { ...board, label_repos: labelReposFrom(board, await readStatusRepos()) };
+}
+
 /** The lane slugs a label repo can carry: every lane the board knows and every lane in tickets.all. */
 export const laneSet = (board: Board, all: string[] = []) => new Set([...Object.keys(board.lanes), ...all]);
 
@@ -333,8 +355,9 @@ export async function poll(reason = "timer"): Promise<void> {
   if (S.busy) return;
   S.busy = true;
   const start = Date.now();
-  const cfg = config();
+  const base = config();
   try {
+    const cfg = base.board?.project_id ? { ...base, board: await boardWithRepos(base.board) } : base;
     let rows: Row[];
     if (cfg.board?.project_id) {
       let r = await readBoard(cfg.board, cfg.tickets?.all || []);
