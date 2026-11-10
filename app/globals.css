@@ -265,6 +265,19 @@
     box-shadow: 0 0 6px var(--red);
     transition: opacity 0.12s ease;
   }
+  /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
+  .rail a.item:has(.tag.inbox-dot)::after {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    box-shadow: 0 0 6px var(--blue);
+    transition: opacity 0.12s ease;
+  }
   .rail:hover a.item::after,
   .rail:focus-within a.item::after {
     opacity: 0;
@@ -2078,6 +2091,124 @@
   }
   .plans .note {
     padding: 6px 16px 14px;
+  }
+
+  /* Briefs (collector#64): the Inbox and the Archived section, and one brief read as Markdown. */
+  /* Every word in a Briefs panel is 16px at least (James, 2026-11-10), the shared 12px heads and dates included. */
+  .briefs-panel,
+  .briefs-panel th,
+  .briefs-panel td,
+  .briefs-panel .sub,
+  .briefs-panel .btn,
+  .briefs-panel .mono,
+  .briefs-panel h2,
+  .briefs-panel .count {
+    font-size: 16px;
+  }
+  /* An open brief's head stays under the top bar while the brief scrolls, so Inbox and Archive are always in reach
+     (James, 2026-11-10). A sticky head needs its panel to let it out, so this panel keeps its corners itself. */
+  .brief-panel {
+    overflow: visible;
+  }
+  .brief-panel > .panel-head {
+    position: sticky;
+    top: 48px;
+    z-index: 1;
+    background: var(--panel);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  /* Inbox, back from a brief: a button-shaped link with an arrow, on the Archive button's line, never underlined. */
+  .briefs-panel a.back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+  }
+  .briefs-panel a.back:hover {
+    color: var(--text);
+  }
+  /* Unread is the brief's name in bold; a read one stays where it is, dimmed. */
+  .briefs tr.unread td.name a {
+    font-weight: 600;
+  }
+  .briefs tr.read td {
+    opacity: 0.6;
+  }
+  .section-head {
+    padding: 7px 16px;
+    font-size: 16px;
+    color: var(--faint);
+    background: var(--panel-2);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .brief-body {
+    padding: 6px 16px 20px;
+    max-width: 940px;
+    line-height: 1.55;
+    /* A brief carries long bare URLs (the posts Lead Watch found): they wrap inside the panel instead of running
+       off its right edge, on a phone as much as on the desktop. */
+    overflow-wrap: anywhere;
+  }
+  .brief-body h1,
+  .brief-body h2,
+  .brief-body h3 {
+    font-weight: 500;
+    margin: 18px 0 6px;
+  }
+  .brief-body h1 {
+    font-size: 20px;
+  }
+  .brief-body h2 {
+    font-size: 16px;
+  }
+  .brief-body h3 {
+    font-size: 16px;
+    color: var(--muted);
+  }
+  .brief-body p,
+  .brief-body li {
+    margin: 6px 0;
+  }
+  .brief-body ul,
+  .brief-body ol {
+    padding-left: 22px;
+  }
+  .brief-body a {
+    color: var(--blue-2);
+  }
+  .brief-body code {
+    font-family: var(--mono);
+    font-size: 16px;
+    background: var(--panel-2);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  .brief-body pre {
+    overflow-x: auto;
+    padding: 10px 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+  .brief-body pre code {
+    background: none;
+    padding: 0;
+  }
+  .brief-body hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 16px 0;
+  }
+  /* A brief's tables wrap in their cells: the page's other tables keep one line per row, and a quoted sentence is
+     longer than any of them. */
+  .brief-body th,
+  .brief-body td {
+    white-space: normal;
+  }
+  /* At 16px a short head (Impr., Clicks, Pos.) broke inside its word; a head keeps one line, its cells wrap. */
+  .brief-body th {
+    white-space: nowrap;
   }
 }
 

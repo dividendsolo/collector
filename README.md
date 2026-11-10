@@ -63,7 +63,9 @@ updates go through the page's button.
 - [Bun](https://bun.sh) 1.4 or later, which `install.sh` installs when it is missing. Collector is a Next.js app
   (TypeScript); `bun install` gets the rest.
 - Python 3.9 or later, standard library only, on this machine and on each remote machine: `collect.py` reads each one.
-- SSH access (key-based) to each remote machine, with `python3` on it.
+- SSH access (key-based) to each remote machine, with `python3` on it. Reach each machine over a private network such
+  as Tailscale, with its SSH port closed to the public internet: Collector only ever connects out from this machine to
+  the servers, and a server never needs to reach this machine, so the laptop is never opened to a server.
 - The [GitHub CLI](https://cli.github.com) (`gh`), signed in with the `user` scope (`gh auth refresh -h github.com -s user`), for the board, the API limit, Actions minutes and dollars (the billing usage summary of the signed-in account; without that scope GitHub answers 404, the panel says it could not read them, and set `actions_minutes` in `config.json` if your plan is not read right), and the Projects page.
 - Optional: Docker, for verify runs in the Running now table.
 

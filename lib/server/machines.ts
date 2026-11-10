@@ -36,10 +36,14 @@ export function watchFor(watch: unknown, machine: string, here: string): Watch[]
 }
 
 /** One machine's snapshot from collect.py: run here, or sent over SSH (`ssh host python3 -`), so nothing is installed there. */
-export async function collect(machine: Machine, cfg: Config) {
+export async function collect(machine: Machine, cfg: Config, brief?: string) {
   const remote = JSON.stringify(Object.fromEntries(REMOTE_KEYS.filter((k) => k in cfg).map((k) => [k, cfg[k]])));
-  if (!machine.ssh) return run(["python3", COLLECT, remote]);
-  return run([...SSH, machine.ssh, "python3", "-", shellQuote(remote)], { input: fs.readFileSync(COLLECT, "utf8") });
+  // One brief's body, instead of the whole machine: the same script, one more argument (collector#64).
+  const extra = brief ? ["brief", shellQuote(brief)] : [];
+  if (!machine.ssh) return run(["python3", COLLECT, remote, ...(brief ? ["brief", brief] : [])]);
+  return run([...SSH, machine.ssh, "python3", "-", shellQuote(remote), ...extra], {
+    input: fs.readFileSync(COLLECT, "utf8"),
+  });
 }
 
 export interface GithubLimit {

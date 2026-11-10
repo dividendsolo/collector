@@ -19,8 +19,10 @@ export type IconName =
   | "activity"
   | "receipt"
   | "brief"
+  | "inbox"
   | "list"
   | "chev"
+  | "back"
   | "eye"
   | "eye-off"
   | "shield"
@@ -97,9 +99,16 @@ export function Sprite() {
         <rect x="3" y="7" width="18" height="13" rx="2" />
         <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18" />
       </symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24">
+        <path d="M4.5 4h15l1.5 9v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z" />
+        <path d="M3 13h5l1.5 3h5L16 13h5" />
+      </symbol>
       <symbol id="i-list" viewBox="0 0 24 24">
         <path d="M9 6h11M9 12h11M9 18h11" />
         <path d="m3 6 1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2" />
+      </symbol>
+      <symbol id="i-back" viewBox="0 0 24 24">
+        <path d="M19 12H5m6-6-6 6 6 6" />
       </symbol>
       <symbol id="i-chev" viewBox="0 0 24 24">
         <path d="m9 6 6 6-6 6" />
