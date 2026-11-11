@@ -236,22 +236,28 @@ async function grok(): Promise<Reading> {
 const READERS: Record<string, () => Promise<Reading>> = { nous, minimax, anthropic, xai: grok, "kimi-coding": kimi };
 const KIND: Record<string, "usage"> = { nous: "usage" };
 
-/** One row per AI provider the Hermes profiles use (each profile's config.yaml), read from the provider. */
-async function readAll(): Promise<{ at: number; providers: AiRow[] }> {
-  const snap = await snapshot.get();
-  const users = new Map<string, string[]>();
-  for (const m of snap.machines)
-    for (const prof of m.profiles || []) {
-      // A fallback provider is a subscription the profile can call too (MiniMax is only ever a fallback), so it
-      // gets its own row (James, 2026-11-09).
+/** How many Hermes profiles use each AI provider, the most used first. A fallback provider is a subscription the
+ * profile can call too (MiniMax is only ever a fallback), so it counts (James, 2026-11-09). A profile is one agent
+ * wherever it runs: a name on two machines counts once (James, 2026-11-11: 100 profiles were 61 names). */
+export function profilesByProvider(
+  machines: { profiles?: { name: string; provider?: string | null; fallbacks?: string[] | null }[] }[],
+): [string, number][] {
+  const users = new Map<string, Set<string>>();
+  for (const m of machines)
+    for (const prof of m.profiles || [])
       for (const provider of new Set([prof.provider, ...(prof.fallbacks || [])])) {
         if (!provider) continue;
         // One account, one row: the Claude SDK login is the same Claude subscription as "anthropic".
         const slug = provider.startsWith("claude") ? "anthropic" : provider;
-        users.set(slug, [...(users.get(slug) || []), `${m.name}:${prof.name}`]);
+        users.set(slug, (users.get(slug) || new Set()).add(prof.name));
       }
-    }
-  const sorted = [...users].sort((a, b) => b[1].length - a[1].length);
+  return [...users].map(([slug, names]): [string, number] => [slug, names.size]).sort((a, b) => b[1] - a[1]);
+}
+
+/** One row per AI provider the Hermes profiles use (each profile's config.yaml), read from the provider. */
+async function readAll(): Promise<{ at: number; providers: AiRow[] }> {
+  const snap = await snapshot.get();
+  const sorted = profilesByProvider(snap.machines);
   const providers = await Promise.all(
     sorted.map(async ([slug, profiles]) => {
       const base = slug.split("-")[0];
@@ -260,7 +266,7 @@ async function readAll(): Promise<{ at: number; providers: AiRow[] }> {
       return {
         ...row,
         provider: slug,
-        profiles: profiles.length,
+        profiles,
         link: LINKS[slug] || LINKS[base],
         kind: KIND[slug] || "plan",
       } as AiRow;
