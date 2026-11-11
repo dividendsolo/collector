@@ -176,3 +176,9 @@ export function moneyParts(text: string): { text: string; money: boolean }[] {
   if (last < text.length) out.push({ text: text.slice(last), money: false });
   return out;
 }
+
+/** When a panel's numbers were read from their source, in the viewer's local time, as the top bar's "Updated" says
+ * it. `at` is epoch seconds; a cached answer carries the time of the read it came from (James, 2026-11-11). */
+export function fetchedText(at: number | null | undefined): string {
+  return at ? `Fetched ${new Date(at * 1000).toLocaleTimeString()}` : "";
+}

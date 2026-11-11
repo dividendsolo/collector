@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { ago } from "@/lib/format";
+import { ago, fetchedText } from "@/lib/format";
 import { jumpHref } from "@/lib/jump";
 import { priorityOrder, triageRow } from "@/lib/priority";
 import { waitingList } from "@/lib/statuses";
@@ -365,14 +365,18 @@ function Waiting() {
   );
 }
 
-function AiCredits() {
+function AiUsage() {
   const { data } = useAi();
   const rows: any[] = data?.providers || [];
   const plans = rows.filter((a) => a.kind !== "usage");
   const usage = rows.filter((a) => a.kind === "usage");
   return (
     <section className="panel">
-      <PanelHead icon="gauge" title="AI credits">
+      <PanelHead icon="gauge" title="AI usage">
+        {/* When Collector last read the providers: a cached answer keeps its read's time (James, 2026-11-11). */}
+        <span className="sub fetched" title={data?.at ? new Date(data.at * 1000).toLocaleString() : undefined}>
+          {fetchedText(data?.at)}
+        </span>
         <BlurToggle />
         <a className="more" href="#/subscriptions">
           All providers &rarr;
@@ -422,7 +426,7 @@ export function Dashboard() {
       <Waiting />
       <JogPanel />
       <div className="pair">
-        <AiCredits />
+        <AiUsage />
         <ServiceHealth />
       </div>
     </div>
