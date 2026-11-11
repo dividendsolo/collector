@@ -51,6 +51,7 @@ describe("Needs attention with a stopped tailnet", () => {
     const w = warnings({ ...base, machines: [{ name: "altair", local: true, tailscale: "Stopped", jobs: [] }] });
     expect(w).toEqual([
       {
+        group: "cant-work",
         level: "warn",
         text: "Tailscale is stopped on altair",
         action: { label: "Start Tailscale", post: "/api/tailscale" },
@@ -86,7 +87,7 @@ describe("a machine that could not be read while the tailnet here is down", () =
         { name: "ezio", local: false, error: "timed out after 20 s", jobs: [] },
       ],
     });
-    expect(w).toEqual([{ level: "error", text: "Could not read ezio: timed out after 20 s" }]);
+    expect(w).toEqual([{ group: "cant-work", level: "error", text: "Could not read ezio: timed out after 20 s" }]);
   });
 });
 

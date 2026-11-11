@@ -1,7 +1,9 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ago } from "@/lib/format";
+import { jumpHref } from "@/lib/jump";
+import { priorityOrder, triageRow } from "@/lib/priority";
 import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
@@ -63,7 +65,13 @@ function PriorityTasks() {
   const [fixed, setFixed] = useState<{ post: string; at: number } | null>(null);
   const shown = fixed && state && state.at > fixed.at ? null : fixed;
   const acks = useAcks();
-  const all: any[] = (state?.warnings || []).filter((x: any) => !(shown && x.action?.post === shown.post));
+  // The needs-triage row (James, 2026-11-11) comes from the same board read as Waiting on you, so the two agree.
+  const waiting = useWaiting();
+  const triage = waiting ? triageRow(waiting.list) : null;
+  const all: any[] = priorityOrder([
+    ...(state?.warnings || []).filter((x: any) => !(shown && x.action?.post === shown.post)),
+    ...(triage ? [triage] : []),
+  ]);
   // An acknowledged row leaves the count and moves under the open ones, dimmed, until its job runs again.
   const w = all.filter((x) => !acked(x, acks));
   const done = all.filter((x) => acked(x, acks));
@@ -83,7 +91,11 @@ function PriorityTasks() {
             <div className={`alert ${x.level}`} key={i}>
               <span className="n">{i + 1}</span>
               <Icon name="alert" />
-              {x.url ? (
+              {x.jump ? (
+                <a className="plain" href={`${jumpHref("dashboard", x.jump)}&${WAITING_FILTER}=${x.filter}`}>
+                  {x.text}
+                </a>
+              ) : x.url ? (
                 <a className="plain" href={x.url} target="_blank" rel="noopener">
                   {x.text}
                 </a>
@@ -210,10 +222,31 @@ export function useWaiting() {
   return { d, list, p0 };
 }
 
+/** The address query that opens Waiting on you on one status (`#/dashboard?to=waiting-panel&lane=needs-triage`): the
+ * Priority tasks triage row links there (James, 2026-11-11). Read once, then taken off the address. */
+const WAITING_FILTER = "lane";
+
 /** Waiting on you: every ticket in the "each" lanes, needs-triage first, then by priority, then lane (waitingOrder), then oldest. The chip counts only the P0s, in red. */
 function Waiting() {
   const w = useWaiting();
   const [lane, setLane] = useState("all");
+  // A link that names a status opens the list on it: the triage row's click shows only the needs-triage cards.
+  useEffect(() => {
+    const read = () => {
+      const [page, query] = location.hash.split("?");
+      if (!query) return;
+      const params = new URLSearchParams(query);
+      const want = params.get(WAITING_FILTER);
+      if (!want) return;
+      setLane(want);
+      params.delete(WAITING_FILTER);
+      const rest = params.toString();
+      history.replaceState(null, "", rest ? `${page}?${rest}` : page);
+    };
+    read();
+    addEventListener("hashchange", read);
+    return () => removeEventListener("hashchange", read);
+  }, []);
   const list = w?.list || [];
   const counts: [string, number][] = w
     ? w.d.count.map((l: string) => [l, w.d.tickets.filter((t: any) => t.lane === l).length]).filter(([, n]: any) => n)

@@ -279,6 +279,23 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
+## Priority tasks: groups, in James's order (2026-11-11)
+
+Every Priority tasks row has a group (`lib/priority.ts`), and the panel lists the groups in this order. Inside a
+group, the rows keep the order the server finds them in. An error no longer goes above a warning of an earlier group.
+
+1. **Can't work**: a service or a vendor down, a domain or HTTPS certificate running out, every AI plan out, a repo's
+   checks red on main, Tailscale or Hermes stopped, a script in a loop or started by two jobs, the tickets or a
+   machine Collector cannot read, a config.json setting that does nothing.
+2. **Security**: a port open to the internet, a risky sshd setting.
+3. **Needs triage**: "N cards need triage", from the same board read as Waiting on you (cards the waiting crew is
+   checking left out). Its link, `#/dashboard?to=waiting-panel&lane=needs-triage`, glides to Waiting on you and
+   opens it on the needs-triage cards. A triaged card can go straight to an agent, so triage takes it off James's
+   plate at once. No row when none waits.
+4. **Jobs failing**: a failed job run, a watched agent failing or idle.
+5. **Money and limits**: a renewal, a GitHub limit, X credits.
+6. **Good news**: a job's good news.
+
 ## The three hand-kept fields Mission Control had (card #78)
 
 Mission Control is retired and Collector took the three small fields of it James missed (James, 2026-11-08). Each is a

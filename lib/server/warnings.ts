@@ -1,5 +1,6 @@
 import { money } from "../format";
 import { webUrl } from "../links";
+import { type PriorityGroup, priorityOrder } from "../priority";
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
 import { badConfigValues, type Config, isRenewsDate, unknownConfigKeys } from "./config";
@@ -14,6 +15,8 @@ import type { XUsage } from "./x";
 export interface Warning {
   level: "error" | "warn";
   text: string;
+  /** Its group on Priority tasks, which sets the order (lib/priority.ts, James 2026-11-11). */
+  group?: PriorityGroup;
   url?: string;
   /** A value for the row's right side (GitHub Actions sets the dollars billed this month). */
   aside?: string;
@@ -77,6 +80,7 @@ export function warnings(w: WarningInputs): Warning[] {
   const unknown = unknownConfigKeys(w.cfg);
   if (unknown.length)
     out.push({
+      group: "cant-work",
       level: "warn",
       text: `config.json has ${unknown.length === 1 ? "a key" : `${unknown.length} keys`} Collector does not read: ${unknown.join(", ")}`,
     });
@@ -85,6 +89,7 @@ export function warnings(w: WarningInputs): Warning[] {
   const bad = badConfigValues(w.cfg);
   if (bad.length)
     out.push({
+      group: "cant-work",
       level: "warn",
       text: `config.json has ${bad.length === 1 ? "a value" : `${bad.length} values`} Collector does not use: ${bad.join("; ")}`,
     });
@@ -96,7 +101,8 @@ export function warnings(w: WarningInputs): Warning[] {
     // The foreman's host-broken-<repo> marker: the repo's checks fail on its main branch at this machine, so no
     // card of that repo is built here. The row says what failed, not whose fault it is (James, 2026-11-11: "It's not
     // a great error"): the step and short SHA from the marker's line, and the first error line of the foreman's log.
-    for (const b of m.host_broken || []) if (b?.repo) out.push({ level: "error", text: hostBrokenText(b, m.name) });
+    for (const b of m.host_broken || [])
+      if (b?.repo) out.push({ group: "cant-work", level: "error", text: hostBrokenText(b, m.name) });
     // collect.py's tailnet state; null with no Tailscale on that machine. A stopped tailnet breaks every ssh job
     // there, so the jobs' rows carry the reason and, on this machine, the button that starts it again.
     const tailnetDown = !!m.tailscale && m.tailscale !== "Running";
@@ -105,6 +111,7 @@ export function warnings(w: WarningInputs): Warning[] {
       !(m.jobs || []).some((j: any) => j.enabled && j.ssh_host && j.last_status && !j.last_status.startsWith("ok"))
     )
       out.push({
+        group: "cant-work",
         level: "warn",
         text: `Tailscale is ${String(m.tailscale).toLowerCase()} on ${m.name}`,
         ...(m.local ? { action: START_TAILSCALE } : {}),
@@ -119,12 +126,14 @@ export function warnings(w: WarningInputs): Warning[] {
       const age = typeof gw.ticker_age_s === "number" ? gw.ticker_age_s : null;
       if (!gw.running)
         out.push({
+          group: "cant-work",
           level: "error",
           text: `Hermes gateway is down on ${m.name}`,
           ...(m.local ? { action: START_HERMES } : {}),
         });
       else if (age !== null && age > (gw.ticker_stale_s ?? TICKER_STALE_S))
         out.push({
+          group: "cant-work",
           level: "warn",
           text: `Hermes cron ticker stopped ${ageText(age)} ago on ${m.name}`,
           ...(m.local ? { action: START_HERMES } : {}),
@@ -136,6 +145,7 @@ export function warnings(w: WarningInputs): Warning[] {
       if (!j.enabled) continue;
       if (j.last_status && !j.last_status.startsWith("ok"))
         out.push({
+          group: "jobs",
           level: "error",
           text: `${j.name} on ${m.name}: last run ${j.last_status}${j.last_error ? ` (${j.last_error.slice(0, 140)})` : ""}`,
           ...(j.ssh_host && tailnetDown && m.local ? { action: START_TAILSCALE } : {}),
@@ -155,6 +165,7 @@ export function warnings(w: WarningInputs): Warning[] {
     for (const x of m.watch || [])
       if (x.state !== "busy" && x.state !== "ok")
         out.push({
+          group: "jobs",
           level: x.state === "failed" ? "error" : "warn",
           text: `${x.name} on ${m.name}: ${x.detail || x.state}`,
         });
@@ -168,6 +179,7 @@ export function warnings(w: WarningInputs): Warning[] {
       const href = webUrl(n?.href);
       if (n?.text)
         out.push({
+          group: "good-news",
           level: n.level === "error" ? "error" : "warn",
           text: String(n.text),
           ...(href ? { url: href } : {}),
@@ -183,6 +195,7 @@ export function warnings(w: WarningInputs): Warning[] {
       const shown = open.slice(0, 10).map((s) => `${s.proto} ${s.port}`);
       const rest = open.length - shown.length;
       out.push({
+        group: "security",
         level: "error",
         text: `${open.length === 1 ? "1 port" : `${open.length} ports`} on ${m.name} ${open.length === 1 ? "is" : "are"} open to anyone on the internet: ${shown.join(", ")}${rest ? `, and ${rest} more (see the Network page)` : ""}`,
       });
@@ -192,9 +205,9 @@ export function warnings(w: WarningInputs): Warning[] {
     // (ezio, 2026-11-06: the file said yes, sshd_config.d/00-hardening.conf said no, and this row was false).
     const ssh = m.network?.ssh;
     if (ssh?.source === "sshd -T" && ssh.passwordauthentication)
-      out.push({ level: "error", text: `SSH on ${m.name}: password authentication is on` });
+      out.push({ group: "security", level: "error", text: `SSH on ${m.name}: password authentication is on` });
     if (ssh?.source === "sshd -T" && ssh.permitrootlogin)
-      out.push({ level: "error", text: `SSH on ${m.name}: root login is on` });
+      out.push({ group: "security", level: "error", text: `SSH on ${m.name}: root login is on` });
     const starts: number[] = Array.isArray(m.work_starts_10m) ? m.work_starts_10m : [];
     const limit = work.max_starts_60s ?? 5;
     // collect.py reports the starts as epoch seconds.
@@ -207,6 +220,7 @@ export function warnings(w: WarningInputs): Warning[] {
     }
     if (burst >= limit)
       out.push({
+        group: "cant-work",
         level: "error",
         text: `${workLabel} on ${m.name} started ${burst} times in 60 s: it is starting itself in a loop`,
       });
@@ -215,6 +229,7 @@ export function warnings(w: WarningInputs): Warning[] {
     const [script, machine] = JSON.parse(k);
     if (where.length > 1)
       out.push({
+        group: "cant-work",
         level: "warn",
         text: `The same script (${script}) starts from ${where.length} jobs on ${machine}: ${where.join(", ")}`,
       });
@@ -226,6 +241,7 @@ export function warnings(w: WarningInputs): Warning[] {
     const days = renewalDays(s.renews);
     if ((s.status || "active") === "active" && days != null && days >= 0 && days <= RENEWS_WARN_DAYS)
       out.push({
+        group: "money",
         level: "warn",
         text: `${s.name} renews on ${s.renews} for ${money(s.amount, s.currency || "USD")}`,
       });
@@ -233,15 +249,24 @@ export function warnings(w: WarningInputs): Warning[] {
   for (const d of w.domains) {
     if (d.registered && d.days != null && d.days <= 30)
       out.push({
+        group: "cant-work",
         level: d.days <= 7 ? "error" : "warn",
         text: `${d.name} expires in ${d.days} days (${d.expires}) at ${d.registrar || "its registrar"}`,
         // Acknowledged once renewed (James, 2026-11-09): the key holds the expiry date, so a new date asks again.
         ack: { key: `domain|${d.name}|${d.expires}`, next: null },
       });
     if (d.auto_renew === false && d.days != null && d.days <= 60)
-      out.push({ level: "warn", text: `${d.name} expires in ${d.days} days and auto-renew is off` });
+      out.push({
+        group: "cant-work",
+        level: "warn",
+        text: `${d.name} expires in ${d.days} days and auto-renew is off`,
+      });
     if (d.ssl_days != null && d.ssl_days <= 14)
-      out.push({ level: "error", text: `The HTTPS certificate of ${d.name} runs out in ${d.ssl_days} days` });
+      out.push({
+        group: "cant-work",
+        level: "error",
+        text: `The HTTPS certificate of ${d.name} runs out in ${d.ssl_days} days`,
+      });
   }
   for (const [k, name] of [
     ["graphql", "GraphQL"],
@@ -250,6 +275,7 @@ export function warnings(w: WarningInputs): Warning[] {
     const g = w.github[k];
     if (g && g.limit - g.used < 500)
       out.push({
+        group: "money",
         level: "error",
         text: `GitHub ${name} limit nearly gone: ${Math.max(0, g.limit - g.used)} of ${g.limit} left`,
       });
@@ -257,28 +283,33 @@ export function warnings(w: WarningInputs): Warning[] {
   const ga = w.github.actions;
   if (ga?.used != null && ga.limit && ga.used >= ga.limit * 0.9)
     out.push({
+      group: "money",
       level: ga.used >= ga.limit ? "error" : "warn",
       text: `GitHub Actions: ${ga.used.toLocaleString()} of ${ga.limit.toLocaleString()} included minutes used this month${ga.used >= ga.limit ? " (each extra minute is billed)" : ""}`,
       url: "https://github.com/settings/billing",
       aside: `$${(ga.billed ?? 0).toFixed(2)} billed`,
     });
   for (const x of w.services)
-    if (x.status === "down") out.push({ level: "error", text: `${x.name} is down: ${x.error} (${x.url})` });
+    if (x.status === "down")
+      out.push({ group: "cant-work", level: "error", text: `${x.name} is down: ${x.error} (${x.url})` });
   // A machine read over ssh fails while this machine's tailnet is down: the row says so and carries the same button.
   const here = w.machines.find((m) => m.local);
   const hereDown = !!here?.tailscale && here.tailscale !== "Running";
   for (const m of w.machines)
     if (m.error)
       out.push({
+        group: "cant-work",
         level: "error",
         text: `Could not read ${m.name}: ${m.error}${!m.local && hereDown ? ` (Tailscale is ${String(here.tailscale).toLowerCase()} on ${here.name})` : ""}`,
         ...(!m.local && hereDown ? { action: START_TAILSCALE } : {}),
       });
-  if (w.ticketsError) out.push({ level: "warn", text: `Could not list tickets: ${w.ticketsError}` });
+  if (w.ticketsError)
+    out.push({ group: "cant-work", level: "warn", text: `Could not list tickets: ${w.ticketsError}` });
   const watched = new Set((w.cfg.vendors || []).filter((v) => v.attention).map((v) => v.name));
   for (const v of w.vendors || [])
     if (watched.has(v.name) && v.incidents.length)
       out.push({
+        group: "cant-work",
         level: v.state === "major" || v.state === "critical" ? "error" : "warn",
         text: `${v.name} incident: ${v.incidents.map((i) => `${i.name} (${i.impact})`).join("; ")}`,
         url: v.url,
@@ -286,6 +317,7 @@ export function warnings(w: WarningInputs): Warning[] {
   const xc = w.x?.credits?.total;
   if (typeof xc === "number" && xc < AI_LOW_USD)
     out.push({
+      group: "money",
       level: "error",
       text: `X API: $${xc.toFixed(2)} of credits left (top up before Situation's X wire stops)`,
       url: "https://console.x.com",
@@ -296,8 +328,10 @@ export function warnings(w: WarningInputs): Warning[] {
   const metered = w.ai.filter((a) => a.left != null || a.windows?.length);
   if (metered.length && metered.every((a) => a.low))
     out.push({
+      group: "cant-work",
       level: "error",
       text: `Every AI plan is out: ${metered.map((a) => a.provider).join(", ")}. The lanes stop until one resets.`,
     });
-  return [...out.filter((x) => x.level === "error"), ...out.filter((x) => x.level === "warn")];
+  // James's group order (lib/priority.ts), not errors first: a security warning goes above a failed job.
+  return priorityOrder(out);
 }

@@ -83,7 +83,9 @@ describe("Needs attention", () => {
       x: null,
       ai: [],
     });
-    expect(w).toEqual([{ level: "warn", text: "config.json has a key Collector does not read: machines_" }]);
+    expect(w).toEqual([
+      { group: "cant-work", level: "warn", text: "config.json has a key Collector does not read: machines_" },
+    ]);
   });
   it("says nothing about a config of keys Collector reads", () => {
     const w = warnings({

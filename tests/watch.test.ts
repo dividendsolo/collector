@@ -300,7 +300,7 @@ describe("Needs attention with a watched agent", () => {
       launchd: { "com.example.report": { out: FAILED } },
     });
     expect(warnings({ ...base, machines: [machine({ watch: rows })] })).toEqual([
-      { level: "error", text: "Nightly backup on altair: last run exit 1" },
+      { group: "jobs", level: "error", text: "Nightly backup on altair: last run exit 1" },
     ]);
   });
 
@@ -310,7 +310,7 @@ describe("Needs attention with a watched agent", () => {
       files: { "crew/beat": { age_s: 7200 } },
     });
     expect(warnings({ ...base, machines: [machine({ watch: rows })] })).toEqual([
-      { level: "warn", text: "The crew on altair: nothing written for 2 h" },
+      { group: "jobs", level: "warn", text: "The crew on altair: nothing written for 2 h" },
     ]);
   });
 
@@ -330,7 +330,11 @@ describe("Needs attention with a watched agent", () => {
   it("warns about an entry Collector cannot read, so a setting that does nothing is not silent", () => {
     const rows = read({ entries: [{ name: "Thing", launchd_: "com.example.report" }] });
     expect(warnings({ ...base, machines: [machine({ watch: rows })] })).toEqual([
-      { level: "warn", text: "Thing on altair: no signal Collector reads (process, session, launchd, log, heartbeat)" },
+      {
+        group: "jobs",
+        level: "warn",
+        text: "Thing on altair: no signal Collector reads (process, session, launchd, log, heartbeat)",
+      },
     ]);
   });
 
@@ -378,7 +382,7 @@ describe("a watch that is not a list, on the snapshot path", () => {
     ]);
     // Only the watch rows: the rest of a real machine's read (its own jobs) is not this test's to pin.
     expect(warnings({ ...base, machines }).filter((w) => w.text.startsWith("watch on"))).toEqual([
-      { level: "warn", text: "watch on altair: config.json's watch is not a list of entries" },
+      { group: "jobs", level: "warn", text: "watch on altair: config.json's watch is not a list of entries" },
     ]);
   });
 
