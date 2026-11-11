@@ -10,6 +10,7 @@
  */
 
 import type { Check } from "./checks";
+import { AI_LOW_PERCENT, resetText } from "./format";
 import { jumpHref } from "./jump";
 import { webUrl } from "./links";
 
@@ -281,9 +282,30 @@ interface AiIn {
   left?: string | null;
   detail?: string | null;
   link?: string;
+  windows?: { label: string; used: number; resets: string | null }[];
 }
 
-export function aiToasts(ai: AiIn[] | null | undefined): Toast[] {
+/** The limit names a toast says ("the weekly limit"), by the window's label in lib/server/ai.ts. */
+const LIMIT_NAMES: Record<string, string> = {
+  Week: "weekly",
+  "5-hour session": "5-hour session",
+  "5-hour window": "5-hour",
+};
+
+/** Why the toast is up, and nothing else (James, 2026-11-11: "Just put why the notification is up"): each low window as
+ * "Only 7% of the weekly limit is left. Resets Thu 10 PM." A reading with no windows (a balance) says what is left. */
+function whyLow(a: AiIn, now: number): string {
+  const low = (a.windows || []).filter((w) => 100 - w.used < AI_LOW_PERCENT);
+  if (!low.length) return `${a.left ?? "?"} left`;
+  return low
+    .map((w) => {
+      const reset = resetText(w.resets, now);
+      return `Only ${Math.max(0, 100 - w.used)}% of the ${LIMIT_NAMES[w.label] || w.label.toLowerCase()} limit is left.${reset ? ` Resets ${reset}.` : ""}`;
+    })
+    .join(" ");
+}
+
+export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast[] {
   const out: Toast[] = [];
   for (const a of ai || []) {
     const t = AI_TOASTS[a.provider];
@@ -296,7 +318,7 @@ export function aiToasts(ai: AiIn[] | null | undefined): Toast[] {
       level: "error",
       noDot: true,
       title: empty ? t.out : t.low,
-      text: `${a.left ?? "?"} left${a.detail ? ` ${a.detail}` : ""}`,
+      text: whyLow(a, now),
       href: a.link || jumpHref("dashboard", "ai-plans"),
       ...(t.action ? { action: t.action } : {}),
       dismissible: true,

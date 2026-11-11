@@ -9,7 +9,9 @@ import { run, runText } from "./run";
 import { check } from "./services";
 
 export const AI_LOW_USD = 5;
-export const AI_LOW_PERCENT = 10; // under these, a provider goes to Needs attention
+export { AI_LOW_PERCENT } from "../format"; // under these, a provider goes to Needs attention
+
+import { AI_LOW_PERCENT, resetText } from "../format";
 
 export interface AiRow {
   provider: string;
@@ -50,7 +52,6 @@ const LINKS: Record<string, string> = {
   "xai-oauth": "https://grok.com",
 };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 
 /** "renews in 9 days (Oct 30)", in local time. */
@@ -161,15 +162,6 @@ async function kimi(): Promise<Reading> {
   }
 }
 
-/** "3:15 PM" or "Thu 9 AM", in local time, like the old strftime with leading zeros dropped. */
-export function clock(iso: string | null | undefined, withDay: boolean): string {
-  const t = new Date(iso || "");
-  if (Number.isNaN(t.getTime())) return "?";
-  const h = t.getHours() % 12 || 12;
-  const ampm = t.getHours() < 12 ? "AM" : "PM";
-  return withDay ? `${WEEKDAYS[t.getDay()]} ${h} ${ampm}` : `${h}:${String(t.getMinutes()).padStart(2, "0")} ${ampm}`;
-}
-
 /** The Claude subscription's session and week limits, through Claude Code's own login in the macOS keychain (read
  * only). It never refreshes that login: Claude Code owns it. The token stays in memory for one request. */
 async function anthropic(): Promise<Reading> {
@@ -207,7 +199,7 @@ async function anthropic(): Promise<Reading> {
       { label: "5-hour session", used: sUsed, resets: session.resets_at ?? null },
       { label: "Week", used: wUsed, resets: week.resets_at ?? null },
     ],
-    detail: `of this 5-hour session (resets ${clock(session.resets_at, false)}), ${100 - wUsed}% of the week (resets ${clock(week.resets_at, true)})`,
+    detail: `of this 5-hour session (resets ${resetText(session.resets_at)}), ${100 - wUsed}% of the week (resets ${resetText(week.resets_at)})`,
     low: Math.min(100 - sUsed, 100 - wUsed) < AI_LOW_PERCENT,
     out: Math.min(100 - sUsed, 100 - wUsed) <= 0,
   };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resetText } from "@/lib/format";
 import { warnings } from "@/lib/server/warnings";
 import { aiToasts } from "@/lib/toasts";
 
@@ -102,5 +103,42 @@ describe("a domain that expires soon", () => {
     expect(row.ack).toEqual({ key: "domain|zerophase.app|2026-12-05", next: null });
     const [later] = warnings({ ...base, ai: [], domains: [{ ...domain, expires: "2027-12-05", days: 20 }] });
     expect(later.ack?.key).not.toBe(row.ack?.key);
+  });
+});
+
+/**
+ * James, 2026-11-11, on the toast "Claude is nearly out / 94% left of this 5-hour session (resets 8:49 PM), 7% of the
+ * week (resets Thu 9 PM)": "Just put why the notification is up ... only 7% of the weekly limit is left, and then put
+ * resets Thursday, 9 p.m." And the toast said Thu 9 PM while the AI plans panel said 10 PM: "we need to get the dates
+ * consistent. It should be local time only, not UTC."
+ */
+describe("the Claude toast says only why it is up", () => {
+  const now = new Date(2026, 10, 11, 16, 47).getTime();
+  const weekEnd = new Date(2026, 10, 12, 21, 59, 59, 650).toISOString();
+  const claude = row("anthropic", true, {
+    left: "94%",
+    windows: [
+      { label: "5-hour session", used: 6, resets: new Date(2026, 10, 11, 20, 49, 59).toISOString() },
+      { label: "Week", used: 93, resets: weekEnd },
+    ],
+  });
+
+  it("names the low limit and its reset, and nothing else", () => {
+    const [t] = aiToasts([claude], now);
+    expect(t.text).toBe("Only 7% of the weekly limit is left. Resets Thu 10 PM.");
+  });
+
+  it("names both limits when both are low", () => {
+    const both = { ...claude, windows: [{ ...claude.windows[0], used: 95 }, claude.windows[1]] };
+    expect(aiToasts([both], now)[0].text).toBe(
+      "Only 5% of the 5-hour session limit is left. Resets 8:50 PM. Only 7% of the weekly limit is left. Resets Thu 10 PM.",
+    );
+  });
+
+  it("formats a reset the same way the AI plans panel does", () => {
+    expect(resetText(weekEnd, now)).toBe("Thu 10 PM");
+    expect(resetText(new Date(2026, 10, 11, 20, 49, 59).toISOString(), now)).toBe("8:50 PM");
+    expect(resetText(new Date(2026, 10, 13, 9, 30).toISOString(), now)).toBe("Fri 9:30 AM");
+    expect(resetText(new Date(2026, 10, 25, 9, 0).toISOString(), now)).toBe("Nov 25");
   });
 });
