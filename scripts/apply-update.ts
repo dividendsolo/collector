@@ -1,15 +1,14 @@
 #!/usr/bin/env bun
 /**
- * The Update click's one write (card #41): move the finished build the rebuild job staged beside the served one into
- * `.next`, then restart the job that serves the page, so the page comes back on the new build.
+ * Put a staged build in service (cards #41, #122): move the finished build the rebuild job staged beside the served
+ * one into `.next`, then restart the job that serves the page, so open pages reload onto the new build.
  *
  *     bun scripts/apply-update.ts --dir /Users/me/code/collector --label com.james.collector
  *     bun scripts/apply-update.ts --restart "echo restarted"        # a test's stand-in for the restart
  *
- * `POST /api/update` runs this detached, a process of its own: the click's answer has to land before the restart,
- * which is what takes the server away. The restart is whole — the swap is in place first, so the page that comes
- * back is the new build. With nothing staged the run says so and stops: a second click, or a page left open on a
- * build already swapped in, changes nothing.
+ * `scripts/rebuild-if-stale.ts` runs this right after a staged build succeeds (no click since card #122), and it is
+ * the same step from a shell. The restart is whole — the swap is in place first, so the page that comes back is the
+ * new build. With nothing staged the run says so and stops: a second run changes nothing.
  *
  * The swap is `lib/rebuild.ts`'s `swapIn`: the served folder moves aside, the staged one takes its name, and the old
  * one is deleted, so the page is without a build for the time between two renames rather than for the length of a

@@ -52,11 +52,11 @@ To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/
 path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
 Then `launchd/com.example.collector-rebuild.plist` the same way: every five minutes it checks whether the build the
 page serves is behind `main` and, when it is, pulls it and builds into `.next-rebuild` beside the served `.next`. A
-finished build shows in the page's top bar as an **Update** button, and the click is what swaps it in and restarts,
-so a merge never restarts the server by itself. A failed build is logged (`[rebuild] build failed`) and the served
-`.next` is left as it was. `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check. Once a
+finished build is swapped in and the server restarts on it, so open pages reload onto the new build with no click: at
+most once per new commit, and never twice within five minutes. A failed build is logged (`[rebuild] build failed`),
+the served `.next` is left as it was, and nothing restarts. `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check. Once a
 checkout is the one being served, leave it alone: `install.sh` builds into the `.next` that server is reading, so
-updates go through the page's button.
+updates go through `main` and the rebuild job.
 
 ## Requirements
 

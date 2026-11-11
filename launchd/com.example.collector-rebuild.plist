@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.example.collector-rebuild</string>
-  <!-- Every StartInterval seconds: when the build the page serves is behind main, pull and build it, and leave the
-       finished build staged beside the served one for the page's Update button (card #41). Set both paths to your
+  <!-- Every StartInterval seconds: when the build the page serves is behind main, pull and build it, then swap the
+       finished build in and restart the serving job named by label (card #122). Set both paths to your
        Collector checkout; the answer to a build that is current is no output. -->
   <key>StartInterval</key><integer>300</integer>
   <key>RunAtLoad</key><true/>

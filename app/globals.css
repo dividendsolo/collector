@@ -891,23 +891,13 @@
     font-size: 12px;
     line-height: 16px;
   }
-  /* The top bar's right side: the Update button (card #41, shown only while a newer build waits) and the live dot. */
+  /* The top bar's right side: the live dot. */
   .topbar .tools {
     display: flex;
     align-items: center;
     gap: 12px;
   }
-  .update {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  /* The Update button while the new build goes in: a small spinner in the button, then the page fades over. */
-  .update .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
+  /* A small spinner in a button at work; a reload onto a new build fades the page over. */
   .spinner {
     width: 12px;
     height: 12px;
@@ -940,11 +930,6 @@
     .spinner {
       animation-duration: 1.6s;
     }
-  }
-  .update .said {
-    color: var(--muted);
-    font-size: 12px;
-    line-height: 16px;
   }
   .live .pulse {
     align-self: center;
@@ -1158,7 +1143,7 @@
     margin-top: -4px;
   }
   /* A Debug and fix at work (James, 2026-11-11): the button itself says the step its session wrote, with the
-     Update button's spinner. Disabled, so a second click cannot open a second session. */
+     spinner. Disabled, so a second click cannot open a second session. */
   .alert .act .btn.fixing {
     display: inline-flex;
     align-items: center;
