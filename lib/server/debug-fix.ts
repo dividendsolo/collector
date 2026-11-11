@@ -178,7 +178,10 @@ export const FIX_MODEL = { provider: "claude-code", model: "claude-opus-5-5" } a
  * Claude Code and picks the first model with a key (MiniMax, out of plan, 2026-11-11). It names the model, so pi
  * never picks one by itself. The prompt goes in as $0, never into the shell's text. */
 export function tmuxArgs(cwd: string, prompt: string): string[] {
-  const pi = `exec pi --provider ${FIX_MODEL.provider} --model ${FIX_MODEL.model} "$0"`;
+  // Collector runs under launchd with a bare PATH, and a login zsh does not read ~/.zshrc, where ~/.local/bin is
+  // added: pi was "command not found" and the pane closed at once (James, 2026-11-11: "my debug and fix button isn't
+  // doing anything"). ~/.local/bin is where pi's installer links pi.
+  const pi = `PATH="$HOME/.local/bin:$PATH"; exec pi --provider ${FIX_MODEL.provider} --model ${FIX_MODEL.model} "$0"`;
   return ["split-window", "-h", "-c", cwd, "-P", "-F", "#{pane_id}", "/bin/zsh", "-lc", pi, prompt];
 }
 

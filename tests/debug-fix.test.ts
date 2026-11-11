@@ -162,7 +162,31 @@ describe("the pane's pi", () => {
   it("starts in a login shell, always on Claude Opus 5.5", () => {
     const a = tmuxArgs("/Users/me", "fix it");
     const cmd = a.slice(a.indexOf("-F") + 2);
-    expect(cmd).toEqual(["/bin/zsh", "-lc", 'exec pi --provider claude-code --model claude-opus-5-5 "$0"', "fix it"]);
+    expect(cmd.slice(0, 2)).toEqual(["/bin/zsh", "-lc"]);
+    expect(cmd[2]).toContain('exec pi --provider claude-code --model claude-opus-5-5 "$0"');
+    expect(cmd.at(-1)).toBe("fix it");
+  });
+
+  // The bug James hit on the live Collector, 2026-11-11: "my debug and fix button isn't doing anything". Collector
+  // runs under launchd with a bare PATH; a login zsh does not read ~/.zshrc, which is where ~/.local/bin (pi) is
+  // added, so the pane printed "command not found: pi" and closed at once. The dev server worked only because it
+  // started from a terminal. The pane's command finds pi from the bare environment launchd gives Collector.
+  it("finds pi from launchd's bare environment", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { spawnSync } = await import("node:child_process");
+    // A home whose pi sits where pi's installer puts it, ~/.local/bin, and a PATH with only the system folders.
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-home-"));
+    fs.mkdirSync(path.join(home, ".local/bin"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".local/bin/pi"), '#!/bin/sh\necho "pi ran: $*"\n', { mode: 0o755 });
+    const a = tmuxArgs("/tmp", "x");
+    const cmd = a.slice(a.indexOf("-F") + 2);
+    const r = spawnSync("/bin/sh", ["-c", cmd[2], "the prompt"], {
+      env: { HOME: home, PATH: "/usr/bin:/bin" } as unknown as NodeJS.ProcessEnv,
+      encoding: "utf8",
+    });
+    expect(r.stdout.trim()).toBe("pi ran: --provider claude-code --model claude-opus-5-5 the prompt");
   });
 });
 
