@@ -1106,6 +1106,26 @@
   .alert:last-child {
     border-bottom: 0;
   }
+  /* A row that leads inside Collector (needs triage, unread briefs): the whole row is the link (James, 2026-11-11). */
+  .alert:has(.row-link) {
+    position: relative;
+  }
+  .alert .row-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+  /* The row's own buttons stay above the row link, so they still take their click. */
+  .alert:has(.row-link) .act {
+    position: relative;
+    z-index: 1;
+  }
+  .alert:has(.row-link):hover {
+    background: var(--panel-2);
+  }
+  .alert:has(.row-link):hover .row-link {
+    color: var(--blue-2);
+  }
   .alert .n {
     font: 500 11px / 20px var(--mono);
     color: var(--faint);
@@ -1129,6 +1149,24 @@
     gap: 12px;
     align-items: center;
     margin-top: -4px;
+  }
+  /* A Debug and fix at work (James, 2026-11-11): the button itself says the step its session wrote, with the
+     Update button's spinner. Disabled, so a second click cannot open a second session. */
+  .alert .act .btn.fixing {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 260px;
+    cursor: default;
+  }
+  .alert .act .btn.fixing .spinner {
+    display: inline-block;
+    flex: none;
+  }
+  .alert .act .btn.fixing .step {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .alert .act .why {
     color: var(--red);
@@ -1168,6 +1206,12 @@
     }
     .alert .act ~ .since {
       margin-left: auto;
+    }
+    /* A row with no button: its age sits at the right edge too, so every age lines up down the list. */
+    .alert > :not(.act) + .since {
+      flex: 1 0 100%;
+      margin-left: 0;
+      text-align: right;
     }
   }
   .alert.error .i {

@@ -42,6 +42,88 @@ function AlertAction({ action, done }: { action: { label: string; post: string }
   );
 }
 
+/** The Debug and fix panes open now, by job (machine/id), each with the step its session wrote (every 3 seconds). */
+const useFixes = () => useApi<{ fixes: Record<string, { pane: string; step: string }> }>("/api/debug-fix", 3_000);
+
+/** A failed cron row's Debug and fix (James, 2026-11-11): opens a new pi session in a new tmux pane, split beside the
+ * one James is looking at, which debugs the failure test first, ships the fix and reruns the job. While its pane is
+ * open the button shows the step the session wrote, and does not open a second one; closing the pane brings the
+ * button back. The row leaves on its own when the job's next run ends ok. */
+function DebugFix({
+  debug,
+  label = "Debug and fix",
+}: {
+  debug: { machine: string; id: string } | { triage: { repo: string; number: number } };
+  label?: string;
+}) {
+  const { data, mutate } = useFixes();
+  const key = "triage" in debug ? "triage" : `${debug.machine}/${debug.id}`;
+  const open = data?.fixes?.[key];
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState("");
+  const click = async () => {
+    setBusy(true);
+    setWhy("");
+    try {
+      const r = await fetch("/api/debug-fix", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(debug),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) await mutate();
+      else setWhy(body.why || `failed (${r.status})`);
+    } catch (e) {
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  if (open)
+    return (
+      <button className="btn fixing" type="button" disabled title={`Debug and fix is open in tmux pane ${open.pane}`}>
+        <span className="spinner" aria-hidden="true" />
+        <span className="step">{open.step}</span>
+      </button>
+    );
+  return (
+    <>
+      {why ? <span className="why">{why}</span> : null}
+      <button className="btn" type="button" onClick={click} disabled={busy}>
+        {busy ? "Opening…" : label}
+      </button>
+    </>
+  );
+}
+
+/** The address query that opens Waiting on you on one status (`#/dashboard?to=waiting-panel&lane=needs-triage`): the
+ * Priority tasks triage row links there (James, 2026-11-11). Read once, then taken off the address. */
+const WAITING_FILTER = "lane";
+
+/** A Priority tasks row's text. A row that leads somewhere inside Collector (the needs-triage row, unread briefs) is
+ * one link whose hit area covers the whole row (James, 2026-11-11: "make the row clickable regardless"); a web
+ * address stays a link on its words, beside the row's own buttons. */
+export function PriorityRowText({ x }: { x: any }) {
+  if (x.jump)
+    return (
+      <a className="plain row-link" href={`${jumpHref("dashboard", x.jump)}&${WAITING_FILTER}=${x.filter}`}>
+        {x.text}
+      </a>
+    );
+  if (x.href)
+    return (
+      <a className="plain row-link" href={x.href}>
+        {x.text}
+      </a>
+    );
+  if (x.url)
+    return (
+      <a className="plain" href={x.url} target="_blank" rel="noopener">
+        {x.text}
+      </a>
+    );
+  return <span>{x.text}</span>;
+}
+
 /** "Mon 9 Nov, 8:30 AM" in the browser's own time zone. */
 function nextRun(iso: string): string {
   const d = new Date(iso);
@@ -98,21 +180,7 @@ function PriorityTasks() {
             <div className={`alert ${x.level}`} key={i}>
               <span className="n">{i + 1}</span>
               <Icon name="alert" />
-              {x.jump ? (
-                <a className="plain" href={`${jumpHref("dashboard", x.jump)}&${WAITING_FILTER}=${x.filter}`}>
-                  {x.text}
-                </a>
-              ) : x.href ? (
-                <a className="plain" href={x.href}>
-                  {x.text}
-                </a>
-              ) : x.url ? (
-                <a className="plain" href={x.url} target="_blank" rel="noopener">
-                  {x.text}
-                </a>
-              ) : (
-                <span>{x.text}</span>
-              )}
+              <PriorityRowText x={x} />
               {x.aside ? (
                 <span className="aside">
                   <BlurText text={x.aside} />
@@ -120,6 +188,16 @@ function PriorityTasks() {
               ) : null}
               {x.action ? (
                 <AlertAction action={x.action} done={() => setFixed({ post: x.action.post, at: Date.now() / 1000 })} />
+              ) : x.triage ? (
+                // One card to triage: a session opens beside James's own to triage it with him (2026-11-11).
+                <span className="act">
+                  <DebugFix debug={{ triage: x.triage }} label="Triage" />
+                </span>
+              ) : x.debug ? (
+                // A failed cron run or the work script's loop: fixed, never acknowledged (James, 2026-11-11).
+                <span className="act">
+                  <DebugFix debug={x.debug} />
+                </span>
               ) : x.ack ? (
                 <span className="act">
                   <button className="btn" type="button" onClick={() => setAck(x.ack.key, true)}>
@@ -232,10 +310,6 @@ export function useWaiting() {
   const p0 = list.filter((t: any) => t.priority === "P0").length;
   return { d, list, p0 };
 }
-
-/** The address query that opens Waiting on you on one status (`#/dashboard?to=waiting-panel&lane=needs-triage`): the
- * Priority tasks triage row links there (James, 2026-11-11). Read once, then taken off the address. */
-const WAITING_FILTER = "lane";
 
 /** Waiting on you: every ticket in the "each" lanes, needs-triage first, then by priority, then lane (waitingOrder), then oldest. The chip counts only the P0s, in red. */
 function Waiting() {

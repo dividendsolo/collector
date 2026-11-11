@@ -536,6 +536,7 @@ describe("warnings", () => {
         group: "cant-work",
         level: "error",
         text: "Foreman on m1 started 5 times in 60 s: it is starting itself in a loop",
+        debug: { machine: "m1", id: "work-loop" },
       },
     ]);
   });

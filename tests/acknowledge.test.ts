@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { acked } from "@/components/acks";
 import { ackKey, failingJobs, status } from "@/lib/format";
 import { warnings } from "@/lib/server/warnings";
 
@@ -19,17 +18,14 @@ const job = {
 };
 const row = (j: any) => warnings({ ...base, machines: [{ name: "ezio", jobs: [j] }] })[0];
 
-describe("Acknowledge on a failed job's row", () => {
-  it("names the machine, the job and that run, and when the next run is", () => {
-    expect(row(job).ack).toEqual({
-      key: "ezio|situation-maintainer|2026-11-02T13:21:52+00:00",
-      next: "2026-11-09T08:30:00+00:00",
-    });
-  });
-  it("covers that run only: a new failed run is open again", () => {
-    const acks = [(row(job).ack as { key: string }).key];
-    expect(acked(row(job), acks)).toBe(true);
-    expect(acked(row({ ...job, last_run_at: "2026-11-09T08:31:00+00:00" }), acks)).toBe(false);
+/**
+ * James, 2026-11-11: "we don't want to just acknowledge them, we need to fix them". A failed run's row has no
+ * Acknowledge any more: it has Debug and fix, and it leaves when the job's next run ends ok.
+ */
+describe("a failed job's row", () => {
+  it("has no Acknowledge, only Debug and fix", () => {
+    expect(row(job).ack).toBeUndefined();
+    expect(row({ ...job, id: "abc" }).debug).toEqual({ machine: "ezio", id: "abc" });
   });
 });
 
@@ -55,7 +51,7 @@ describe("Acknowledge clears the Cron Jobs icon", () => {
     expect(failingJobs(next, [key])).toHaveLength(1);
     expect(status(next[0], [key])).toBe("Failed");
   });
-  it("the key matches the Needs attention row's key", () => {
-    expect(ackKey(jobs[0])).toBe((row(job).ack as { key: string }).key);
+  it("names the machine, the job and that run, so an old acknowledgement covers that run only", () => {
+    expect(ackKey(jobs[0])).toBe(key);
   });
 });
