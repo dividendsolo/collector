@@ -88,6 +88,49 @@ export function triagePrompt(card: { repo: string; number: number }): string {
   ].join("\n");
 }
 
+/** The pane key of a failing main's Debug and fix session: one per repo and machine. */
+export const mainKey = (fix: { machine: string; repo: string }) => `main/${fix.machine}/${fix.repo}`;
+
+/** The first message of a failing main's Debug and fix session (James, 2026-11-11: "There's no way to fix it. There's
+ * no info on it."): the foreman tests a repo's main on a machine before it builds a card there, and main failed. The
+ * repo goes into shell commands in the prompt, so only a repo name's own shape is accepted. */
+export function mainChecksPrompt(
+  m: DebugMachine,
+  b: { repo: string; step: string; sha: string; error?: string },
+): string {
+  if (!/^[\w.-]+$/.test(b.repo)) throw new Error(`not a repo: ${b.repo}`);
+  const step = (name: (typeof FIX_STEPS)[number]) => `\`tmux set -p -t "$TMUX_PANE" ${STEP_OPTION} "${name}"\``;
+  const on = (cmd: string) => (m.local || !m.ssh ? `\`${cmd}\`` : `\`ssh ${m.ssh} ${cmd}\``);
+  return [
+    `Debug and fix: ${b.repo}'s main fails its own checks on ${m.machine}, so the foreman there builds no ${b.repo} cards.`,
+    "",
+    "The foreman (agent-stack foreman/foreman.py, base_gate) runs the repo's checks on origin/main before it builds a",
+    "card, so a red main is not blamed on the card. Two failures in a row write the marker that stops the builds.",
+    "",
+    `- Failed step: ${b.step || "unknown"}${b.sha ? ` at ${b.sha}` : ""}`,
+    `- Error: ${b.error || "none recorded"}`,
+    `- The failing output: ${on(`cat ~/.hermes/foreman/base-gate-${b.repo}.log`)}`,
+    `- The marker: ${on(`cat ~/.hermes/foreman/host-broken-${b.repo}`)}`,
+    "",
+    "James's Debug and fix button shows the step you are on. Run each step's command, word for word, as the first",
+    "thing in that step. Use no other words.",
+    "",
+    "Do this, in order:",
+    `1. ${step("finding the cause")} Find why main fails: in the repo's code, on that machine only (its setup), or not our code at all. Check main's CI runs on GitHub too.`,
+    `2. ${step("writing the failing test")} Write a failing test that reproduces the cause (TDD). Run it and see it fail for that reason.`,
+    `3. ${step("fixing")} Fix the code until that test passes. Then run the tests around it.`,
+    `4. ${step("shipping")} Ship the fix with the shipit skill, in a worktree.`,
+    `5. ${step("rerunning the job")} The foreman rechecks main on its own (at most once an hour). To recheck now, run ${on(`rm -f ~/.hermes/foreman/base-gate-${b.repo}.json`)}; the next tick runs the checks again and removes the marker when main passes.`,
+    `6. ${step("done: the job ran ok")} Report the proof: the test that failed before the fix and passes after, and the marker gone.`,
+    "",
+    `If you cannot go on (the fix needs James: a key, a login, a decision), run ${step("stuck")} and tell him why.`,
+    "",
+    "A cause you cannot prove with a test is a guess: say so.",
+  ]
+    .filter((l, i, a) => l !== "" || a[i - 1] !== "")
+    .join("\n");
+}
+
 /** The pane key of an Unblock session: one per card. */
 export const unblockKey = (card: { repo: string; number: number }) => `unblock/${card.repo}#${card.number}`;
 

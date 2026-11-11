@@ -310,12 +310,20 @@ beside config.json). After a restart the incident row is there at once, from tha
 replaces it in the background instead of popping the row in late (James, 2026-11-11). Every dashboard read asks for a
 fresh vendor read once the last is five minutes old, so a resolved incident leaves within five minutes.
 
-During a GitHub incident that names Actions, a "the checks fail on main" row whose CI run has no log at all
-("failed to get run log") is GitHub's, not ours (James, 2026-11-11, during GitHub's Actions outage: "maybe we
-shouldn't even have them there at all"). It folds into the GitHub incident row, which adds "<repo> builds wait on it
-(<machines>)", and one Acknowledge covers both; a new waiting repo changes the key, so the row shows again. The
-foreman rechecks main by itself (at most once an hour), so nothing needs doing when GitHub recovers; a main that still
-fails then shows its own row again. A run with a log is a real failure and always keeps its own row.
+A Priority tasks row is something James can act on; a thing that clears itself with nothing for him to do gets no
+row (James, 2026-11-11: "if there's nothing I can do except wait ... then they shouldn't be in there").
+
+A main that fails its own checks on a machine (the foreman's `host-broken-<repo>` marker) reads "<repo>: main fails
+its own checks on <machine>. The foreman tests main before it builds a card, so <machine> builds no <repo> cards until
+main passes. Failed: <the step> at <sha>: <the error>" (James, 2026-11-11: "what is causing the checks to fail on
+main? ... Why is it getting triggered? And then why is it failing?"). When the failed step is the unit tests in
+GitHub Actions, the row links to main's CI runs. Its Debug and fix button opens a session with the failed step, the
+error, and the foreman's log and marker on that machine.
+
+A main whose CI run has no log at all ("failed to get run log") is GitHub's, not ours, and gets no row: the foreman
+rechecks main by itself. During a GitHub incident that names Actions, the GitHub incident row adds "<repo> builds
+wait on it (<machines>)", and a new waiting repo changes its Acknowledge key. Since agent-stack#384 the foreman treats
+a run GitHub never started (`startup_failure`) as no answer and writes no marker for it.
 
 "Every AI plan is out" shows only when every plan with a usage reading is out: its reading's `out` flag, a window at
 0% left or no Nous credit (#119). Low (under 10% left) is the toast's job, never this row (James, 2026-11-11: the row named

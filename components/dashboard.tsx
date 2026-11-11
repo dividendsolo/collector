@@ -56,7 +56,8 @@ function DebugFix({
   debug:
     | { machine: string; id: string }
     | { triage: { repo: string; number: number } }
-    | { unblock: { repo: string; number: number } };
+    | { unblock: { repo: string; number: number } }
+    | { fixMain: { machine: string; repo: string } };
   label?: string;
 }) {
   const { data, mutate } = useFixes();
@@ -65,7 +66,9 @@ function DebugFix({
       ? "triage"
       : "unblock" in debug
         ? `unblock/${debug.unblock.repo}#${debug.unblock.number}`
-        : `${debug.machine}/${debug.id}`;
+        : "fixMain" in debug
+          ? `main/${debug.fixMain.machine}/${debug.fixMain.repo}`
+          : `${debug.machine}/${debug.id}`;
   const open = data?.fixes?.[key];
   const [busy, setBusy] = useState(false);
   const [why, setWhy] = useState("");
@@ -205,6 +208,11 @@ function PriorityTasks() {
                 // One card to triage: a session opens beside James's own to triage it with him (2026-11-11).
                 <span className="act">
                   <DebugFix debug={{ triage: x.triage }} label="Triage" />
+                </span>
+              ) : x.fixMain ? (
+                // A main that fails its checks on a machine: a session finds why and fixes it (2026-11-11).
+                <span className="act">
+                  <DebugFix debug={{ fixMain: x.fixMain }} />
                 </span>
               ) : x.debug ? (
                 // A failed cron run or the work script's loop: fixed, never acknowledged (James, 2026-11-11).

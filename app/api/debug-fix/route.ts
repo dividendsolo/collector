@@ -4,6 +4,8 @@ import { config } from "@/lib/server/config";
 import {
   fixKey,
   LOOP_GONE,
+  mainChecksPrompt,
+  mainKey,
   openDebugSession,
   openFixes,
   openFixPane,
@@ -17,7 +19,7 @@ import {
 import { guard } from "@/lib/server/guard";
 import { snapshot } from "@/lib/server/machines";
 import { json } from "@/lib/server/respond";
-import { warnings } from "@/lib/server/warnings";
+import { brokenStep, warnings } from "@/lib/server/warnings";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +51,20 @@ export async function POST(req: Request) {
     const card = row && waiting.find((x: any) => x.url === row.url);
     if (!row?.unblock || !card) return json({ ok: false, why: "that card is not a P0 waiting on you now" }, 409);
     const r = await openFixPane(unblockKey(row.unblock), unblockPrompt({ ...row.unblock, lane: card.lane }));
+    return json(r, r.ok ? 200 : 500);
+  }
+  // A main that fails its checks on a machine (James, 2026-11-11): only while that machine's marker is up.
+  if (body?.fixMain) {
+    const snap = await snapshot.get();
+    const m = snap.machines.find((x: any) => x.name === body.fixMain.machine);
+    const b = (m?.host_broken || []).find((x: any) => x.repo === body.fixMain.repo);
+    if (!m || !b) return json({ ok: false, why: "main passes there now: nothing to fix" }, 409);
+    const ssh = (config().machines || []).find((x: any) => x.name === m.name)?.ssh ?? null;
+    const prompt = mainChecksPrompt(
+      { machine: m.name, ssh, local: Boolean(m.local) },
+      { repo: b.repo, ...brokenStep(b.line), error: b.error },
+    );
+    const r = await openFixPane(mainKey({ machine: m.name, repo: b.repo }), prompt);
     return json(r, r.ok ? 200 : 500);
   }
   const machine = typeof body?.machine === "string" ? body.machine : "";
