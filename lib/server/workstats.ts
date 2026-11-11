@@ -59,6 +59,14 @@ async function deploysToday(repo: string, since: string): Promise<string[]> {
   return out;
 }
 
+/** The GitHub search behind a Work panel number: cards closed as done, or PRs merged (James, 2026-11-11), since `day`
+ * (a date or a local timestamp), across every owner. */
+export function searchQuery(kind: "closed" | "merged", day: string, owners: string[]): string {
+  const what =
+    kind === "merged" ? `is:pr is:merged merged:>=${day}` : `is:issue is:closed reason:completed closed:>=${day}`;
+  return `${what} ${owners.map((o) => `user:${o}`).join(" ")}`;
+}
+
 const CAL =
   "query={viewer{contributionsCollection{contributionCalendar{totalContributions weeks{contributionDays{date contributionCount contributionLevel}}}}}}";
 
@@ -74,21 +82,24 @@ const cache = swr("work-stats", 300_000, async () => {
     if (m) repos.add(m[1]);
   }
   const owners = [...new Set([...repos].map((r) => r.split("/")[0]))].sort();
-  const search = async (day: string, perPage: number) => {
-    const q = `is:issue is:closed reason:completed closed:>=${day} ${owners.map((o) => `user:${o}`).join(" ")}`;
+  const search = async (day: string, perPage: number, kind: "closed" | "merged" = "closed") => {
+    const q = searchQuery(kind, day, owners);
     const [data] = await run(
       ["gh", "api", "-X", "GET", "search/issues", "-f", `q=${q}`, "-f", `per_page=${perPage}`, "-f", "sort=updated"],
       { timeout: 20 },
     );
     return data;
   };
-  const closed = async (day: string) => ((await search(day, 1))?.total_count as number | undefined) ?? null;
+  const count = async (day: string, kind: "closed" | "merged") =>
+    ((await search(day, 1, kind))?.total_count as number | undefined) ?? null;
   const names = [...repos].sort();
   const month = new Date(midnight);
   month.setDate(month.getDate() - 30);
-  const [todays, thirty, counts, [cal]] = await Promise.all([
+  const [todays, thirty, mergedToday, merged30, counts, [cal]] = await Promise.all([
     search(isoLocal(midnight), 100),
-    closed(ymdLocal(month)),
+    count(ymdLocal(month), "closed"),
+    count(isoLocal(midnight), "merged"),
+    count(ymdLocal(month), "merged"),
     Promise.all(names.map((r) => deploysToday(r, since))),
     run(["gh", "api", "graphql", "-f", CAL], { timeout: 20 }),
   ]);
@@ -99,6 +110,8 @@ const cache = swr("work-stats", 300_000, async () => {
     // The cards behind that number, for the Closed today page (James, 2026-11-10). Search answers 100 at most.
     closed_today_cards: closedRows(todays?.items || []),
     closed_30d: thirty,
+    merged_today: mergedToday,
+    merged_30d: merged30,
     contributions: c
       ? {
           total: c.totalContributions,
