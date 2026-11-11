@@ -38,7 +38,7 @@ const texts = (w: any[]) => w.map((x) => x.text);
 describe("main's checks during a GitHub Actions incident", () => {
   it("fold into the GitHub incident row, which names the builds that wait", () => {
     const w = warnings({ ...base, vendors: [github(["Webhooks", "Actions", "Pages"])] });
-    expect(texts(w).some((t) => t.includes("the checks fail on main"))).toBe(false);
+    expect(texts(w).some((t) => t.includes("main fails its own checks"))).toBe(false);
     const row = w.find((x) => x.text.startsWith("GitHub incident"));
     expect(row?.text).toContain("omarchy4mac builds wait on it (altair, ezio)");
   });
@@ -50,9 +50,9 @@ describe("main's checks during a GitHub Actions incident", () => {
     expect(key(waiting)).not.toBe(key(quiet));
   });
 
-  it("stay their own rows when the incident does not name Actions", () => {
+  it("never show as their own rows, even when the incident does not name Actions (nothing to fix)", () => {
     const w = warnings({ ...base, vendors: [github(["Pages"])] });
-    expect(texts(w).filter((t) => t.includes("the checks fail on main"))).toHaveLength(2);
+    expect(texts(w).filter((t) => t.includes("omarchy4mac"))).toHaveLength(0);
   });
 
   it("stay their own rows when the run has a log: that is a real failure", () => {
@@ -62,12 +62,12 @@ describe("main's checks during a GitHub Actions incident", () => {
       machines: [{ name: "altair", host_broken: [real] }],
       vendors: [github(["Actions"])],
     });
-    expect(texts(w).filter((t) => t.includes("the checks fail on main"))).toHaveLength(1);
+    expect(texts(w).filter((t) => t.includes("main fails its own checks"))).toHaveLength(1);
   });
 
-  it("stay their own rows with no GitHub incident", () => {
+  it("never show with no GitHub incident either: the foreman rechecks main on its own", () => {
     const w = warnings({ ...base, vendors: [] });
-    expect(texts(w).filter((t) => t.includes("the checks fail on main"))).toHaveLength(2);
+    expect(texts(w)).toEqual([]);
   });
 
   it("drops the period that ends a vendor's incident name before its impact", () => {

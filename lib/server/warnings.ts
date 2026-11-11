@@ -26,6 +26,8 @@ export interface Warning {
   /** The Debug and fix button (app/api/debug-fix, James 2026-11-11): a failed cron run, by machine and job id, or the
    * work script's loop on a machine (id WORK_LOOP). */
   debug?: { machine: string; id: string };
+  /** The Debug and fix button of a main that fails its checks on a machine (James, 2026-11-11). */
+  fixMain?: { machine: string; repo: string };
   /** A failed job's row can be acknowledged until its next run: `key` names that run, `next` is when the next one is. */
   ack?: { key: string; next: string | null };
   /** When the row first showed up, epoch seconds (state.ts adds it from first-seen.ts). */
@@ -91,14 +93,36 @@ function waitText(waiting: Map<string, string[]>): string {
     .join("");
 }
 
-/** One host-broken marker as a sentence: what fails, where, and what it stops. */
+/** A host-broken marker's line, "<step>: base <sha>", as its step and short SHA; a line without a base is the step. */
+export function brokenStep(line?: string): { step: string; sha: string } {
+  const m = (line || "").match(/^(.*?):\s*base\s+([0-9a-f]{7,40})/);
+  return m ? { step: m[1], sha: m[2].slice(0, 7) } : { step: line || "", sha: "" };
+}
+
+/** The foreman's name for the repo's unit tests in GitHub Actions (agent-stack CI_LABEL, "Jog CI ci.yml"). */
+const CI_STEP = /^Jog CI (\S+)$/;
+
+/** One host-broken marker as a sentence (James, 2026-11-11: "what is causing the checks to fail on main? ... Why is
+ * it getting triggered? And then why is it failing?"): what fails, what runs the check and why, what it stops, and the
+ * step and error that failed. */
 export function hostBrokenText(b: { repo: string; line?: string; error?: string }, host: string) {
-  const m = (b.line || "").match(/^(.*?):\s*base\s+([0-9a-f]{7,40})/);
-  const where = m ? ` (${m[1]}, at ${m[2].slice(0, 7)})` : b.line ? ` (${b.line})` : "";
-  const head = `${b.repo}: the checks fail on main at ${host}${where}`;
-  return b.error
-    ? `${head}: ${b.error}. ${host} builds no ${b.repo} cards until main passes`
-    : `${head}, so ${host} builds no ${b.repo} cards`;
+  const { step, sha } = brokenStep(b.line);
+  const ci = step.match(CI_STEP);
+  const what = ci ? `the unit tests in GitHub Actions (${ci[1]})` : step ? `\`${step}\`` : "a check";
+  const failed = `Failed: ${what}${sha ? ` at ${sha}` : ""}${b.error ? `: ${b.error}` : "."}`;
+  return (
+    `${b.repo}: main fails its own checks on ${host}. The foreman tests main before it builds a card, so ${host} ` +
+    `builds no ${b.repo} cards until main passes. ${failed}`
+  );
+}
+
+/** The page of main's CI runs for a repo, when the failed step is its GitHub Actions workflow; else undefined. */
+function ciRunsUrl(cfg: Config, repo: string, line?: string): string | undefined {
+  const ci = brokenStep(line).step.match(CI_STEP);
+  if (!ci) return undefined;
+  const projects = Array.isArray(cfg.projects) ? cfg.projects : Object.keys(cfg.projects || {});
+  const full = projects.find((p: string) => p.split("/")[1] === repo) || `dividendsolo/${repo}`;
+  return `https://github.com/${full}/actions/workflows/${ci[1]}?query=branch%3Amain`;
 }
 
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
@@ -130,9 +154,9 @@ export function warnings(w: WarningInputs): Warning[] {
   const work = w.cfg.work_script || {};
   const workJobs = new Set(work.jobs || []);
   const workLabel = work.label || "The work script";
-  // GitHub's own Actions outage (James, 2026-11-11): a main whose CI run has no log at all, while GitHub has an open
-  // incident naming Actions, is GitHub's, not ours. Those rows fold into the GitHub incident row below, which names
-  // the builds that wait on it; the foreman rechecks main on its own when GitHub recovers.
+  // GitHub's own Actions outage (James, 2026-11-11): a main whose CI run has no log at all is GitHub's, not ours, and
+  // James can do nothing about it: "if there's nothing I can do except wait ... then they shouldn't be in there."
+  // No row. During an incident naming Actions the GitHub incident row names the builds that wait on it.
   const actionsDown = githubActionsDown(w);
   const waitingOnGithub = new Map<string, string[]>();
   for (const m of w.machines) {
@@ -141,11 +165,18 @@ export function warnings(w: WarningInputs): Warning[] {
     // a great error"): the step and short SHA from the marker's line, and the first error line of the foreman's log.
     for (const b of m.host_broken || []) {
       if (!b?.repo) continue;
-      if (actionsDown && NO_RUN_LOG.test(b.error || "")) {
-        waitingOnGithub.set(b.repo, [...(waitingOnGithub.get(b.repo) || []), m.name]);
+      if (NO_RUN_LOG.test(b.error || "")) {
+        if (actionsDown) waitingOnGithub.set(b.repo, [...(waitingOnGithub.get(b.repo) || []), m.name]);
         continue;
       }
-      out.push({ group: "cant-work", level: "error", text: hostBrokenText(b, m.name) });
+      const url = ciRunsUrl(w.cfg, b.repo, b.line);
+      out.push({
+        group: "cant-work",
+        level: "error",
+        text: hostBrokenText(b, m.name),
+        ...(url ? { url } : {}),
+        fixMain: { machine: m.name, repo: b.repo },
+      });
     }
     // collect.py's tailnet state; null with no Tailscale on that machine. A stopped tailnet breaks every ssh job
     // there, so the jobs' rows carry the reason and, on this machine, the button that starts it again.

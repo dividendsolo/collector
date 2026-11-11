@@ -477,7 +477,8 @@ describe("warnings", () => {
       {
         group: "cant-work",
         level: "error",
-        text: "collector: the checks fail on main at laptop (bun run build, at 7f3a2b1), so laptop builds no collector cards",
+        text: "collector: main fails its own checks on laptop. The foreman tests main before it builds a card, so laptop builds no collector cards until main passes. Failed: `bun run build` at 7f3a2b1.",
+        fixMain: { machine: "laptop", repo: "collector" },
       },
     ]);
   });
@@ -504,7 +505,7 @@ describe("warnings", () => {
       ai: [],
     });
     expect(w[0].text).toBe(
-      "pageroast: the checks fail on main at ezio (ci, at 37f16da): Error: Cannot find module '/home/div/code/pageroast/.worktrees/base-37f16da67b6a/test'. ezio builds no pageroast cards until main passes",
+      "pageroast: main fails its own checks on ezio. The foreman tests main before it builds a card, so ezio builds no pageroast cards until main passes. Failed: `ci` at 37f16da: Error: Cannot find module '/home/div/code/pageroast/.worktrees/base-37f16da67b6a/test'",
     );
   });
   it("shows no host-broken row without a marker", () => {
