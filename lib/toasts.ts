@@ -265,7 +265,17 @@ export function githubToasts(
 /** Nous and Claude running low (James, 2026-11-09: "noose, we want to see that one show up. And we want to see the
  * clawed one show up in the bottom right, too"). The other providers are fallbacks and get no toast. Amber and
  * dismissible; its state is what is left, so a new low shows again. */
-const AI_TOASTS: Record<string, { name: string; out: string; low: string; action?: { label: string; url: string } }> = {
+const AI_TOASTS: Record<
+  string,
+  {
+    name: string;
+    out: string;
+    low: string;
+    action?: { label: string; url: string };
+    /** A button only while a limit is used up. */
+    outAction?: { label: string; url: string };
+  }
+> = {
   // The billing page Hermes itself sends people to (hermes_cli/portal_cli.py, SUBSCRIPTION_URL).
   nous: {
     name: "Nous",
@@ -274,12 +284,13 @@ const AI_TOASTS: Record<string, { name: string; out: string; low: string; action
     action: { label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" },
   },
   // Claude sometimes grants a free limit reset; its "Reset for free" button is on Settings > Usage, and Collector cannot
-  // see whether one is there (James, 2026-11-11: "Check for reset is good").
+  // see whether one is there (James, 2026-11-11: "Check for reset is good"). Only when Claude is out: "when it's
+  // completely out, we need to put that button up there, not when there's 7% left".
   anthropic: {
     name: "Claude",
     out: "Claude is out",
     low: "Claude is nearly out",
-    action: { label: "Check for reset", url: "https://claude.ai/settings/usage" },
+    outAction: { label: "Check for reset", url: "https://claude.ai/settings/usage" },
   },
 };
 
@@ -289,6 +300,8 @@ interface AiIn {
   left?: string | null;
   detail?: string | null;
   link?: string;
+  /** A limit is used up (lib/server/ai.ts). */
+  out?: boolean;
   windows?: { label: string; used: number; resets: string | null }[];
 }
 
@@ -317,7 +330,8 @@ export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast
   for (const a of ai || []) {
     const t = AI_TOASTS[a.provider];
     if (!t || !a.low) continue;
-    const empty = a.left === "$0.00" || a.left === "0%";
+    const empty = !!a.out || a.left === "$0.00" || a.left === "0%";
+    const action = (empty && t.outAction) || t.action;
     out.push({
       key: `ai:${a.provider}`,
       state: a.left || "low",
@@ -327,7 +341,7 @@ export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast
       title: empty ? t.out : t.low,
       text: whyLow(a, now),
       href: a.link || jumpHref("dashboard", "ai-plans"),
-      ...(t.action ? { action: t.action } : {}),
+      ...(action ? { action } : {}),
       dismissible: true,
     });
   }

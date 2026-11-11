@@ -72,7 +72,7 @@ describe("the every-plan-is-out row", () => {
 describe("AI toasts", () => {
   it("shows Nous and Claude when they are low, and no other provider", () => {
     const ai = [
-      row("anthropic", true, { left: "4%", detail: "of this 5-hour session" }),
+      row("anthropic", true, { left: "4%", out: false, detail: "of this 5-hour session" }),
       row("nous", true, { left: "$0.00" }),
       row("kimi-coding", true),
       row("minimax", true),
@@ -88,7 +88,17 @@ describe("AI toasts", () => {
     });
     expect(t[0].title).toBe("Claude is nearly out");
     expect(t[1].action).toEqual({ label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" });
-    expect(t[0].action).toEqual({ label: "Check for reset", url: "https://claude.ai/settings/usage" });
+    expect(t[0].action).toBeUndefined();
+  });
+
+  // James, 2026-11-11: "when it's completely out, we need to put that button up there, not when there's 7% left".
+  it("gives Claude's toast Check for reset only when a limit is used up", () => {
+    const out = aiToasts([row("anthropic", true, { left: "40%", out: true })])[0];
+    expect(out.title).toBe("Claude is out");
+    expect(out.action).toEqual({ label: "Check for reset", url: "https://claude.ai/settings/usage" });
+    const low = aiToasts([row("anthropic", true, { left: "40%", out: false })])[0];
+    expect(low.title).toBe("Claude is nearly out");
+    expect(low.action).toBeUndefined();
   });
 
   it("shows nothing when they are fine", () => {
