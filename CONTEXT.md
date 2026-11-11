@@ -513,6 +513,12 @@ writes nothing. On 2026-11-10 (collector#94) the two Slow toasts were the sites 
 process timing the same GET beside the live server's own check read the same numbers (Situation 1.95 s against
 1.95 s, RepSheet 1.0 s against 1.0 s), so the check stays one plain GET with no second chance.
 
+A site shows Down only when two checks in a row fail (`confirmDown`, James, 2026-11-11). On 2026-11-10 at 19:13 UTC
+and on 2026-11-11 at 19:42 UTC several sites failed in the same second from the Mac while they were up: Abide (ezio)
+answered Cloudflare's 520 and Dividend Solo (Vercel) timed out together, and ezio's proxy logged no request. The
+first failed check shows as Slow with its error; the second in a row shows Down. Each check is still one plain GET,
+and the log still writes every failed check as `down`.
+
 A GitHub API limit (REST or GraphQL) with under 500 calls left raises an amber toast with Dismiss, since nobody can
 fix it but wait for the reset; it shows again when the limit runs out. Priority tasks lists both limits too.
 
