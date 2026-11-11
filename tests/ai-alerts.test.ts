@@ -14,6 +14,7 @@ const row = (provider: string, low: boolean, extra: Record<string, unknown> = {}
     profiles: 3,
     kind: "plan",
     low,
+    out: low,
     left: low ? "0%" : "80%",
     link: `https://${provider}.example`,
     ...extra,
@@ -33,6 +34,17 @@ describe("Needs attention for AI plans", () => {
     expect(out[0].text).toBe(
       "Every AI plan is out: anthropic, nous, kimi-coding, minimax. The lanes stop until one resets.",
     );
+  });
+
+  // James, 2026-11-11: the row showed while Claude still had 13% of its session and 9% of its week. Low is not out.
+  it("has no row while a provider is low but not out", () => {
+    const ai = [
+      row("anthropic", true, { out: false, left: "13%" }),
+      row("nous", true),
+      row("kimi-coding", true),
+      row("minimax", true),
+    ];
+    expect(warnings({ ...base, ai }).filter((w) => /lanes|AI/.test(w.text))).toEqual([]);
   });
 
   it("ignores a provider with no usage reading (Grok) when it decides everything is out", () => {

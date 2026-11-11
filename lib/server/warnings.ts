@@ -347,10 +347,11 @@ export function warnings(w: WarningInputs): Warning[] {
       url: "https://console.x.com",
     });
   // One row only when every provider with a usage reading is out: a fallback still answers otherwise (James,
-  // 2026-11-09: "one message that says that we are completely out when ... all the fallbacks are drained"). Nous and
-  // Claude running low are toasts (lib/toasts.ts, aiToasts).
+  // 2026-11-09: "one message that says that we are completely out when ... all the fallbacks are drained"). Out, not
+  // low: the row showed with Claude at 13% left (2026-11-11). Nous and Claude running low are toasts (lib/toasts.ts,
+  // aiToasts).
   const metered = w.ai.filter((a) => a.left != null || a.windows?.length);
-  if (metered.length && metered.every((a) => a.low))
+  if (metered.length && metered.every((a) => a.out))
     out.push({
       group: "cant-work",
       level: "error",
