@@ -64,12 +64,19 @@ export function AiPlan({ a }: { a: any }) {
         <div className="stats">
           {(a.windows || []).map((w: any) => (
             <div className="stat" key={w.label}>
-              <span className="label">{w.label}</span>
+              <span className="label">
+                <BlurText text={w.label} />
+              </span>
               <span className="value">
                 {w.used}%{" "}
                 <small>
                   used{w.resets ? ` · resets ${resets(w.resets)}` : ""}
-                  {w.left ? ` · ${w.left}` : ""}
+                  {w.left ? (
+                    <>
+                      {" · "}
+                      <BlurText text={w.left} />
+                    </>
+                  ) : null}
                 </small>
               </span>
               {/* A bar keeps its provider's color at any usage (James, 2026-11-09): a low plan is the
@@ -94,7 +101,9 @@ export function AiPlan({ a }: { a: any }) {
           ) : null}
         </div>
       ) : (
-        <div className="note sub">{a.note || a.detail || ""}</div>
+        <div className="note sub">
+          <BlurText text={a.note || a.detail || ""} />
+        </div>
       )}
     </div>
   );
