@@ -7,11 +7,22 @@
  *   looping or started twice, the tickets or a machine unreadable, a config setting that does nothing)
  * - security: a port open to the internet, a risky sshd setting
  * - triage: the cards waiting for a triage session (James: a card triaged can go straight to an agent)
+ * - p0: each P0 card waiting on James, outside needs-triage (James, 2026-11-11)
  * - jobs: a failed job run, a watched agent failing or idle
  * - money: a renewal, a GitHub limit, X credits
+ * - briefs: the unread briefs in the inbox (James, 2026-11-11)
  * - good-news: a job's good news
  */
-export const PRIORITY_GROUPS = ["cant-work", "security", "triage", "jobs", "money", "good-news"] as const;
+export const PRIORITY_GROUPS = [
+  "cant-work",
+  "security",
+  "triage",
+  "p0",
+  "jobs",
+  "money",
+  "briefs",
+  "good-news",
+] as const;
 export type PriorityGroup = (typeof PRIORITY_GROUPS)[number];
 
 /** The status the triage row counts. */
@@ -41,4 +52,39 @@ export function triageRow(tickets: { lane?: string | null; checking?: boolean }[
     jump: "waiting-panel",
     filter: TRIAGE_LANE,
   };
+}
+
+/** The unread briefs row: how many briefs in the inbox are not read yet, linking to the Briefs page. Null when none
+ * is. Built in the browser from the same read as the Briefs page (James, 2026-11-11). */
+export function briefsRow(inbox: { read?: boolean }[]) {
+  const n = inbox.filter((b) => !b.read).length;
+  if (!n) return null;
+  return {
+    level: "warn" as const,
+    group: "briefs" as const,
+    text: `${n} unread ${n === 1 ? "brief" : "briefs"}`,
+    href: "#/briefs",
+  };
+}
+
+/** One row per P0 card waiting on James, linking to the card (James, 2026-11-11). A P0 in needs-triage is counted
+ * by the triage row instead, so no card shows twice. `tickets` is the Waiting on you list, already in its order. */
+export function p0Rows(
+  tickets: {
+    lane?: string | null;
+    priority?: string | null;
+    repo?: string;
+    number?: number;
+    title?: string;
+    url?: string;
+  }[],
+) {
+  return tickets
+    .filter((t) => t.priority === "P0" && t.lane !== TRIAGE_LANE)
+    .map((t) => ({
+      level: "error" as const,
+      group: "p0" as const,
+      text: `P0: ${t.title} (${String(t.repo).split("/").pop()}#${t.number}, ${t.lane})`,
+      url: t.url,
+    }));
 }
