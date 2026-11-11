@@ -68,7 +68,10 @@ describe("the needs-triage row", () => {
       jump: "waiting-panel",
       filter: "needs-triage",
     });
-    expect(triageRow([{ lane: "needs-triage" }])?.text).toBe("1 card needs triage");
+    // James, 2026-11-11: one card names itself, so it can be triaged at once.
+    expect(triageRow([{ lane: "needs-triage", repo: "dividendsolo/omarchy4mac", number: 45 }])?.text).toBe(
+      "1 card needs triage: omarchy4mac#45",
+    );
   });
 
   it("is no row when nothing needs triage", () => {
@@ -143,5 +146,35 @@ describe("the P0 rows", () => {
       { group: "triage", text: "triage" },
     ] as any);
     expect(rows.map((r: any) => r.text)).toEqual(["triage", "p0", "job"]);
+  });
+});
+
+// James, 2026-11-11: "let's put the time like when it was open ... the way that the cron job says two hours ago ...
+// so that the buttons all line up, and you could do that for the P0 as well". The time is when the card was opened.
+describe("the age on the triage and P0 rows", () => {
+  const at = (iso: string) => Date.parse(iso) / 1000;
+  it("gives the triage row the oldest card's open time", () => {
+    const row = triageRow([
+      { lane: "needs-triage", repo: "o/a", number: 1, created: "2026-11-11T18:00:00Z" },
+      { lane: "needs-triage", repo: "o/b", number: 2, created: "2026-11-10T09:00:00Z" },
+    ]);
+    expect(row?.since).toBe(at("2026-11-10T09:00:00Z"));
+  });
+  it("gives each P0 row its card's open time", () => {
+    const rows = p0Rows([
+      {
+        lane: "ready-for-agent",
+        priority: "P0",
+        repo: "o/a",
+        number: 3,
+        title: "t",
+        url: "u",
+        created: "2026-11-09T12:00:00Z",
+      },
+    ]);
+    expect(rows[0].since).toBe(at("2026-11-09T12:00:00Z"));
+  });
+  it("leaves the age off when the card has no open time", () => {
+    expect(triageRow([{ lane: "needs-triage", repo: "o/a", number: 1 }])?.since).toBeUndefined();
   });
 });

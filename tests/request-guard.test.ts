@@ -286,6 +286,7 @@ describe("every route in the repo", () => {
       .map((f) => path.relative(process.cwd(), f));
     expect(writes).toEqual([
       "app/api/briefs/route.ts",
+      "app/api/debug-fix/route.ts",
       "app/api/hermes/route.ts",
       "app/api/projects/route.ts",
       "app/api/proposals/route.ts",

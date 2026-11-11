@@ -4,6 +4,7 @@ import { type PriorityGroup, priorityOrder } from "../priority";
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
 import { badConfigValues, type Config, isRenewsDate, unknownConfigKeys } from "./config";
+import { WORK_LOOP } from "./debug-fix";
 import type { Domain } from "./domains";
 import { TICKER_STALE_S } from "./hermes";
 import type { GithubLimit } from "./machines";
@@ -22,6 +23,9 @@ export interface Warning {
   aside?: string;
   /** A one-click fix on the row's right side, posted to `post` (Start Tailscale on this machine). */
   action?: { label: string; post: string };
+  /** The Debug and fix button (app/api/debug-fix, James 2026-11-11): a failed cron run, by machine and job id, or the
+   * work script's loop on a machine (id WORK_LOOP). */
+  debug?: { machine: string; id: string };
   /** A failed job's row can be acknowledged until its next run: `key` names that run, `next` is when the next one is. */
   ack?: { key: string; next: string | null };
   /** When the row first showed up, epoch seconds (state.ts adds it from first-seen.ts). */
@@ -149,7 +153,8 @@ export function warnings(w: WarningInputs): Warning[] {
           level: "error",
           text: `${j.name} on ${m.name}: last run ${j.last_status}${j.last_error ? ` (${j.last_error.slice(0, 140)})` : ""}`,
           ...(j.ssh_host && tailnetDown && m.local ? { action: START_TAILSCALE } : {}),
-          ack: { key: `${m.name}|${j.name}|${j.last_run_at ?? ""}`, next: j.next_run_at ?? null },
+          // No Acknowledge: a failed run is fixed, not acknowledged (James, 2026-11-11).
+          ...(j.id ? { debug: { machine: m.name, id: String(j.id) } } : {}),
         });
       const key = workJobs.has(j.name) ? workLabel : j.script;
       if (key) {
@@ -223,6 +228,7 @@ export function warnings(w: WarningInputs): Warning[] {
         group: "cant-work",
         level: "error",
         text: `${workLabel} on ${m.name} started ${burst} times in 60 s: it is starting itself in a loop`,
+        debug: { machine: m.name, id: WORK_LOOP },
       });
   }
   for (const [k, where] of byScript) {
@@ -313,6 +319,9 @@ export function warnings(w: WarningInputs): Warning[] {
         level: v.state === "major" || v.state === "critical" ? "error" : "warn",
         text: `${v.name} incident: ${v.incidents.map((i) => `${i.name} (${i.impact})`).join("; ")}`,
         url: v.url,
+        // Nothing to fix on our side: acknowledged, it stays faded until the vendor's incidents change (James,
+        // 2026-11-11).
+        ack: { key: `vendor|${v.name}|${v.incidents.map((i) => i.name).join("|")}`, next: null },
       });
   const xc = w.x?.credits?.total;
   if (typeof xc === "number" && xc < AI_LOW_USD)
