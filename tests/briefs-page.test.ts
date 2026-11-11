@@ -12,7 +12,7 @@ import type { Brief } from "@/lib/briefs";
 const swr = vi.hoisted(() => ({ mutate: vi.fn(), data: undefined as unknown }));
 vi.mock("swr", () => ({ default: () => ({ data: swr.data }), mutate: swr.mutate }));
 
-const { BriefsPage, postBrief } = await import("@/components/briefs");
+const { BriefsPage, postBrief, briefDay } = await import("@/components/briefs");
 
 const brief = (file: string, read: boolean, archived = false): Brief =>
   ({ machine: "ezio", file, brief: file, subject: `Subject ${file}`, sent_at: null, read, archived }) as Brief;
@@ -277,5 +277,29 @@ describe("a brief's table heads never break inside a word (2026-11-10)", () => {
 
   it("keeps each head on one line, while the cells still wrap", () => {
     expect(block).toMatch(/\.brief-body th \{[^}]*white-space:\s*nowrap/);
+  });
+});
+
+describe("a brief's date is the viewer's own local day (James, 2026-11-11)", () => {
+  // The Illyism Watch that ran 2026-11-10T03:01Z went out at 10:01 pm on Nov 9 in New York. Collector showed
+  // "Nov 10" (the UTC day), one day off the email. Collector is public: the day is the viewer's, not one zone's.
+  const at = "2026-11-10T03:01:34Z";
+
+  it("shows the day in the viewer's time zone", () => {
+    expect(briefDay(at, "America/New_York")).toBe(
+      new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "America/New_York" }),
+    );
+    expect(briefDay(at, "America/New_York")).toMatch(/9/);
+    expect(briefDay(at, "Asia/Tokyo")).toMatch(/10/);
+  });
+
+  it("uses the browser's own zone when none is given", () => {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(briefDay(at)).toBe(briefDay(at, zone));
+  });
+
+  it("shows a dash for a brief with no date", () => {
+    expect(briefDay(null)).toBe("—");
+    expect(briefDay("not a date")).toBe("—");
   });
 });
