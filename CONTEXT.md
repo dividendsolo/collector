@@ -280,14 +280,14 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 Mission Control is retired and Collector took the three small fields of it James missed (James, 2026-11-08). Each is a
 setting in `config.json`, the way Collector holds its other hand-kept facts, and each is refused rather than obeyed
-when it holds a value Collector does not know: `bun run check:config` exits 1 over it and Needs attention carries a
+when it holds a value Collector does not know: `bun run check:config` exits 1 over it and Priority tasks carries a
 row, the same as an unknown key.
 
 | Field | In `config.json` | Where it shows |
 |---|---|---|
 | A project's stage | `projects["owner/repo"].stage` — `idea`, `development`, `testing`, `production` or `archived` | The Stage column on the Projects page; a project with no stage shows nothing |
 | A vendor's criticality | `vendors[].criticality` — `low`, `medium`, `high` or `critical` | A pill beside the vendor's name on the APIs page |
-| A subscription's renewal | `subscriptions[].renews` — a `YYYY-MM-DD` day | The Renews column on the Subscriptions page, and a `warn` row in Needs attention inside the week before it |
+| A subscription's renewal | `subscriptions[].renews` — a `YYYY-MM-DD` day | The Renews column on the Subscriptions page, and a `warn` row in Priority tasks inside the week before it |
 
 `lib/server/config.ts` holds the vocabularies (`PROJECT_STAGES`, `API_CRITICALITIES`), the one check both callers read
 (`badConfigValues`), and the two readers of the `projects` key. `projects` keeps both shapes: the map above, which the
@@ -329,7 +329,7 @@ and no name), reading past the zone `ss` appends (`203.0.113.10%eth0:68`) and th
 its public addresses, and its Tailscale address. Loopback, link-local and the bridges inside the machine (Docker,
 VMs) are no network another machine is on. `reach_of` then says who can connect to each socket:
 
-- **internet** (red, and named in the machine's one error row in Needs attention): bound on a public address, or on
+- **internet** (red, and named in the machine's one error row in Priority tasks): bound on a public address, or on
   every address (`*`, `0.0.0.0`, `::`) of a machine with a public address. An address that cannot be placed, and a
   wildcard on a machine whose addresses were not read, read as the internet: the flag is the safe direction.
 - **lan** (grey, and no warning): bound on a private or link-local address, or on every
@@ -418,7 +418,7 @@ read (the same 10-second read, no extra ssh) from a cache in this process's memo
 own loopback never asked. Nothing else about a connection is remembered. collector#66 also kept a list of what was
 new about a machine's network — a process never seen on it, a new destination, an upload over a configurable size
 between two reads, a knock on a listening port from the local network, each a "mark" with a Seen click that stayed in
-Needs attention until it was clicked — and that was noise James never asked for: 80 rows of ordinary traffic (Brave,
+Priority tasks until it was clicked — and that was noise James never asked for: 80 rows of ordinary traffic (Brave,
 Todoist, gh, Docker reaching GitHub, Google, AWS) in two days, and wrong on its own terms, since one site's many
 load-balancer names (`lb-140-82-113-5`, `lb-140-82-114-5`, …) each counted as somewhere new. It is gone
 (collector#75), and so is the file it kept beside `config.json` (`network-seen.json`) and the config.json setting
@@ -430,7 +430,7 @@ address and port, the host name — "no name" when reverse DNS had none — the 
 received), then the Listening table of slice 1. It reads them off the same snapshot the Dashboard uses, so a
 connection costs nothing extra.
 
-The only network rows in **Needs attention** are the ports open to the internet and the two sshd settings
+The only network rows in **Priority tasks** are the ports open to the internet and the two sshd settings
 (collector#65); nothing about a connection is a row (collector#75).
 
 ## Security checks (each machine's rubric)
@@ -478,17 +478,17 @@ process timing the same GET beside the live server's own check read the same num
 1.95 s, RepSheet 1.0 s against 1.0 s), so the check stays one plain GET with no second chance.
 
 A GitHub API limit (REST or GraphQL) with under 500 calls left raises an amber toast with Dismiss, since nobody can
-fix it but wait for the reset; it shows again when the limit runs out. Needs attention lists both limits too.
+fix it but wait for the reset; it shows again when the limit runs out. Priority tasks lists both limits too.
 
 The sidebar's Network item counts the ports open to the internet across every machine (`internetPortCount`), the
-same number the toast and Needs attention name.
+same number the toast and Priority tasks name.
 
 ## A job's notices (card #82)
 
 A job's good news has a path into the page now. The weekly `directory-listings` check (agent-stack#306) appends one
 JSON line per newly live listing to `~/.hermes/notices/directory-listings.jsonl` on the machine it runs on, and each
-line shows once: one toast and one Needs attention row, linking to the listing, gone when it is acknowledged.
-Collector had no such path — toasts came only from services and the network, and Needs attention only from failures
+line shows once: one toast and one Priority tasks row, linking to the listing, gone when it is acknowledged.
+Collector had no such path — toasts came only from services and the network, and Priority tasks only from failures
 and watch entries.
 
 The line is `{"at": "<ISO time>", "key": "<what an acknowledgement names>", "level": "info", "text": "<the news>",
@@ -508,7 +508,7 @@ own key, so acknowledging a listing covers it however many times the machine is 
 no next run reads `Acknowledged.` — the Dashboard only says "Waiting for the next run" when `ack.next` names one.
 
 `lib/toasts.ts`'s `noticeToasts(machines, acks)` is the toast: the line's text is the title and the link (a notice
-with no `href` leads to the Needs attention panel instead), the address is the body, and a `key` already in the
+with no `href` leads to the Priority tasks panel instead), the address is the body, and a `key` already in the
 browser's acknowledgements (`components/acks.ts`) is left out. One Acknowledge on the row clears both, since they
 read the same list; there is no Dismiss, because the news is not a problem that has to wait for a run to clear.
 `tests/notices.test.ts` and `tests/notices.driver.py` drive the real `collect.py` on a fixture home.
@@ -570,7 +570,7 @@ another machine's entry never invents an idle row here.
 `collect.py`'s `watch_rows` reads them beside the Hermes gateway read on every machine refresh (15 seconds) and puts
 one row per entry on the machine's snapshot: `busy` (a process or a session running, a launchd job with a PID), `ok`
 (nothing running, nothing wrong), `idle` (no process, no session, no file, or a file older than its limit), or
-`failed`. `lib/server/warnings.ts` turns `failed` into an error row in Needs attention and `idle` into a warning, and
+`failed`. `lib/server/warnings.ts` turns `failed` into an error row in Priority tasks and `idle` into a warning, and
 says nothing for `busy` and `ok` — the words are `<name> on <machine>: <detail>`. An entry Collector cannot read (no
 signal, an unknown one, a `session` that is not `claude` or `codex`, an `idle_after` that is not a positive number of
 seconds, an entry that is not an object, a `watch` that is not a list) is a warning rather than a dropped setting,
@@ -691,7 +691,7 @@ is that folder, worked the way an email inbox works.
 
 | Endpoint | What it answers |
 |---|---|
-| `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Needs attention warnings worked out from the newest result of each reader. |
+| `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Priority tasks warnings worked out from the newest result of each reader. |
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel), and the three status sets the page reads (`each`, `working`, `done`). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
 | `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; and every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's), the knocks from its local network among them — the read an agent asks to answer "is anything open that should not be?" |

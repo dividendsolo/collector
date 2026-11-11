@@ -47,7 +47,7 @@ function nextRun(iso: string): string {
   return `${day}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 }
 
-/** How long ago a Needs attention row first showed up, the last column on the row (James, 2026-11-06). */
+/** How long ago a Priority tasks row first showed up, the last column on the row (James, 2026-11-06). */
 function Since({ at }: { at?: number }) {
   return at ? (
     <span className="since" title={new Date(at * 1000).toLocaleString()}>
@@ -56,7 +56,7 @@ function Since({ at }: { at?: number }) {
   ) : null;
 }
 
-function NeedsAttention() {
+function PriorityTasks() {
   const { state } = useLive();
   // A one-click fix the server confirmed (Tailscale is running again): its rows hide at once and stay hidden until
   // a machine read newer than the click; if that read still fails, the rows come back (James, 2026-11-02).
@@ -70,7 +70,7 @@ function NeedsAttention() {
   const hot = w.some((x) => x.level === "error"); // red only for errors
   return (
     <section className="panel" id="attention">
-      <PanelHead icon="alert" title="Needs attention">
+      <PanelHead icon="alert" title="Priority tasks">
         <span className={`count${w.length && hot ? " hot" : ""}`}>{w.length}</span>
       </PanelHead>
       <div className="alerts">
@@ -110,7 +110,7 @@ function NeedsAttention() {
         ) : (
           <div className="empty">
             <Icon name="check" />
-            Nothing needs attention.
+            Nothing in priority tasks.
           </div>
         )}
         {state
@@ -383,8 +383,8 @@ function ServiceHealth() {
 export function Dashboard() {
   return (
     <div className="page">
+      <PriorityTasks />
       <CurrentWork />
-      <NeedsAttention />
       <WorkPanel />
       <Waiting />
       <JogPanel />
