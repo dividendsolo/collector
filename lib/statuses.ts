@@ -97,10 +97,16 @@ export const waitingRank = (waiting: string[], lane?: string | null) => {
   return i < 0 ? waiting.length : i;
 };
 
-/** Waiting on you: highest priority first, then the set's own order, then oldest (James, 2026-10-22). */
+/** The status that goes first on Waiting on you, whatever the priority (James, 2026-11-11: a card triaged can go
+ * straight to an agent, so triage takes it off his plate at once). */
+export const TRIAGE_FIRST = "needs-triage";
+
+/** Waiting on you: needs-triage first, then highest priority, then the set's own order, then oldest (James,
+ * 2026-10-22, and 2026-11-11 for needs-triage first). */
 export const waitingOrder =
   (waiting: string[]) =>
   (a: { priority?: string | null; lane?: string | null; created?: string | null }, b: typeof a) =>
+    Number(a.lane !== TRIAGE_FIRST) - Number(b.lane !== TRIAGE_FIRST) ||
     prio(a.priority) - prio(b.priority) ||
     waitingRank(waiting, a.lane) - waitingRank(waiting, b.lane) ||
     (a.created || "").localeCompare(b.created || "");

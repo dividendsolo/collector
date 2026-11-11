@@ -226,6 +226,9 @@ once. A machine read over ssh gets no button: the click would act here, never th
 - `waiting` is the Waiting on you list: only those lanes are on it, in the order written. The set is also what has its
   reason read (the comment that moved the card there), what Current work leaves out, and what a card leaving the board
   is not: it waited on you, it did not close.
+  A `needs-triage` card always goes first on the list, whatever its priority (James, 2026-11-11: a card triaged can
+  go straight to an agent, so triage takes it off his plate at once); the rest keep priority, the order written, then
+  oldest (`waitingOrder`).
 - `working` is the statuses that say a machine or a session holds the card. A card there with no run in the page's
   read shows how old the data is (`stale 4 min`) instead of its status, since the claim and the read disagree.
 - `done` is the statuses that mean the card is finished: those cards are not open work (`workCards` leaves them out of
