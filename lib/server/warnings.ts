@@ -55,6 +55,16 @@ export interface WarningInputs {
   ai: AiRow[];
 }
 
+/** One host-broken marker as a sentence: what fails, where, and what it stops. */
+export function hostBrokenText(b: { repo: string; line?: string; error?: string }, host: string) {
+  const m = (b.line || "").match(/^(.*?):\s*base\s+([0-9a-f]{7,40})/);
+  const where = m ? ` (${m[1]}, at ${m[2].slice(0, 7)})` : b.line ? ` (${b.line})` : "";
+  const head = `${b.repo}: the checks fail on main at ${host}${where}`;
+  return b.error
+    ? `${head}: ${b.error}. ${host} builds no ${b.repo} cards until main passes`
+    : `${head}, so ${host} builds no ${b.repo} cards`;
+}
+
 /** Needs attention: failed jobs, a work script in a loop, one script started from two jobs, domains and certificates
  * near expiry, the GitHub GraphQL limit, sites down, machines that could not be read, the Hermes gateway or its cron
  * ticker on a machine that has one, the agents and jobs the user's own `watch` entries name, the good news a machine's
@@ -83,11 +93,10 @@ export function warnings(w: WarningInputs): Warning[] {
   const workJobs = new Set(work.jobs || []);
   const workLabel = work.label || "The work script";
   for (const m of w.machines) {
-    // The foreman's host-broken-<repo> marker: this machine cannot pass that repo's base checks, so no card of
-    // that repo is built here. collect.py reports each marker with its one line (the failing step and base SHA).
-    for (const b of m.host_broken || [])
-      if (b?.repo)
-        out.push({ level: "error", text: `host broken: ${b.repo} on ${m.name}${b.line ? `: ${b.line}` : ""}` });
+    // The foreman's host-broken-<repo> marker: the repo's checks fail on its main branch at this machine, so no
+    // card of that repo is built here. The row says what failed, not whose fault it is (James, 2026-11-11: "It's not
+    // a great error"): the step and short SHA from the marker's line, and the first error line of the foreman's log.
+    for (const b of m.host_broken || []) if (b?.repo) out.push({ level: "error", text: hostBrokenText(b, m.name) });
     // collect.py's tailnet state; null with no Tailscale on that machine. A stopped tailnet breaks every ssh job
     // there, so the jobs' rows carry the reason and, on this machine, the button that starts it again.
     const tailnetDown = !!m.tailscale && m.tailscale !== "Running";
