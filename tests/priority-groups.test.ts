@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRIORITY_GROUPS, priorityOrder, triageRow } from "@/lib/priority";
+import { briefsRow, PRIORITY_GROUPS, p0Rows, priorityOrder, triageRow } from "@/lib/priority";
 import { warnings } from "@/lib/server/warnings";
 
 /**
@@ -11,7 +11,7 @@ const base = { github: {}, cfg: {}, services: [], domains: [], ticketsError: nul
 
 describe("Priority tasks groups", () => {
   it("are the six groups in James's order", () => {
-    expect(PRIORITY_GROUPS).toEqual(["cant-work", "security", "triage", "jobs", "money", "good-news"]);
+    expect(PRIORITY_GROUPS).toEqual(["cant-work", "security", "triage", "p0", "jobs", "money", "briefs", "good-news"]);
   });
 
   it("put a service down above open ports, open ports above a failed job, and a failed job above a renewal", () => {
@@ -83,5 +83,65 @@ describe("the needs-triage row", () => {
       { group: "cant-work", text: "down" },
     ] as any);
     expect(rows.map((r: any) => r.text)).toEqual(["down", "ports", "triage", "job"]);
+  });
+});
+
+// James, 2026-11-11: unread briefs go between money and limits and good news.
+describe("the unread briefs row", () => {
+  it("counts the inbox's unread briefs and links to the Briefs page", () => {
+    const row = briefsRow([{ read: false }, { read: true }, { read: false }]);
+    expect(row).toMatchObject({ group: "briefs", level: "warn", text: "2 unread briefs", href: "#/briefs" });
+    expect(briefsRow([{ read: false }])?.text).toBe("1 unread brief");
+  });
+
+  it("is no row when every brief is read", () => {
+    expect(briefsRow([{ read: true }])).toBeNull();
+    expect(briefsRow([])).toBeNull();
+  });
+
+  it("sits below money and limits, above good news", () => {
+    const rows = priorityOrder([
+      { group: "good-news", text: "news" },
+      { group: "briefs", text: "briefs" },
+      { group: "money", text: "renewal" },
+    ] as any);
+    expect(rows.map((r: any) => r.text)).toEqual(["renewal", "briefs", "news"]);
+  });
+});
+
+// James, 2026-11-11: under needs triage, the P0 cards waiting on him, one row each.
+describe("the P0 rows", () => {
+  const card = (n: number, lane: string, priority: string) => ({
+    repo: "dividendsolo/situation",
+    number: n,
+    title: `Card ${n}`,
+    url: `https://github.com/dividendsolo/situation/issues/${n}`,
+    lane,
+    priority,
+  });
+
+  it("is one row per P0 card, outside needs-triage, linking to the card", () => {
+    const rows = p0Rows([
+      card(1, "ready-for-human", "P0"),
+      card(2, "needs-info", "P1"),
+      card(3, "needs-manual-qa", "P0"),
+    ]);
+    expect(rows).toEqual([
+      { level: "error", group: "p0", text: "P0: Card 1 (situation#1, ready-for-human)", url: card(1, "", "").url },
+      { level: "error", group: "p0", text: "P0: Card 3 (situation#3, needs-manual-qa)", url: card(3, "", "").url },
+    ]);
+  });
+
+  it("leaves a P0 in needs-triage to the triage row", () => {
+    expect(p0Rows([card(4, "needs-triage", "P0")])).toEqual([]);
+  });
+
+  it("sits below needs triage, above a failed job", () => {
+    const rows = priorityOrder([
+      { group: "jobs", text: "job" },
+      { group: "p0", text: "p0" },
+      { group: "triage", text: "triage" },
+    ] as any);
+    expect(rows.map((r: any) => r.text)).toEqual(["triage", "p0", "job"]);
   });
 });

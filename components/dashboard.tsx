@@ -3,10 +3,11 @@
 import { Fragment, useEffect, useState } from "react";
 import { ago, fetchedText } from "@/lib/format";
 import { jumpHref } from "@/lib/jump";
-import { priorityOrder, triageRow } from "@/lib/priority";
+import { briefsRow, p0Rows, priorityOrder, triageRow } from "@/lib/priority";
 import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
+import { useBriefs } from "./briefs";
 import { useApi, useLive } from "./data";
 import { JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
@@ -68,9 +69,15 @@ function PriorityTasks() {
   // The needs-triage row (James, 2026-11-11) comes from the same board read as Waiting on you, so the two agree.
   const waiting = useWaiting();
   const triage = waiting ? triageRow(waiting.list) : null;
+  // The unread briefs row (James, 2026-11-11), from the same read as the Briefs page.
+  const { data: briefs } = useBriefs();
+  const unread = briefsRow(briefs?.inbox || []);
   const all: any[] = priorityOrder([
     ...(state?.warnings || []).filter((x: any) => !(shown && x.action?.post === shown.post)),
     ...(triage ? [triage] : []),
+    // Each P0 card waiting on James, under the triage row (James, 2026-11-11).
+    ...p0Rows(waiting?.list || []),
+    ...(unread ? [unread] : []),
   ]);
   // An acknowledged row leaves the count and moves under the open ones, dimmed, until its job runs again.
   const w = all.filter((x) => !acked(x, acks));
@@ -93,6 +100,10 @@ function PriorityTasks() {
               <Icon name="alert" />
               {x.jump ? (
                 <a className="plain" href={`${jumpHref("dashboard", x.jump)}&${WAITING_FILTER}=${x.filter}`}>
+                  {x.text}
+                </a>
+              ) : x.href ? (
+                <a className="plain" href={x.href}>
                   {x.text}
                 </a>
               ) : x.url ? (

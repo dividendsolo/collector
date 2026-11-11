@@ -292,9 +292,16 @@ group, the rows keep the order the server finds them in. An error no longer goes
    checking left out). Its link, `#/dashboard?to=waiting-panel&lane=needs-triage`, glides to Waiting on you and
    opens it on the needs-triage cards. A triaged card can go straight to an agent, so triage takes it off James's
    plate at once. No row when none waits.
-4. **Jobs failing**: a failed job run, a watched agent failing or idle.
-5. **Money and limits**: a renewal, a GitHub limit, X credits.
-6. **Good news**: a job's good news.
+4. **P0 waiting on you**: one row per P0 card on Waiting on you, linking to the card. A P0 in needs-triage is left
+   to the triage row, so no card shows twice.
+5. **Jobs failing**: a failed job run, a watched agent failing or idle.
+6. **Money and limits**: a renewal, a GitHub limit, X credits.
+7. **Unread briefs**: "N unread briefs", linking to the Briefs page. No row when every brief is read.
+8. **Good news**: a job's good news.
+
+The rows of types 3, 4 and 7 are built in the browser, from the same reads as Waiting on you and the Briefs page. The
+Dashboard's sidebar count is the panel's open rows, these with them (`attentionTag`), so the two always agree; an
+acknowledged row leaves both.
 
 ## The three hand-kept fields Mission Control had (card #78)
 

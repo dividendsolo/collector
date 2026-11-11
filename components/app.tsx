@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { failingJobs } from "@/lib/format";
+import { briefsRow, p0Rows, triageRow } from "@/lib/priority";
 import { internetPortCount } from "@/lib/toasts";
 import { vendorHit } from "@/lib/vendors";
 import { acked, useAcks } from "./acks";
@@ -121,6 +122,19 @@ type Tag = { text: string; hot: boolean; dot?: boolean };
 /** Briefs: the inbox count, and a dot on the closed sidebar's icon while the inbox holds a brief (James, 2026-11-10). */
 export const briefsTag = (n: number): Tag => ({ text: n ? String(n) : "", hot: false, dot: n > 0 });
 
+/** Dashboard: the Priority tasks panel's open rows, the needs-triage row with them (James, 2026-11-11: the count said 3
+ * while the panel showed 4). Red only when a row is an error. */
+export function attentionTag(
+  warnings: any[],
+  tickets: { lane?: string | null; priority?: string | null }[],
+  acks: string[],
+  inbox: { read?: boolean }[] = [],
+): Tag {
+  const extra = [triageRow(tickets), ...p0Rows(tickets), briefsRow(inbox)].filter((x) => x !== null);
+  const open = [...warnings.filter((x) => !acked(x, acks)), ...extra];
+  return { text: open.length ? String(open.length) : "", hot: open.some((x) => x.level === "error") };
+}
+
 export const tagClass = (t?: Tag) => `tag${t?.hot ? " hot" : ""}${t?.dot ? " inbox-dot" : ""}`;
 
 function useTags(): Record<string, Tag> {
@@ -130,7 +144,6 @@ function useTags(): Record<string, Tag> {
   const vendors = useVendors();
   const acks = useAcks();
   const { data: briefs } = useBriefs();
-  const w: any[] = (state?.warnings || []).filter((x: any) => !acked(x, acks));
   // An acknowledged failed run leaves the count until the job runs again (James, 2026-11-06).
   const failing = state
     ? failingJobs(
@@ -141,7 +154,7 @@ function useTags(): Record<string, Tag> {
   const hit = (vendors || []).filter(vendorHit);
   const open = internetPortCount(state?.machines);
   return {
-    attention: { text: w.length ? String(w.length) : "", hot: w.length > 0 && w.some((x) => x.level === "error") },
+    attention: attentionTag(state?.warnings || [], waiting?.list || [], acks, briefs?.inbox || []),
     briefs: briefsTag(briefs?.inbox?.length ?? 0),
     running: { text: running?.length ? String(running.length) : "", hot: false },
     work: { text: waiting?.p0 ? String(waiting.p0) : "", hot: Boolean(waiting?.p0) },
