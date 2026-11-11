@@ -3,28 +3,60 @@ import { boardRows, ready, workView } from "./board";
 import { swr } from "./cache";
 import { config, projectRepos } from "./config";
 import { isoLocal, isoUtc, localMidnight, ymdLocal } from "./dates";
+import { snapshot } from "./machines";
 import { run } from "./run";
 
-/** Production deploys of one repo since `since` (local midnight, UTC): GitHub deployments to a production environment
- * (Vercel makes these), else successful CI jobs named "deploy" on pushes to main (Kamal from Actions). */
-async function deploysToday(repo: string, since: string): Promise<number> {
+/** A deploy the machines made themselves: pull-deploy's Kamal deploys (collect.py `pull_deploys`). */
+export interface MachineDeploy {
+  app: string;
+  sha: string;
+  at: string;
+}
+
+/** Deploys today per repo, most first: GitHub's (the commit of each) plus the machines' own Kamal deploys since `since`,
+ * a commit once per repo, so zero-phase's Vercel and Kamal deploy of one commit is one (James, 2026-11-11). A Kamal
+ * app is matched to its repo by its name. */
+export function countDeploys(
+  repos: string[],
+  github: Record<string, string[]>,
+  machine: MachineDeploy[],
+  since: string,
+): { repo: string; n: number }[] {
+  const shas = new Map<string, Set<string>>();
+  const add = (repo: string, sha: string) => {
+    const name = repo.split("/").pop() as string;
+    if (!shas.has(name)) shas.set(name, new Set());
+    shas.get(name)?.add(sha);
+  };
+  for (const r of repos) for (const sha of github[r] || []) add(r, sha);
+  for (const d of machine) if (d.at >= since) add(d.app, d.sha);
+  return [...shas.entries()]
+    .map(([repo, s]) => ({ repo, n: s.size }))
+    .filter((x) => x.n)
+    .sort((a, b) => b.n - a.n);
+}
+
+/** The commit of each production deploy of one repo since `since` (local midnight, UTC): GitHub deployments to a
+ * production environment (Vercel makes these), else successful CI jobs named "deploy" on pushes to main (Kamal from
+ * Actions). */
+async function deploysToday(repo: string, since: string): Promise<string[]> {
   const [deps] = await run(["gh", "api", `repos/${repo}/deployments?per_page=50`], { timeout: 15 });
   if (deps?.length)
-    return deps.filter((d: any) => (d.environment || "").toLowerCase() === "production" && d.created_at >= since)
-      .length;
+    return deps
+      .filter((d: any) => (d.environment || "").toLowerCase() === "production" && d.created_at >= since)
+      .map((d: any) => d.sha);
   const [runs] = await run(
     ["gh", "api", `repos/${repo}/actions/runs?event=push&created=>=${since.slice(0, 10)}&per_page=50`],
     { timeout: 15 },
   );
-  let n = 0;
+  const out: string[] = [];
   for (const r of runs?.workflow_runs || []) {
     if (r.created_at < since || !["main", "master"].includes(r.head_branch)) continue;
     const [jobs] = await run(["gh", "api", `repos/${repo}/actions/runs/${r.id}/jobs`], { timeout: 15 });
-    n += (jobs?.jobs || []).filter(
-      (j: any) => j.name.toLowerCase().includes("deploy") && j.conclusion === "success",
-    ).length;
+    for (const j of jobs?.jobs || [])
+      if (j.name.toLowerCase().includes("deploy") && j.conclusion === "success") out.push(`${r.head_sha}/${j.id}`);
   }
-  return n;
+  return out;
 }
 
 const CAL =
@@ -75,10 +107,12 @@ const cache = swr("work-stats", 300_000, async () => {
           ),
         }
       : null,
-    deploys: names
-      .map((r, i) => ({ repo: r.split("/").pop() as string, n: counts[i] }))
-      .filter((x) => x.n)
-      .sort((a, b) => b.n - a.n),
+    deploys: countDeploys(
+      names,
+      Object.fromEntries(names.map((r, i) => [r, counts[i]])),
+      ((await snapshot.get()).machines || []).flatMap((m: any) => m.pull_deploys || []),
+      since,
+    ),
   };
 });
 
