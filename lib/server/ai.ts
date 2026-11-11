@@ -21,6 +21,8 @@ export interface AiRow {
   detail?: string | null;
   note?: string;
   low?: boolean;
+  /** Nothing left to call: a window at 0%, or no Nous credit. Low is a warning; out stops the lanes. */
+  out?: boolean;
   alert?: string;
   windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string }[];
 }
@@ -96,6 +98,7 @@ async function nous(): Promise<Reading> {
       ...(topupWindow ? [{ ...topupWindow, low }] : []),
     ],
     low,
+    out: isNum(usable) && usable <= 0,
   };
 }
 
@@ -122,6 +125,7 @@ async function minimax(): Promise<Reading> {
     ],
     detail: `of this 5-hour window, ${week}% of the week`,
     low: Math.min(now ?? 100, week ?? 100) < AI_LOW_PERCENT,
+    out: Math.min(now ?? 100, week ?? 100) <= 0,
   };
 }
 
@@ -143,6 +147,7 @@ export function kimiReading(d: any): Reading {
     ],
     detail: `of this 5-hour window, ${wk}% of the week`,
     low: Math.min(now, wk) < AI_LOW_PERCENT,
+    out: Math.min(now, wk) <= 0,
   };
 }
 
@@ -204,6 +209,7 @@ async function anthropic(): Promise<Reading> {
     ],
     detail: `of this 5-hour session (resets ${clock(session.resets_at, false)}), ${100 - wUsed}% of the week (resets ${clock(week.resets_at, true)})`,
     low: Math.min(100 - sUsed, 100 - wUsed) < AI_LOW_PERCENT,
+    out: Math.min(100 - sUsed, 100 - wUsed) <= 0,
   };
 }
 

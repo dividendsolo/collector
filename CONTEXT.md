@@ -317,8 +317,8 @@ shouldn't even have them there at all"). It folds into the GitHub incident row, 
 foreman rechecks main by itself (at most once an hour), so nothing needs doing when GitHub recovers; a main that still
 fails then shows its own row again. A run with a log is a real failure and always keeps its own row.
 
-"Every AI plan is out" shows only when every plan with a usage reading is out: a window at 100% used, or "0%" or
-"$0.00" left (`planOut`). Low (under 10% left) is the toast's job, never this row (James, 2026-11-11: the row named
+"Every AI plan is out" shows only when every plan with a usage reading is out: its reading's `out` flag, a window at
+0% left or no Nous credit (#119). Low (under 10% left) is the toast's job, never this row (James, 2026-11-11: the row named
 Anthropic while Claude had 99% of its 5-hour session left).
 
 When Priority tasks is empty, its line links to Waiting on you (a glide, `jumpHref`), and a line sits above the

@@ -72,12 +72,6 @@ export interface WarningInputs {
   ai: AiRow[];
 }
 
-/** A plan that cannot answer now: a window at 100% used, or nothing left ("0%", "$0.00"). */
-function planOut(a: { left?: string | null; windows?: { used: number }[] }): boolean {
-  if (a.left === "0%" || a.left === "$0.00") return true;
-  return (a.windows || []).some((x) => x.used >= 100);
-}
-
 const GITHUB = "GitHub";
 /** The foreman's error when a CI run never started: GitHub kept no log for it. */
 const NO_RUN_LOG = /failed to get run log|log not found/i;
@@ -390,12 +384,11 @@ export function warnings(w: WarningInputs): Warning[] {
       url: "https://console.x.com",
     });
   // One row only when every provider with a usage reading is out: a fallback still answers otherwise (James,
-  // 2026-11-09: "one message that says that we are completely out when ... all the fallbacks are drained"). Nous and
-  // Claude running low are toasts (lib/toasts.ts, aiToasts).
-  // Out, not low (James, 2026-11-11: the row named Anthropic while Claude had 99% of its session left): a plan is out
-  // when one of its windows is used up, or nothing is left of it. Low is the toast's job.
+  // 2026-11-09: "one message that says that we are completely out when ... all the fallbacks are drained"). Out, not
+  // low: the row showed with Claude at 13% left (2026-11-11). Nous and Claude running low are toasts (lib/toasts.ts,
+  // aiToasts).
   const metered = w.ai.filter((a) => a.left != null || a.windows?.length);
-  if (metered.length && metered.every(planOut))
+  if (metered.length && metered.every((a) => a.out))
     out.push({
       group: "cant-work",
       level: "error",

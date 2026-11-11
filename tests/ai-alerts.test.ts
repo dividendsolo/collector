@@ -14,6 +14,7 @@ const row = (provider: string, low: boolean, extra: Record<string, unknown> = {}
     profiles: 3,
     kind: "plan",
     low,
+    out: low,
     left: low ? "0%" : "80%",
     link: `https://${provider}.example`,
     ...extra,
@@ -35,6 +36,17 @@ describe("Needs attention for AI plans", () => {
     );
   });
 
+  // James, 2026-11-11: the row showed while Claude still had 13% of its session and 9% of its week. Low is not out.
+  it("has no row while a provider is low but not out", () => {
+    const ai = [
+      row("anthropic", true, { out: false, left: "13%" }),
+      row("nous", true),
+      row("kimi-coding", true),
+      row("minimax", true),
+    ];
+    expect(warnings({ ...base, ai }).filter((w) => /lanes|AI/.test(w.text))).toEqual([]);
+  });
+
   it("ignores a provider with no usage reading (Grok) when it decides everything is out", () => {
     const ai = [row("nous", true), row("minimax", true), row("xai-oauth", false, { left: undefined })];
     expect(warnings({ ...base, ai })).toHaveLength(1);
@@ -43,32 +55,15 @@ describe("Needs attention for AI plans", () => {
 
 // James, 2026-11-11, on "Every AI plan is out: anthropic, kimi-coding, minimax, nous" while Claude had 99% of its
 // 5-hour session and 8% of its week: "it says it's out. All of them are out. And if you look at Anthropic, it's not".
-// Low (under 10% left) is a toast; out is a window used up or no money left. The row counts only plans that are out.
+// Low (under 10% left) is a toast; the row counts only plans whose reading says out.
 describe("the every-plan-is-out row", () => {
-  const plan = (provider: string, windows: { label: string; used: number }[], left = "50%") =>
-    ({ provider, low: true, left, windows: windows.map((w) => ({ ...w, resets: null })) }) as any;
+  const plan = (provider: string, out: boolean) => ({ provider, low: true, out, left: "8%", windows: [] }) as any;
   it("does not count a plan that is only low", () => {
-    const ai = [
-      plan(
-        "anthropic",
-        [
-          { label: "5-hour session", used: 1 },
-          { label: "Week", used: 92 },
-        ],
-        "99%",
-      ),
-      plan("kimi-coding", [{ label: "Week", used: 100 }]),
-      plan("minimax", [{ label: "Week", used: 100 }]),
-      plan("nous", [{ label: "Plan credits", used: 100 }], "$0.00"),
-    ];
+    const ai = [plan("anthropic", false), plan("kimi-coding", true), plan("minimax", true), plan("nous", true)];
     expect(warnings({ ...base, ai }).filter((w) => /Every AI plan/.test(w.text))).toEqual([]);
   });
-  it("shows when every plan has a window used up or no money left", () => {
-    const ai = [
-      plan("anthropic", [{ label: "Week", used: 100 }]),
-      plan("kimi-coding", [{ label: "Week", used: 100 }]),
-      plan("nous", [], "$0.00"),
-    ];
+  it("shows when every plan is out", () => {
+    const ai = [plan("anthropic", true), plan("kimi-coding", true), plan("nous", true)];
     expect(warnings({ ...base, ai }).filter((w) => /Every AI plan/.test(w.text))).toHaveLength(1);
   });
 });
