@@ -83,12 +83,27 @@ describe("AI toasts", () => {
       level: "error",
       noDot: true,
       title: "Nous credits are out",
-      text: "$0.00 left",
+      text: "",
       dismissible: true,
     });
     expect(t[0].title).toBe("Claude is nearly out");
     expect(t[1].action).toEqual({ label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" });
     expect(t[0].action).toBeUndefined();
+  });
+
+  // James, 2026-11-11: "If the credits are out, then it just says out ... we don't need to say only 0%."
+  it("says nothing under the title when a plan is out", () => {
+    const nous = row("nous", true, {
+      left: "$0.00",
+      out: true,
+      windows: [
+        { label: "Plan credits", used: 100, resets: "2026-11-20T14:07:02.000Z" },
+        { label: "Top-up ($25)", used: 100, resets: null },
+      ],
+    });
+    const [t] = aiToasts([nous]);
+    expect(t.title).toBe("Nous credits are out");
+    expect(t.text).toBe("");
   });
 
   // James, 2026-11-11: "when it's completely out, we need to put that button up there, not when there's 7% left".
@@ -127,6 +142,7 @@ describe("the Claude toast says only why it is up", () => {
   const weekEnd = new Date(2026, 10, 12, 21, 59, 59, 650).toISOString();
   const claude = row("anthropic", true, {
     left: "94%",
+    out: false,
     windows: [
       { label: "5-hour session", used: 6, resets: new Date(2026, 10, 11, 20, 49, 59).toISOString() },
       { label: "Week", used: 93, resets: weekEnd },

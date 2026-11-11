@@ -339,7 +339,8 @@ export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast
       level: "error",
       noDot: true,
       title: empty ? t.out : t.low,
-      text: whyLow(a, now),
+      // Out is the whole message: no "Only 0% left" under it (James, 2026-11-11: "they're just out").
+      text: empty ? "" : whyLow(a, now),
       href: a.link || jumpHref("dashboard", "ai-plans"),
       ...(action ? { action } : {}),
       dismissible: true,
