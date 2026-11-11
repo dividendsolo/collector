@@ -288,12 +288,13 @@ group, the rows keep the order the server finds them in. An error no longer goes
    checks red on main, Tailscale or Hermes stopped, a script in a loop or started by two jobs, the tickets or a
    machine Collector cannot read, a config.json setting that does nothing.
 2. **Security**: a port open to the internet, a risky sshd setting.
-3. **Needs triage**: "N cards need triage", from the same board read as Waiting on you (cards the waiting crew is
+3. **P0 waiting on you**: one row per P0 card on Waiting on you, linking to the card. A P0 in needs-triage is left
+   to the triage row, so no card shows twice. It sits above needs triage (James, 2026-11-11: "i was wrong i want p0 before the triage
+   cards").
+4. **Needs triage**: "N cards need triage", from the same board read as Waiting on you (cards the waiting crew is
    checking left out). Its link, `#/dashboard?to=waiting-panel&lane=needs-triage`, glides to Waiting on you and
    opens it on the needs-triage cards. A triaged card can go straight to an agent, so triage takes it off James's
    plate at once. No row when none waits.
-4. **P0 waiting on you**: one row per P0 card on Waiting on you, linking to the card. A P0 in needs-triage is left
-   to the triage row, so no card shows twice.
 5. **Jobs failing**: a failed job run, a watched agent failing or idle.
 6. **Money and limits**: a renewal, a GitHub limit, X credits.
 7. **Unread briefs**: "N unread briefs", linking to the Briefs page. No row when every brief is read.

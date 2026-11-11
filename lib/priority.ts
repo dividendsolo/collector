@@ -16,8 +16,8 @@
 export const PRIORITY_GROUPS = [
   "cant-work",
   "security",
-  "triage",
   "p0",
+  "triage",
   "jobs",
   "money",
   "briefs",
