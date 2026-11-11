@@ -171,3 +171,23 @@ describe("a brief's inline parts (collector#64)", () => {
     expect((blocks as any)[2].parts.every((p: any) => p.kind === "text")).toBe(true);
   });
 });
+
+describe("a numbered list across blank lines (collector#116)", () => {
+  it("keeps one list, and its numbers, when a blank line sits between the items", () => {
+    const blocks = parseMarkdown("1. a\n   x\n\n2. b\n\n3. c");
+    expect(kinds(blocks)).toEqual(["list"]);
+    expect(blocks[0]).toMatchObject({ kind: "list", ordered: true, start: 1 });
+    expect((blocks[0] as any).items.map(plain)).toEqual(["ax", "b", "c"]);
+  });
+
+  it("shows the number the brief wrote first", () => {
+    expect(parseMarkdown("4. d\n\n5. e")).toEqual([
+      { kind: "list", ordered: true, start: 4, items: [[{ kind: "text", text: "d" }], [{ kind: "text", text: "e" }]] },
+    ]);
+  });
+
+  it("still ends the list at a paragraph after the blank line", () => {
+    const blocks = parseMarkdown("1. a\n\nSome words.\n\n- b");
+    expect(kinds(blocks)).toEqual(["list", "paragraph", "list"]);
+  });
+});

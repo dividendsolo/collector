@@ -27,7 +27,8 @@ export type Block =
   | { kind: "heading"; level: number; parts: Part[] }
   | { kind: "paragraph"; parts: Part[] }
   | { kind: "code"; text: string }
-  | { kind: "list"; ordered: boolean; items: Part[][] }
+  /** `start` is the number a numbered list opens with, as the brief wrote it (`4.` shows 4). */
+  | { kind: "list"; ordered: boolean; start?: number; items: Part[][] }
   | { kind: "table"; align: Align[]; head: Part[][]; rows: Part[][][] }
   | { kind: "rule" };
 
@@ -204,10 +205,20 @@ export function parseMarkdown(markdown: string): Block[] {
           i += 1;
           continue;
         }
+        // A blank line between two items of the same list keeps the list (the briefs space their leads that way).
+        let j = i;
+        while (j < lines.length && !lines[j].trim()) j += 1;
+        const after = j > i && j < lines.length ? ITEM.exec(lines[j]) : null;
+        if (after && (after[3] !== undefined) === ordered) {
+          i = j;
+          continue;
+        }
         break;
       }
       items.push(current);
-      blocks.push({ kind: "list", ordered, items });
+      blocks.push(
+        ordered ? { kind: "list", ordered, start: Number(item[3]), items } : { kind: "list", ordered, items },
+      );
       continue;
     }
     const parts: Part[] = [];
