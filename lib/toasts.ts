@@ -273,7 +273,14 @@ const AI_TOASTS: Record<string, { name: string; out: string; low: string; action
     low: "Nous credits are nearly out",
     action: { label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" },
   },
-  anthropic: { name: "Claude", out: "Claude is out", low: "Claude is nearly out" },
+  // Claude sometimes grants a free limit reset; its "Reset for free" button is on Settings > Usage, and Collector cannot
+  // see whether one is there (James, 2026-11-11: "Check for reset is good").
+  anthropic: {
+    name: "Claude",
+    out: "Claude is out",
+    low: "Claude is nearly out",
+    action: { label: "Check for reset", url: "https://claude.ai/settings/usage" },
+  },
 };
 
 interface AiIn {

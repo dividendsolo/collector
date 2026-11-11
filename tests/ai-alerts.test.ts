@@ -88,7 +88,7 @@ describe("AI toasts", () => {
     });
     expect(t[0].title).toBe("Claude is nearly out");
     expect(t[1].action).toEqual({ label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" });
-    expect(t[0].action).toBeUndefined();
+    expect(t[0].action).toEqual({ label: "Check for reset", url: "https://claude.ai/settings/usage" });
   });
 
   it("shows nothing when they are fine", () => {
