@@ -46,6 +46,8 @@ REPOS = os.path.expanduser(CONFIG.get("repos_dir") or "~/code")
 # SHA) sits here while this machine cannot pass that repo's checks on its base branch (agent-stack#151).
 FOREMAN = os.path.join(HERMES, "foreman")
 HOST_BROKEN = "host-broken-"
+# pull-deploy's state file (agent-stack vps/scripts/pull-deploy.py): the Kamal apps this machine deploys itself.
+PULL_DEPLOY_STATE = os.path.join(HERMES, "cron", "output", "pull-deploy", "state.json")
 # The lab droid (agent-stack#111): a headless Claude Code run under its own Linux user on ezio, working in its own
 # home rather than a card worktree. Nothing else in the panel would show it, so its user is what marks it.
 DROID_USER = "lab"
@@ -2012,6 +2014,26 @@ def hermes_profiles():
     return out
 
 
+def pull_deploys(path=PULL_DEPLOY_STATE):
+    """The deploys pull-deploy made on this machine: its `history` (a week of {app, sha, at}), else each app's last
+    deploy from a state file written before the history existed. No file is no deploys (James, 2026-11-11: the Work
+    panel's deploys today missed every Kamal app ezio deploys)."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    keep = lambda h: isinstance(h, dict) and h.get("app") and h.get("sha") and h.get("at")
+    history = data.get("history")
+    if isinstance(history, list):
+        return [{"app": h["app"], "sha": h["sha"], "at": h["at"]} for h in history if keep(h)]
+    return [{"app": app, "sha": a["sha"], "at": a["at"]}
+            for app, a in sorted((data.get("apps") or {}).items())
+            if isinstance(a, dict) and a.get("how") == "deploy" and keep({"app": app, **a})]
+
+
 def host_broken(scratch=FOREMAN):
     """Each `host-broken-<repo>` marker in the foreman's scratch dir: the repo and its one line (the failing
     gate step and the base SHA). A marker means this machine cannot pass that repo's base checks, so no card
@@ -2475,6 +2497,7 @@ def main():
         "notices": notices_rows(now),
         "running": running_agents(),
         "host_broken": host_broken(),
+        "pull_deploys": pull_deploys(),
         "profiles": hermes_profiles(),
         "work_ticks_10m": len(starts) if starts is not None else None,
         "work_starts_10m": starts,

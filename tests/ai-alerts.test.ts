@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resetText } from "@/lib/format";
 import { warnings } from "@/lib/server/warnings";
 import { aiToasts } from "@/lib/toasts";
 
@@ -71,7 +72,7 @@ describe("the every-plan-is-out row", () => {
 describe("AI toasts", () => {
   it("shows Nous and Claude when they are low, and no other provider", () => {
     const ai = [
-      row("anthropic", true, { left: "4%", detail: "of this 5-hour session" }),
+      row("anthropic", true, { left: "4%", out: false, detail: "of this 5-hour session" }),
       row("nous", true, { left: "$0.00" }),
       row("kimi-coding", true),
       row("minimax", true),
@@ -82,12 +83,37 @@ describe("AI toasts", () => {
       level: "error",
       noDot: true,
       title: "Nous credits are out",
-      text: "$0.00 left",
+      text: "",
       dismissible: true,
     });
     expect(t[0].title).toBe("Claude is nearly out");
     expect(t[1].action).toEqual({ label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" });
     expect(t[0].action).toBeUndefined();
+  });
+
+  // James, 2026-11-11: "If the credits are out, then it just says out ... we don't need to say only 0%."
+  it("says nothing under the title when a plan is out", () => {
+    const nous = row("nous", true, {
+      left: "$0.00",
+      out: true,
+      windows: [
+        { label: "Plan credits", used: 100, resets: "2026-11-20T14:07:02.000Z" },
+        { label: "Top-up ($25)", used: 100, resets: null },
+      ],
+    });
+    const [t] = aiToasts([nous]);
+    expect(t.title).toBe("Nous credits are out");
+    expect(t.text).toBe("");
+  });
+
+  // James, 2026-11-11: "when it's completely out, we need to put that button up there, not when there's 7% left".
+  it("gives Claude's toast Check for reset only when a limit is used up", () => {
+    const out = aiToasts([row("anthropic", true, { left: "40%", out: true })])[0];
+    expect(out.title).toBe("Claude is out");
+    expect(out.action).toEqual({ label: "Check for reset", url: "https://claude.ai/settings/usage" });
+    const low = aiToasts([row("anthropic", true, { left: "40%", out: false })])[0];
+    expect(low.title).toBe("Claude is nearly out");
+    expect(low.action).toBeUndefined();
   });
 
   it("shows nothing when they are fine", () => {
@@ -102,5 +128,43 @@ describe("a domain that expires soon", () => {
     expect(row.ack).toEqual({ key: "domain|zerophase.app|2026-12-05", next: null });
     const [later] = warnings({ ...base, ai: [], domains: [{ ...domain, expires: "2027-12-05", days: 20 }] });
     expect(later.ack?.key).not.toBe(row.ack?.key);
+  });
+});
+
+/**
+ * James, 2026-11-11, on the toast "Claude is nearly out / 94% left of this 5-hour session (resets 8:49 PM), 7% of the
+ * week (resets Thu 9 PM)": "Just put why the notification is up ... only 7% of the weekly limit is left, and then put
+ * resets Thursday, 9 p.m." And the toast said Thu 9 PM while the AI plans panel said 10 PM: "we need to get the dates
+ * consistent. It should be local time only, not UTC."
+ */
+describe("the Claude toast says only why it is up", () => {
+  const now = new Date(2026, 10, 11, 16, 47).getTime();
+  const weekEnd = new Date(2026, 10, 12, 21, 59, 59, 650).toISOString();
+  const claude = row("anthropic", true, {
+    left: "94%",
+    out: false,
+    windows: [
+      { label: "5-hour session", used: 6, resets: new Date(2026, 10, 11, 20, 49, 59).toISOString() },
+      { label: "Week", used: 93, resets: weekEnd },
+    ],
+  });
+
+  it("names the low limit and its reset, and nothing else", () => {
+    const [t] = aiToasts([claude], now);
+    expect(t.text).toBe("Only 7% of the weekly limit is left. Resets Thu 10 PM.");
+  });
+
+  it("names both limits when both are low", () => {
+    const both = { ...claude, windows: [{ ...claude.windows[0], used: 95 }, claude.windows[1]] };
+    expect(aiToasts([both], now)[0].text).toBe(
+      "Only 5% of the 5-hour session limit is left. Resets 8:50 PM. Only 7% of the weekly limit is left. Resets Thu 10 PM.",
+    );
+  });
+
+  it("formats a reset the same way the AI plans panel does", () => {
+    expect(resetText(weekEnd, now)).toBe("Thu 10 PM");
+    expect(resetText(new Date(2026, 10, 11, 20, 49, 59).toISOString(), now)).toBe("8:50 PM");
+    expect(resetText(new Date(2026, 10, 13, 9, 30).toISOString(), now)).toBe("Fri 9:30 AM");
+    expect(resetText(new Date(2026, 10, 25, 9, 0).toISOString(), now)).toBe("Nov 25");
   });
 });

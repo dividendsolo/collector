@@ -1,5 +1,6 @@
 "use client";
 
+import { resetText } from "@/lib/format";
 import { useApi } from "./data";
 import { BlurText, BlurToggle, PanelHead, SkelPlans, SkelRows } from "./ui";
 
@@ -36,16 +37,6 @@ const Left = ({ a }: { a: any }) =>
     <span className="sub">—</span>
   );
 
-function resets(iso: string) {
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "";
-  const time = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const ahead = t.getTime() - Date.now();
-  if (ahead < 864e5) return time;
-  if (ahead > 6 * 864e5) return t.toLocaleDateString([], { month: "short", day: "numeric" });
-  return `${t.toLocaleDateString([], { weekday: "short" })} ${time}`;
-}
-
 /** One provider: its usage windows as GitHub-limit style bars, a balance, or a note. */
 export function AiPlan({ a }: { a: any }) {
   return (
@@ -70,7 +61,7 @@ export function AiPlan({ a }: { a: any }) {
               <span className="value">
                 {w.used}%{" "}
                 <small>
-                  used{w.resets ? ` · resets ${resets(w.resets)}` : ""}
+                  used{w.resets ? ` · resets ${resetText(w.resets)}` : ""}
                   {w.left ? (
                     <>
                       {" · "}

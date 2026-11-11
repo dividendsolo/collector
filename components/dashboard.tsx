@@ -266,7 +266,8 @@ function PriorityTasks() {
   );
 }
 
-/** Work stats on the dashboard: open cards (live from the board), cards closed as done, and deploys today per repo. */
+/** Work stats on the dashboard: open cards (live from the board), cards closed as done, PRs merged (today and 30 days,
+ * James 2026-11-11), and deploys today per repo. */
 function WorkPanel() {
   const { data: d } = useApi("/api/work-stats");
   const { board } = useLive();
@@ -282,12 +283,13 @@ function WorkPanel() {
       </PanelHead>
       <div className="stats" id="work-stats">
         {!d ? (
-          [0, 1, 2, 3].map((i) => <SkelStat key={i} />)
+          [0, 1, 2, 3, 4].map((i) => <SkelStat key={i} />)
         ) : (
           <>
             <Stat label="Open cards" value={num(open)} />
             <Stat label="Closed today" value={num(d.closed_today)} href="#/closed" />
             <Stat label="Closed in 30 days" value={num(d.closed_30d)} />
+            <Stat label="PRs merged today" value={num(d.merged_today)} sub={`${num(d.merged_30d)} in 30 days`} />
             <Stat
               label="Deploys today"
               value={num(deployed)}

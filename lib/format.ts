@@ -182,3 +182,23 @@ export function moneyParts(text: string): { text: string; money: boolean }[] {
 export function fetchedText(at: number | null | undefined): string {
   return at ? `Fetched ${new Date(at * 1000).toLocaleTimeString()}` : "";
 }
+
+/** Under this percent left, an AI plan's window is low (lib/server/ai.ts and the toast read the same number). */
+export const AI_LOW_PERCENT = 10;
+
+/** When a limit resets, in local time, the one way every surface writes it (James, 2026-11-11: the toast said "Thu 9
+ * PM" and the AI plans panel "10 PM" for one reset at 9:59:59 PM; "we need to get the dates consistent ... local time
+ * only, not UTC"). Rounded to the nearest minute, so 9:59:59 PM is 10 PM. Within a day "8:50 PM"; within six days
+ * "Thu 10 PM"; further out "Nov 25". "" for no time. */
+export function resetText(iso: string | null | undefined, now = Date.now()): string {
+  const raw = new Date(iso || "").getTime();
+  if (Number.isNaN(raw)) return "";
+  const t = new Date(Math.round(raw / 60_000) * 60_000);
+  const h = t.getHours() % 12 || 12;
+  const m = t.getMinutes();
+  const time = `${h}${m ? `:${String(m).padStart(2, "0")}` : ""} ${t.getHours() < 12 ? "AM" : "PM"}`;
+  const ahead = t.getTime() - now;
+  if (ahead < 864e5) return time;
+  if (ahead > 6 * 864e5) return t.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${DAYS[t.getDay()]} ${time}`;
+}

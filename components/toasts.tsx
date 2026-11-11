@@ -101,7 +101,7 @@ export function Toasts() {
             <a className="toast-title plain" href={t.href}>
               {t.title}
             </a>
-            <div className="toast-text">{t.text}</div>
+            {t.text ? <div className="toast-text">{t.text}</div> : null}
           </div>
           {t.action ? (
             <a className="btn danger" href={t.action.url} target="_blank" rel="noopener">

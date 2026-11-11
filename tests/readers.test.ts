@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clock, kimiReading, nousTopup, renewsText } from "@/lib/server/ai";
+import { kimiReading, nousTopup, renewsText } from "@/lib/server/ai";
 import { perMonth, polarRevenue, stripeRevenue } from "@/lib/server/billing";
 import { daysLeft, parseRdap, parseWhois } from "@/lib/server/domains";
 import { parseEnv } from "@/lib/server/env";
@@ -364,10 +364,6 @@ describe("env and AI", () => {
     expect(parseEnv("# c\nA=1\nB = \"two\"\nC='3'\nnot a pair\n")).toEqual({ A: "1", B: "two", C: "3" });
   });
   it("formats reset times and renewals in local time", () => {
-    const t = new Date(2026, 9, 22, 9, 5);
-    expect(clock(t.toISOString(), false)).toBe("9:05 AM");
-    expect(clock(t.toISOString(), true)).toBe("Thu 9 AM");
-    expect(clock(null, false)).toBe("?");
     expect(renewsText(new Date(2026, 9, 30, 12).toISOString(), new Date(2026, 9, 21, 12))).toBe("in 9 days (Oct 30)");
   });
 });

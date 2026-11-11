@@ -2056,17 +2056,18 @@
     background: var(--panel-2);
     box-shadow: inset 0 0 0 1px var(--line);
   }
+  /* Collector's own blue, not GitHub's green (James, 2026-11-11); in both themes, from --blue. */
   .heat .grid i[data-l="1"] {
-    background: oklch(0.78 0.15 150 / 0.25);
+    background: color-mix(in oklch, var(--blue) 25%, transparent);
   }
   .heat .grid i[data-l="2"] {
-    background: oklch(0.78 0.15 150 / 0.5);
+    background: color-mix(in oklch, var(--blue) 50%, transparent);
   }
   .heat .grid i[data-l="3"] {
-    background: oklch(0.78 0.15 150 / 0.75);
+    background: color-mix(in oklch, var(--blue) 75%, transparent);
   }
   .heat .grid i[data-l="4"] {
-    background: var(--green);
+    background: var(--blue);
   }
   .pill.human {
     color: var(--green);

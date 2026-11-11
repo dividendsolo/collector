@@ -10,6 +10,7 @@
  */
 
 import type { Check } from "./checks";
+import { AI_LOW_PERCENT, resetText } from "./format";
 import { jumpHref } from "./jump";
 import { webUrl } from "./links";
 
@@ -264,7 +265,17 @@ export function githubToasts(
 /** Nous and Claude running low (James, 2026-11-09: "noose, we want to see that one show up. And we want to see the
  * clawed one show up in the bottom right, too"). The other providers are fallbacks and get no toast. Amber and
  * dismissible; its state is what is left, so a new low shows again. */
-const AI_TOASTS: Record<string, { name: string; out: string; low: string; action?: { label: string; url: string } }> = {
+const AI_TOASTS: Record<
+  string,
+  {
+    name: string;
+    out: string;
+    low: string;
+    action?: { label: string; url: string };
+    /** A button only while a limit is used up. */
+    outAction?: { label: string; url: string };
+  }
+> = {
   // The billing page Hermes itself sends people to (hermes_cli/portal_cli.py, SUBSCRIPTION_URL).
   nous: {
     name: "Nous",
@@ -272,7 +283,15 @@ const AI_TOASTS: Record<string, { name: string; out: string; low: string; action
     low: "Nous credits are nearly out",
     action: { label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" },
   },
-  anthropic: { name: "Claude", out: "Claude is out", low: "Claude is nearly out" },
+  // Claude sometimes grants a free limit reset; its "Reset for free" button is on Settings > Usage, and Collector cannot
+  // see whether one is there (James, 2026-11-11: "Check for reset is good"). Only when Claude is out: "when it's
+  // completely out, we need to put that button up there, not when there's 7% left".
+  anthropic: {
+    name: "Claude",
+    out: "Claude is out",
+    low: "Claude is nearly out",
+    outAction: { label: "Check for reset", url: "https://claude.ai/settings/usage" },
+  },
 };
 
 interface AiIn {
@@ -281,14 +300,38 @@ interface AiIn {
   left?: string | null;
   detail?: string | null;
   link?: string;
+  /** A limit is used up (lib/server/ai.ts). */
+  out?: boolean;
+  windows?: { label: string; used: number; resets: string | null }[];
 }
 
-export function aiToasts(ai: AiIn[] | null | undefined): Toast[] {
+/** The limit names a toast says ("the weekly limit"), by the window's label in lib/server/ai.ts. */
+const LIMIT_NAMES: Record<string, string> = {
+  Week: "weekly",
+  "5-hour session": "5-hour session",
+  "5-hour window": "5-hour",
+};
+
+/** Why the toast is up, and nothing else (James, 2026-11-11: "Just put why the notification is up"): each low window as
+ * "Only 7% of the weekly limit is left. Resets Thu 10 PM." A reading with no windows (a balance) says what is left. */
+function whyLow(a: AiIn, now: number): string {
+  const low = (a.windows || []).filter((w) => 100 - w.used < AI_LOW_PERCENT);
+  if (!low.length) return `${a.left ?? "?"} left`;
+  return low
+    .map((w) => {
+      const reset = resetText(w.resets, now);
+      return `Only ${Math.max(0, 100 - w.used)}% of the ${LIMIT_NAMES[w.label] || w.label.toLowerCase()} limit is left.${reset ? ` Resets ${reset}.` : ""}`;
+    })
+    .join(" ");
+}
+
+export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast[] {
   const out: Toast[] = [];
   for (const a of ai || []) {
     const t = AI_TOASTS[a.provider];
     if (!t || !a.low) continue;
-    const empty = a.left === "$0.00" || a.left === "0%";
+    const empty = !!a.out || a.left === "$0.00" || a.left === "0%";
+    const action = (empty && t.outAction) || t.action;
     out.push({
       key: `ai:${a.provider}`,
       state: a.left || "low",
@@ -296,9 +339,10 @@ export function aiToasts(ai: AiIn[] | null | undefined): Toast[] {
       level: "error",
       noDot: true,
       title: empty ? t.out : t.low,
-      text: `${a.left ?? "?"} left${a.detail ? ` ${a.detail}` : ""}`,
+      // Out is the whole message: no "Only 0% left" under it (James, 2026-11-11: "they're just out").
+      text: empty ? "" : whyLow(a, now),
       href: a.link || jumpHref("dashboard", "ai-plans"),
-      ...(t.action ? { action: t.action } : {}),
+      ...(action ? { action } : {}),
       dismissible: true,
     });
   }
