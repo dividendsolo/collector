@@ -36,6 +36,16 @@ const START_TAILSCALE = { label: "Start Tailscale", post: "/api/tailscale" };
 const START_HERMES = { label: "Start Hermes", post: "/api/hermes" };
 
 /** A duration in the words a row reads it in: "12 min", "4 h". */
+/** A time as Unix seconds, or undefined when there is none or it does not parse. */
+const secs = (t: unknown): number | undefined => {
+  const n = typeof t === "string" ? Date.parse(t) : Number.NaN;
+  return Number.isNaN(n) ? undefined : n / 1000;
+};
+/** The earliest of these times, as Unix seconds. */
+const oldest = (ts: unknown[]): number | undefined => {
+  const n = ts.map(secs).filter((x): x is number => x !== undefined);
+  return n.length ? Math.min(...n) : undefined;
+};
 const ageText = (s: number) => (s < 3600 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
 
 /** How many days before a renewal the row shows: a charge lands before it, not after (collector#78). */
@@ -155,6 +165,8 @@ export function warnings(w: WarningInputs): Warning[] {
           ...(j.ssh_host && tailnetDown && m.local ? { action: START_TAILSCALE } : {}),
           // No Acknowledge: a failed run is fixed, not acknowledged (James, 2026-11-11).
           ...(j.id ? { debug: { machine: m.name, id: String(j.id) } } : {}),
+          // The age is the failed run's own time, not when Collector first saw the row (James, 2026-11-11).
+          ...(secs(j.last_run_at) ? { since: secs(j.last_run_at) } : {}),
         });
       const key = workJobs.has(j.name) ? workLabel : j.script;
       if (key) {
@@ -322,6 +334,9 @@ export function warnings(w: WarningInputs): Warning[] {
         // Nothing to fix on our side: acknowledged, it stays faded until the vendor's incidents change (James,
         // 2026-11-11).
         ack: { key: `vendor|${v.name}|${v.incidents.map((i) => i.name).join("|")}`, next: null },
+        // The age is when the vendor opened its oldest open incident (James, 2026-11-11: "time ago since it showed on
+        // the board, that's useless").
+        ...(oldest(v.incidents.map((i) => i.opened)) ? { since: oldest(v.incidents.map((i) => i.opened)) } : {}),
       });
   const xc = w.x?.credits?.total;
   if (typeof xc === "number" && xc < AI_LOW_USD)
