@@ -37,6 +37,8 @@ export async function state() {
     subscriptions: cfg.subscriptions || [],
     agent_notes: cfg.agent_notes || {},
     // Each row carries when it first showed up, for the age at the row's right edge.
-    warnings: list.map((w) => ({ ...w, since: seen[w.text] })),
+    // A row that knows when its thing happened (an incident's open time, a failed run's time) keeps it; the rest
+    // fall back to Collector's first sight of the row.
+    warnings: list.map((w) => ({ ...w, since: w.since ?? seen[w.text] })),
   };
 }

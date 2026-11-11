@@ -300,6 +300,11 @@ group, the rows keep the order the server finds them in. An error no longer goes
 7. **Unread briefs**: "N unread briefs", linking to the Briefs page. No row when every brief is read.
 8. **Good news**: a job's good news.
 
+A row's age, the last column, is when its thing happened, not when Collector first saw the row (James, 2026-11-11:
+"time ago since it showed on the board, that's useless"): a vendor incident shows the vendor's own open time (the
+oldest open incident), a failed job its failed run's time, a P0 or needs-triage card its open time. Only a row with no
+such time falls back to Collector's first sight of it (`.first-seen.json`).
+
 The rows of types 3, 4 and 7 are built in the browser, from the same reads as Waiting on you and the Briefs page. The
 Dashboard's sidebar count is the panel's open rows, these with them (`attentionTag`), so the two always agree; an
 acknowledged row leaves both.
