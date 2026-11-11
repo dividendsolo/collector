@@ -21,7 +21,6 @@ import { useRunning } from "./running";
 import { ServicesPage, ServicesWatcher } from "./services";
 import { Toasts } from "./toasts";
 import { Icon, type IconName, Sprite } from "./ui";
-import { UpdateButton } from "./update";
 
 const NAV: { page: string; href: string; icon: IconName; label: string; tag?: string; sep?: boolean }[] = [
   { page: "dashboard", href: "#/", icon: "dash", label: "Dashboard", tag: "attention" },
@@ -223,7 +222,6 @@ function Topbar({ r }: { r: ReturnType<typeof route> }) {
         </span>
       </div>
       <div className="tools">
-        <UpdateButton />
         <div className={liveClass} id="live">
           <span className="pulse" />
           <span id="updated">{updated}</span>

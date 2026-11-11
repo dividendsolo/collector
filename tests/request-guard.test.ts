@@ -5,14 +5,13 @@ import { fromAnotherSite, guard, hostName, isLoopbackHost } from "@/lib/server/g
 
 /**
  * The one guard (collector#69). Collector listens on 127.0.0.1, but a page James has open in another tab can post to
- * it: /api/update, /api/hermes and /api/tailscale take no body, so a cross-site form post needs no preflight and no
- * CORS answer, and it applies a staged update and restarts the server, or starts the gateway and the tailnet. With no
- * Host check, a page whose own name resolves to 127.0.0.1 (DNS rebinding) could also read the GET routes.
+ * it: /api/hermes and /api/tailscale take no body, so a cross-site form post needs no preflight and no CORS answer,
+ * and it starts the gateway or the tailnet. With no Host check, a page whose own name resolves to 127.0.0.1 (DNS
+ * rebinding) could also read the GET routes.
  *
  * The page's own clicks, and a shell or an agent (no browser headers at all), are answered as before.
  *
- * `ROOT` is a throwaway folder here: POST /api/update on the worktree would read the worktree's own builds, and with
- * one staged the click's script would really swap and restart the machine's Collector.
+ * `ROOT` is a throwaway folder here, so `/api/version` reads no build of the worktree's own.
  */
 vi.mock("@/lib/server/paths", async () => {
   const fs = await import("node:fs");
@@ -45,17 +44,14 @@ vi.mock("@/lib/server/machines", () => ({
   snapshot: { peek: () => ({ machines: [] }), get: async () => ({ machines: [] }) },
 }));
 
-/** The routes these tests go through: the two one-click buttons, the click that stages a restart, and the cheapest
- * read there is. */
+/** The routes these tests go through: the two one-click buttons and the cheapest read there is. */
 let tailscale: (req: Request) => Response | Promise<Response>;
 let hermes: (req: Request) => Response | Promise<Response>;
-let update: (req: Request) => Response | Promise<Response>;
 let version: (req: Request) => Response | Promise<Response>;
 
 beforeAll(async () => {
   tailscale = (await import("@/app/api/tailscale/route")).POST;
   hermes = (await import("@/app/api/hermes/route")).POST;
-  update = (await import("@/app/api/update/route")).POST;
   version = (await import("@/app/api/version/route")).GET;
 });
 
@@ -67,7 +63,7 @@ const HOST = "127.0.0.1:4000";
 
 /** The click as the page sends it, and as another site sends it: one POST, one set of browser headers. */
 const post = (headers: Record<string, string>) =>
-  update(new Request(`http://${HOST}/api/update`, { method: "POST", headers }));
+  hermes(new Request(`http://${HOST}/api/hermes`, { method: "POST", headers }));
 
 const read = (headers: Record<string, string>) => version(new Request(`http://${HOST}/api/version`, { headers }));
 
@@ -115,11 +111,10 @@ describe("a write from another site (collector#69)", () => {
   });
 
   it("answers the page's own click, and a shell or an agent that sends no browser headers", async () => {
-    // Nothing is staged in this folder, so the click's own answer — not a 403 — is the proof it reached the route.
+    // The click's own answer — not a 403 — is the proof it reached the route (the gateway start is mocked).
     const own = await post({ host: HOST, origin: `http://${HOST}`, "sec-fetch-site": "same-origin" });
-    expect(own.status).toBe(409);
-    expect((await own.json()).why).toBe("no build is staged");
-    expect((await post({ host: HOST })).status).toBe(409);
+    expect(own.status).toBe(200);
+    expect((await post({ host: HOST })).status).toBe(200);
   });
 
   it("refuses a write to a name that is not this machine's, even from this page's own site", async () => {
@@ -215,17 +210,17 @@ describe("a read through a name that is not this machine's (DNS rebinding)", () 
 });
 
 describe("fromAnotherSite", () => {
-  const at = (headers: Record<string, string>) => new Request(`http://${HOST}/api/update`, { method: "POST", headers });
+  const at = (headers: Record<string, string>) => new Request(`http://${HOST}/api/hermes`, { method: "POST", headers });
 
   it("reads the browser's own statement first, then the Origin", () => {
-    expect(fromAnotherSite(at({ "sec-fetch-site": "cross-site" }), new URL(`http://${HOST}/api/update`))).toBe(true);
-    expect(fromAnotherSite(at({ "sec-fetch-site": "same-origin" }), new URL(`http://${HOST}/api/update`))).toBe(false);
-    expect(fromAnotherSite(at({ origin: "https://evil.example.com" }), new URL(`http://${HOST}/api/update`))).toBe(
+    expect(fromAnotherSite(at({ "sec-fetch-site": "cross-site" }), new URL(`http://${HOST}/api/hermes`))).toBe(true);
+    expect(fromAnotherSite(at({ "sec-fetch-site": "same-origin" }), new URL(`http://${HOST}/api/hermes`))).toBe(false);
+    expect(fromAnotherSite(at({ origin: "https://evil.example.com" }), new URL(`http://${HOST}/api/hermes`))).toBe(
       true,
     );
-    expect(fromAnotherSite(at({ origin: `http://${HOST}` }), new URL(`http://${HOST}/api/update`))).toBe(false);
-    expect(fromAnotherSite(at({ origin: "not-a-url" }), new URL(`http://${HOST}/api/update`))).toBe(true);
-    expect(fromAnotherSite(at({}), new URL(`http://${HOST}/api/update`))).toBe(false); // no browser headers: a shell
+    expect(fromAnotherSite(at({ origin: `http://${HOST}` }), new URL(`http://${HOST}/api/hermes`))).toBe(false);
+    expect(fromAnotherSite(at({ origin: "not-a-url" }), new URL(`http://${HOST}/api/hermes`))).toBe(true);
+    expect(fromAnotherSite(at({}), new URL(`http://${HOST}/api/hermes`))).toBe(false); // no browser headers: a shell
   });
 });
 
@@ -238,7 +233,7 @@ describe("guard", () => {
       guard(new Request(`http://${HOST}/api/state`, { headers: { host: HOST, origin: "https://evil.example.com" } })),
     ).toBeNull();
     const write = guard(
-      new Request(`http://${HOST}/api/update`, {
+      new Request(`http://${HOST}/api/hermes`, {
         method: "POST",
         headers: { host: HOST, "sec-fetch-site": "cross-site" },
       }),
@@ -291,7 +286,6 @@ describe("every route in the repo", () => {
       "app/api/projects/route.ts",
       "app/api/proposals/route.ts",
       "app/api/tailscale/route.ts",
-      "app/api/update/route.ts",
     ]);
   });
 });

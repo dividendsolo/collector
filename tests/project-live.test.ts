@@ -6,8 +6,8 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 /**
  * A project's live link (collector#86). `lib/server/projects.ts` took a repo's GitHub `homepage` — a field of a
  * repo the user may not own — straight onto the row, and `components/projects.tsx`'s `liveSite` puts it in an
- * `<a href>` on Collector's own origin, where `POST /api/update` swaps a build in and restarts the server,
- * `/api/hermes` and `/api/tailscale` start things and `POST /api/projects` rewrites `config.json`. React writes a
+ * `<a href>` on Collector's own origin, where `/api/hermes` and `/api/tailscale` start things and
+ * `POST /api/projects` rewrites `config.json`. React writes a
  * known attribute straight through, so a `javascript:` homepage runs there when it is clicked. Only a web address
  * is a link (`lib/links.ts`'s `webUrl`, the same rule collector#84 kept on a vendor's feed), and a homepage that is
  * not one reads exactly like a repo with no homepage at all.

@@ -168,3 +168,30 @@ export function rebuildPlan(c: Commits): Rebuild | null {
     why: c.built ? `the build was made from ${short(c.built)}` : "no build has recorded a commit",
   };
 }
+
+/** The rebuild job restarts the page at most once in this long (card #122): a main that moves twice in five
+ * minutes leaves the second build staged, and the next run puts it in service. */
+export const RESTART_GAP_MS = 5 * 60_000;
+
+/** Where the job records when it last restarted the page onto a new build: in the served build, so the record goes
+ * with the build it put in service. */
+export const restartPath = (dir: string) => path.join(dir, SERVED, "collector-restarted.json");
+
+/** When the job last restarted the page, in ms, null when no run recorded one. */
+export function lastRestart(dir: string): number | null {
+  try {
+    const at = Date.parse((JSON.parse(fs.readFileSync(restartPath(dir), "utf8")) as { at?: string }).at ?? "");
+    return Number.isNaN(at) ? null : at;
+  } catch {
+    return null;
+  }
+}
+
+/** Record a restart onto the build now in `.next`. */
+export function markRestart(dir: string, at = new Date()): void {
+  fs.writeFileSync(restartPath(dir), `${JSON.stringify({ at: at.toISOString() })}\n`);
+}
+
+/** How long a staged build still has to wait for its restart: 0 when it can go in now. */
+export const restartWait = (last: number | null, now = Date.now()) =>
+  last === null ? 0 : Math.min(RESTART_GAP_MS, Math.max(0, last + RESTART_GAP_MS - now));

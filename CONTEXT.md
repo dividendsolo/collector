@@ -56,24 +56,25 @@ http://127.0.0.1:4000. The job's stdout and stderr are both `~/Library/Logs/coll
 Remote machines are read the same way in the request: the server sends `collect.py` over SSH
 (`ssh <host> python3 -`), standard library only, read only, nothing installed there.
 
-## A change reaches port 4000 only through the Update button
+## A change reaches port 4000 only through main and the rebuild job
 
 `bun start` serves the `.next` build in `/Users/james/code/collector`, never the source: editing a file changes
-nothing on port 4000 until a new build is swapped in and the job restarts. The one way to do that is the page's
-**Update** button, or the same step from a shell:
+nothing on port 4000 until a new build is swapped in and the job restarts. The one way to do that is a merge to
+`main`: the rebuild job (next section) builds it, swaps it in and restarts the server by itself. The swap of a build
+already staged is also a shell step:
 
 ```bash
 cd /Users/james/code/collector && bun scripts/apply-update.ts
 ```
 
-Both apply the build the rebuild job staged from `main` (next section); with none staged they change nothing.
+With nothing staged it changes nothing.
 
 **An agent never kickstarts, stops or kills `com.james.collector`**, and never runs `bun run build` in that
 checkout. The by-hand pair this file used to give (`bun run build`, then `launchctl kickstart -k`) is what sat
 behind most of the restarts of 2026-10-29: altair's launchd log shows a shell running `git` twice and then
 `launchctl kickstart`, from a session working in this checkout (card #41). An agent builds and serves in its own
 worktree, on its own port (`COLLECTOR_PORT=4001 bun dev`), and leaves port 4000 alone; its change reaches port 4000
-after the merge, through the button.
+after the merge, through the rebuild job.
 
 - A build in a worktree writes that worktree's `.next` and changes nothing on port 4000.
 - Build with `bun run build`, or `COLLECTOR_DIST_DIR=.next-rebuild` like the rebuild job: `next build` writes its
@@ -102,13 +103,13 @@ in the checkout every five minutes, and that script:
   `COLLECTOR_DIST_DIR=.next-rebuild`, so the build goes into `.next-rebuild` beside the served `.next`
   (`next.config.ts` reads that variable as its `distDir`; `postbuild` stamps the same folder). `next build` empties
   its own folder before it compiles, so a build in `.next` itself would leave the page with no build for as long as
-  the build ran, and with none at all when it failed. **The job stops there** (card #41): the finished build stays in
-  `.next-rebuild`, the served `.next` is never touched, and nothing restarts. The page offers the build as its Update
-  button instead. `tsconfig.json` already lists `.next-rebuild/types`, so the build leaves no tracked file changed
-  for the next pull to trip on;
-- reads what the page would serve after a click — the staged build when one waits, else the served one — so a build
-  already waiting for the click is not built again every five minutes, and a staged build of some other commit (a
-  page restarted by hand onto main) is deleted rather than offered;
+  the build ran, and with none at all when it failed. `tsconfig.json` already lists `.next-rebuild/types`, so the
+  build leaves no tracked file changed for the next pull to trip on;
+- after a build that succeeded, runs `scripts/apply-update.ts`: the swap into `.next` and the restart of the serving
+  job (next section), with no click (card #122);
+- reads what the page serves once a staged build is in — the staged build when one waits, else the served one — so a
+  build already staged is not built again, and a staged build of some other commit (a page restarted by hand onto
+  main) is deleted rather than swapped in;
 - is silent when the build is current, and writes one `[rebuild]` line per step it takes otherwise, both streams to
   `~/Library/Logs/collector.log` beside the server's own;
 - refuses a checkout that is not on `main`, and logs and stops on a failed fetch, pull or build. A
@@ -116,8 +117,8 @@ in the checkout every five minutes, and that script:
   were, and the page keeps serving them. It always names what it did in the log, so a main that will not
   build shows up as one `build failed` line every five minutes, not as a silent old page.
 
-`bun scripts/rebuild-if-stale.ts --check` is the read-only form — no fetch, no pull, no build, no restart — and says
-what a run would do from the last fetch.
+`bun scripts/rebuild-if-stale.ts --check` is the read-only form — no fetch, no pull, no build, no swap, no restart —
+and says what a run would do from the last fetch.
 
 Install it once, after this card's code has landed in the checkout:
 
@@ -129,36 +130,41 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.james.collector-rebu
 ```
 
 `RunAtLoad` means bootstrapping runs it at once, so the first build it finds stale — the one serving today, which
-has no stamp — is built and staged straight away, and the page offers it as the Update button.
+has no stamp — is built, swapped in and restarted onto straight away.
 
-## A push offers the update; the click applies it (card #41)
+## A push updates the page by itself, at most once in five minutes (cards #41, #122)
 
-On 2026-10-29 the page went down 46 times in a day, and altair's launchd log shows a `launchctl kickstart` five
-seconds before every one of them: seven from the rebuild job above, the rest from a session running the by-hand pair
-of the section before. James's decision: a push must not restart the server by itself.
+James, 2026-11-11: "web apps don't really use update buttons anymore ... We could just push these changes out
+automatically when that stuff is ready." The Update button (card #41) is gone, and so is `POST /api/update`: after a
+build that succeeded, the rebuild job puts it in service itself.
 
-- `GET /api/update` answers what the button needs: the build this server process runs (its id, and the commit its
-  stamp records), the finished build staged in `.next-rebuild`, and whether to offer the click. Two small file reads.
-- The button is in the top bar (`components/update.tsx`), shown only while a build waits, and it is small: `Update`.
-  It polls `GET /api/update` every 30 seconds, so a push shows up within one rebuild interval.
-- `POST /api/update` hands the work to `scripts/apply-update.ts` **detached**, so the click's answer reaches the page
-  before the restart takes the server away. The script swaps the staged build into `.next` (`swapIn`) and then runs
-  `launchctl kickstart -k gui/$(id -u)/com.james.collector`, which is what makes every open page reload onto the new
-  build. With nothing staged it says so and changes nothing, so a second click is harmless.
-- The script needs Bun, which the route resolves with `bunPath()` rather than `process.execPath`: the plist runs
-  `bun run start`, whose `next start` is a bin with a node shebang, so the server process itself is **node** (found by
-  a real click, not by reading the code).
+Card #41 had added the click for a reason that still holds: on 2026-10-29 the page went down 46 times in a day, and
+altair's launchd log shows a `launchctl kickstart` five seconds before every one of them: seven from the rebuild job,
+the rest from a session running the by-hand pair of the section before. So the restart without a click is bounded:
+
+- **At most one restart per new commit on main.** The job restarts only after it staged a build, and it stages a
+  build only when main is at a commit the page does not serve. With main where it was, a run does nothing at all.
+- **Never two restarts within five minutes** (`RESTART_GAP_MS` in `lib/rebuild.ts`). The job records each restart in
+  `.next/collector-restarted.json`; a build that finishes sooner after the last one stays staged in
+  `.next-rebuild`, and the first run after the five minutes swaps it in and restarts, without building it again.
+- **A failed build changes nothing and restarts nothing.** The swap and the restart come only after `next build`
+  exited 0; a failed one deletes `.next-rebuild` and leaves `.next` as it was.
+- The swap and the restart are `scripts/apply-update.ts`, the step the button used to run: it moves the staged build
+  into `.next` (`swapIn`) and runs `launchctl kickstart -k gui/$(id -u)/com.james.collector` (the label from the
+  plist's `--label`), which makes every open page reload onto the new build. A restart that fails leaves the swap in
+  place and logs `could not put ... in service`.
 - `/api/version` reports the build this process **booted on**, recorded in `instrumentation.ts`, not the folder's.
   The swap leaves the new build on disk while the old one still runs, and a page that reloaded in that window would
   ask for chunks the server is not serving yet. It moves when the server really comes back, which is when the page
   should reload. (The record lives on `globalThis` — `lib/server/store.ts` — because Next bundles `instrumentation.ts`
   apart from the routes.)
+- The page says "Restarting on the new build…" rather than "Could not reach" while the server is away (James,
+  2026-11-06). With no click to mark that, the server's SIGTERM ends every open `/api/events` stream with a
+  `restarting` event, and the page counts failed reads for 90 seconds after it as the restart (`lib/updating.ts`).
 
-The page stays up until the click; one click is a second of downtime, chosen.
-
-While a build waits for the click, the checkout has already been pulled to it, and `collect.py` runs from that
-source on every read: the served page can draw rows a newer `collect.py` sends (the #29 mismatch) for as long as
-nobody clicks. The cure is the click.
+A restart is a few seconds of downtime, once per merge at most. The checkout is pulled to main before the build, and
+`collect.py` runs from that source on every read, so the page and `collect.py` are apart only for the length of a
+build (the #29 mismatch), or five minutes at most when two merges land close together.
 
 ## How a start and a stop show in the log (card #41)
 
@@ -759,7 +765,6 @@ is that folder, worked the way an email inbox works.
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel), and the three status sets the page reads (`each`, `working`, `done`). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
 | `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; and every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's), the knocks from its local network among them — the read an agent asks to answer "is anything open that should not be?" |
-| `/api/update` | The Update button: the build this server runs, the finished one staged for it, and whether to offer the click (`GET`); the click itself, which hands the swap and the restart to `scripts/apply-update.ts` (`POST`). |
 | `/api/proposals` | The client proposals, newest first, and the open pipeline per currency worked out from them (`GET`); the page's one write route adds (`POST`), edits (`PUT`) and removes (`DELETE ?id=`) one, every field parsed on the server, and answers the list and the pipeline as they stand after the change. |
 | `/api/briefs` | The Briefs page: the Inbox (every brief that is not archived, oldest first) and the Archived section (newest first), read off the machine snapshot every other page already reads (`GET`); the page's one write (`POST`) sets one brief's read or archived state, on this machine, and answers both lists as they stand after it. |
 | `/api/brief` | One brief read whole, over the ssh the snapshot uses (`GET ?machine=&file=`): its front matter, its Markdown and whether it is read or archived here. |
@@ -774,8 +779,9 @@ The board poll costs 1 GraphQL point per read, about 360 an hour while a page is
 ## A route answers this page only (card #69)
 
 Collector listens on loopback, which keeps other machines out but not the browser James already has open. A page from
-any site can post to it: `/api/update`, `/api/hermes` and `/api/tailscale` take no body, so a form post needs no
-preflight, and one applied a staged update and restarted the server. No `Host` check meant a page whose own name
+any site can post to it: `/api/hermes` and `/api/tailscale` take no body, so a form post needs no preflight, and
+one started the gateway or the tailnet (the Update route, removed by card #122, applied a staged update the same
+way). No `Host` check meant a page whose own name
 resolves to 127.0.0.1 (DNS rebinding) could read the GET routes too. The input audit of 2026-11-06 (agent-stack#291)
 found both; `lib/server/guard.ts` is the fix.
 
@@ -791,10 +797,9 @@ reads the method itself, so one function covers both rules:
   answered as before, the way a one-click route already did (that route had its own copy of this check; the shared
   guard is the one copy now).
 
-`tests/request-guard.test.ts` holds the behaviour — a cross-site `POST /api/update` is 403 while the page's own click
+`tests/request-guard.test.ts` holds the behaviour — a cross-site `POST /api/hermes` is 403 while the page's own click
 and a curl get the click's own answer, and a foreign `Host` is 403 on a GET route — and the rules that every route
-file calls the guard and that the five state-changing routes are the list (`/api/hermes`, `/api/projects`,
-`/api/proposals` — the fifth, added by collector#77 — `/api/tailscale`, `/api/update`), so a new one has to be guarded
+file calls the guard and that the state-changing routes are the list in that test, so a new one has to be guarded
 on purpose.
 The two one-click routes are driven through their own handlers as well (collector#71), their work mocked: a
 cross-site post to `/api/tailscale` or `/api/hermes` is 403 and starts nothing, and the page's own click still starts
@@ -827,12 +832,12 @@ retries forever: `attempts` is finite and capped whatever a caller asks for.
 - **The health check is not retried, on purpose.** `lib/server/services.ts`'s `check` measures the service; a
   second try would report a service that just timed out as online and hide exactly the slowness the panel exists
   to show. It keeps its 10 s timeout.
-- **Nothing that starts something is retried.** `tailscale up`, `launchctl kickstart`, `open -a`, the update
-  restart: each has a timeout and no second try, because a retry would start it twice.
+- **Nothing that starts something is retried.** `tailscale up`, `launchctl kickstart`, `open -a`, the
+  rebuild job's restart: each has a timeout and no second try, because a retry would start it twice.
 - **The rebuild job.** `lib/rebuild.ts` gives every `git` command a 60 s ceiling (a hung `fetch` or `pull` used to
   hold the job open forever) and retries `git fetch origin main` up to three times with backoff; `bun install`
-  (5 min) and `bun run build` (15 min) in `scripts/rebuild-if-stale.ts`, and the restart in
-  `scripts/apply-update.ts` (1 min), all carry their own ceiling.
+  (5 min) and `bun run build` (15 min) in `scripts/rebuild-if-stale.ts`, the swap and restart it runs (2 min), and the restart
+  in `scripts/apply-update.ts` (1 min), all carry their own ceiling.
 - **`collect.py` needs no change**: every `subprocess.run` in it already passes a `timeout=` (10 s, 5 s for
   `launchctl`), and it makes no HTTP call — it is sent over ssh and runs local, read-only commands.
 

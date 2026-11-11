@@ -6,8 +6,7 @@ import { json } from "@/lib/server/respond";
  *
  * Collector listens on 127.0.0.1, which keeps other machines out but not the browser James is already using. A page
  * he has open can post to this server from any site: a form post needs no preflight, so nothing stops it, and
- * `/api/update`, `/api/hermes` and `/api/tailscale` take no body — one cross-site post applies a staged update and
- * restarts the server, or starts the gateway and the tailnet. And a page whose own name resolves to 127.0.0.1
+ * `/api/hermes` and `/api/tailscale` take no body — one cross-site post starts the gateway or the tailnet. And a page whose own name resolves to 127.0.0.1
  * (DNS rebinding) reaches the GET routes with no check to stop it either.
  *
  * `guard(req)` answers `null` to let the request through, or the 403 to return instead. It reads the method itself,

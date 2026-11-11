@@ -2,7 +2,7 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import useSWR from "swr";
-import { downText, updating } from "@/lib/updating";
+import { downText, markUpdating, updating } from "@/lib/updating";
 
 const fetcher = async (url: string) => {
   const r = await fetch(url, { cache: "no-store" });
@@ -71,6 +71,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       const v = JSON.parse((e as MessageEvent).data);
       setBoard({ tickets: v.tickets, work: v.work });
     });
+    // The server's SIGTERM: the reads that fail next are the restart onto a new build, not an outage.
+    es.addEventListener("restarting", () => markUpdating());
     return () => es.close();
   }, []);
 
