@@ -13,7 +13,22 @@ export interface Checked {
   error: string | null;
   checked_at: number;
   hosting: string | null;
+  /** What this one check found, before confirmDown: a first failure shows as slow, but the log keeps "down". */
+  checked?: "online" | "slow" | "down";
   [key: string]: unknown;
+}
+
+/** A site shows Down only when two checks in a row fail (James, 2026-11-11: four sites behind Cloudflare failed in
+ * the same second from the Mac while they were up, and ezio's proxy saw no request). The first failure shows as
+ * Slow with its error; a good check starts the count over. Every failure is still logged. */
+export function confirmDown(list: Checked[], prev: Checked[]): Checked[] {
+  return list.map((s) => {
+    const checked = s.status;
+    if (checked !== "down") return { ...s, checked };
+    const before = prev.find((p) => p.name === s.name && p.url === s.url);
+    const failedBefore = (before?.checked ?? before?.status) === "down";
+    return { ...s, checked, status: failedBefore ? "down" : "slow" };
+  });
 }
 
 /** The response header each host adds to every answer. */
@@ -90,8 +105,8 @@ export function checkServices(): Promise<Checked[]> {
     state.busy = Promise.all((config().services || []).map(check))
       .then((list) => {
         for (const line of serviceLogLines(list)) console.log(line);
-        state.list = list;
-        return list;
+        state.list = confirmDown(list, state.list);
+        return state.list;
       })
       .finally(() => {
         state.busy = null;
