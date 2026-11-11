@@ -172,7 +172,7 @@ function StateCell({ row }: { row: WorkRow }) {
   const tip = holdTip(hold);
   const deck = row.onDeck ?? [];
   return (
-    <td>
+    <td className="status">
       {row.run ? (
         <span className={`pill ${labRun(row.run) ? LAB.marker : row.run.type}`}>
           <Icon name={row.run.type === "agent" ? "bot" : "term"} />

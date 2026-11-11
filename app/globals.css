@@ -1175,6 +1175,21 @@
   #current-work tr.done td {
     opacity: 0.6;
   }
+  /* Current work's Status column: the refs a card waits on (its blockers, the cards on deck) are a list, so they
+     wrap inside a capped cell. Without the cap the column took the width of the whole list and the table scrolled
+     sideways (collector#99). The pills keep their one line: they have a fixed height, so a wrapped label would
+     spill out of them. A ref never breaks inside itself: a line breaks only at the space after a ref's comma, so
+     `darndest#10` never reads as `darndest#1` (review on #100). */
+  #current-work td.status {
+    max-width: 320px;
+    white-space: normal;
+  }
+  #current-work td.status .pill {
+    white-space: nowrap;
+  }
+  #current-work td.status .sub a {
+    white-space: nowrap;
+  }
   table {
     border-collapse: collapse;
     width: 100%;
