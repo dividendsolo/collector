@@ -225,8 +225,14 @@ function PriorityTasks() {
           <div className="empty">
             <Icon name="check" />
             Nothing in priority tasks.
+            {/* Done here: the next stop is Waiting on you, one glide down (James, 2026-11-11). */}
+            <a className="plain empty-next" href={jumpHref("dashboard", "waiting-panel")}>
+              Waiting on you
+            </a>
           </div>
         )}
+        {/* A line between the open rows and the acknowledged ones (James, 2026-11-11). */}
+        {state && done.length ? <hr className="acked-rule" /> : null}
         {state
           ? done.map((x) => (
               <div className="alert acked" key={x.ack.key}>

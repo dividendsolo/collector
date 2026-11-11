@@ -41,6 +41,38 @@ describe("Needs attention for AI plans", () => {
   });
 });
 
+// James, 2026-11-11, on "Every AI plan is out: anthropic, kimi-coding, minimax, nous" while Claude had 99% of its
+// 5-hour session and 8% of its week: "it says it's out. All of them are out. And if you look at Anthropic, it's not".
+// Low (under 10% left) is a toast; out is a window used up or no money left. The row counts only plans that are out.
+describe("the every-plan-is-out row", () => {
+  const plan = (provider: string, windows: { label: string; used: number }[], left = "50%") =>
+    ({ provider, low: true, left, windows: windows.map((w) => ({ ...w, resets: null })) }) as any;
+  it("does not count a plan that is only low", () => {
+    const ai = [
+      plan(
+        "anthropic",
+        [
+          { label: "5-hour session", used: 1 },
+          { label: "Week", used: 92 },
+        ],
+        "99%",
+      ),
+      plan("kimi-coding", [{ label: "Week", used: 100 }]),
+      plan("minimax", [{ label: "Week", used: 100 }]),
+      plan("nous", [{ label: "Plan credits", used: 100 }], "$0.00"),
+    ];
+    expect(warnings({ ...base, ai }).filter((w) => /Every AI plan/.test(w.text))).toEqual([]);
+  });
+  it("shows when every plan has a window used up or no money left", () => {
+    const ai = [
+      plan("anthropic", [{ label: "Week", used: 100 }]),
+      plan("kimi-coding", [{ label: "Week", used: 100 }]),
+      plan("nous", [], "$0.00"),
+    ];
+    expect(warnings({ ...base, ai }).filter((w) => /Every AI plan/.test(w.text))).toHaveLength(1);
+  });
+});
+
 describe("AI toasts", () => {
   it("shows Nous and Claude when they are low, and no other provider", () => {
     const ai = [

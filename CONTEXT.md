@@ -310,6 +310,20 @@ beside config.json). After a restart the incident row is there at once, from tha
 replaces it in the background instead of popping the row in late (James, 2026-11-11). Every dashboard read asks for a
 fresh vendor read once the last is five minutes old, so a resolved incident leaves within five minutes.
 
+During a GitHub incident that names Actions, a "the checks fail on main" row whose CI run has no log at all
+("failed to get run log") is GitHub's, not ours (James, 2026-11-11, during GitHub's Actions outage: "maybe we
+shouldn't even have them there at all"). It folds into the GitHub incident row, which adds "<repo> builds wait on it
+(<machines>)", and one Acknowledge covers both; a new waiting repo changes the key, so the row shows again. The
+foreman rechecks main by itself (at most once an hour), so nothing needs doing when GitHub recovers; a main that still
+fails then shows its own row again. A run with a log is a real failure and always keeps its own row.
+
+"Every AI plan is out" shows only when every plan with a usage reading is out: a window at 100% used, or "0%" or
+"$0.00" left (`planOut`). Low (under 10% left) is the toast's job, never this row (James, 2026-11-11: the row named
+Anthropic while Claude had 99% of its 5-hour session left).
+
+When Priority tasks is empty, its line links to Waiting on you (a glide, `jumpHref`), and a line sits above the
+acknowledged rows (James, 2026-11-11).
+
 The rows of types 3, 4 and 7 are built in the browser, from the same reads as Waiting on you and the Briefs page. The
 Dashboard's sidebar count is the panel's open rows, these with them (`attentionTag`), so the two always agree; an
 acknowledged row leaves both.
