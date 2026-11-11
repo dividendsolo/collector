@@ -2024,8 +2024,20 @@ def host_broken(scratch=FOREMAN):
         if not repo:
             continue
         text = (read_text(path, 500) or "").strip()
-        out.append({"repo": repo, "line": text.splitlines()[0] if text else ""})
+        out.append({"repo": repo, "line": text.splitlines()[0] if text else "",
+                    "error": first_error(os.path.join(scratch, f"base-gate-{repo}.log"))})
     return out
+
+
+def first_error(log_path):
+    """The first line of the foreman's base-gate log (beside the marker) that names an error, so the row says what
+    failed and not only which step (James, 2026-11-11: "It's not a great error"). "" when there is no log."""
+    text = read_text(log_path, 20000) or ""
+    for raw in text.splitlines():
+        line = raw.lstrip("# ").strip()
+        if re.search(r"\b(Error|FAIL|failed|not ok|Cannot|No such)\b", line) and not line.startswith(("at ", "throw")):
+            return line[:200]
+    return ""
 
 
 TAILSCALE_BINS = ("tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale")

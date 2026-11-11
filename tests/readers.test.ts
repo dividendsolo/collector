@@ -464,7 +464,38 @@ describe("warnings", () => {
       x: null,
       ai: [],
     });
-    expect(w).toEqual([{ level: "error", text: "host broken: collector on laptop: bun run build: base 7f3a2b1" }]);
+    expect(w).toEqual([
+      {
+        level: "error",
+        text: "collector: the checks fail on main at laptop (bun run build, at 7f3a2b1), so laptop builds no collector cards",
+      },
+    ]);
+  });
+  it("names the error from the failure log when there is one (James, 2026-11-11: 'not a great error')", () => {
+    const w = warnings({
+      machines: [
+        {
+          name: "ezio",
+          host_broken: [
+            {
+              repo: "pageroast",
+              line: "ci: base 37f16da67b6a54130d1645b8f6061dfa40468096",
+              error: "Error: Cannot find module '/home/div/code/pageroast/.worktrees/base-37f16da67b6a/test'",
+            },
+          ],
+        },
+      ],
+      github: {},
+      cfg: {},
+      services: [],
+      domains: [],
+      ticketsError: null,
+      x: null,
+      ai: [],
+    });
+    expect(w[0].text).toBe(
+      "pageroast: the checks fail on main at ezio (ci, at 37f16da): Error: Cannot find module '/home/div/code/pageroast/.worktrees/base-37f16da67b6a/test'. ezio builds no pageroast cards until main passes",
+    );
   });
   it("shows no host-broken row without a marker", () => {
     const w = warnings({
