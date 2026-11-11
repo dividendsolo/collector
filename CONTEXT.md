@@ -612,9 +612,9 @@ reason, that date carries the page's own hover card (`components/card-tip.tsx`, 
 date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
 `holdTip` is the reason hovering it shows.
 
-## The AI credits rows
+## The AI usage rows
 
-- The Dashboard's AI credits panel lists Anthropic, then Nous, then Grok (`AI_ORDER` in `components/ai.tsx`).
+- The Dashboard's AI usage panel lists Anthropic, then Nous, then Grok (`AI_ORDER` in `components/ai.tsx`).
 - Each provider's bars use its own color: Anthropic is Claude's orange (`--claude`, `#d97757`), Nous is the
   dark blue of nousresearch.com (`--nous`, `#000091`, its `--marketing-dark-blue`). Any bar turns red when the
   provider runs low.

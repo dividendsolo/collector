@@ -84,7 +84,7 @@ The Dashboard answers these questions at a glance:
    work script, and the work script's own rows say the step it is on (preparing, verifying, merging), never `building`.
    The table also shows the model each agent calls now (a fallback model shows too).
 3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
-4. **AI credits:** one line per AI provider your Hermes profiles use (each profile's `config.yaml`), read from the
+4. **AI usage:** one line per AI provider your Hermes profiles use (each profile's `config.yaml`), read from the
    provider. Plans (subscriptions with usage windows) show bars like the GitHub limit: the Claude subscription
    through Claude Code's own login in the macOS keychain (read only, never renewed), the MiniMax coding plan through
    `MINIMAX_API_KEY` in `~/.hermes/.env`, and Grok as a login check (xAI has no usage API for subscriptions).
