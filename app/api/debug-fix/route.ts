@@ -1,4 +1,4 @@
-import { triageRow } from "@/lib/priority";
+import { p0Rows, triageRow } from "@/lib/priority";
 import { ticketsView } from "@/lib/server/board";
 import { config } from "@/lib/server/config";
 import {
@@ -9,6 +9,8 @@ import {
   openFixPane,
   TRIAGE_KEY,
   triagePrompt,
+  unblockKey,
+  unblockPrompt,
   WORK_LOOP,
   workLoopPrompt,
 } from "@/lib/server/debug-fix";
@@ -35,6 +37,18 @@ export async function POST(req: Request) {
     if (!card || card.repo !== body.triage.repo || card.number !== body.triage.number)
       return json({ ok: false, why: "that card is not the one card waiting for triage now" }, 409);
     const r = await openFixPane(TRIAGE_KEY, triagePrompt(card));
+    return json(r, r.ok ? 200 : 500);
+  }
+  // The Unblock button (James, 2026-11-11): only for a P0 card waiting on James now, by Collector's own read.
+  if (body?.unblock) {
+    const t = ticketsView();
+    const waiting = t.tickets.filter((x: any) => t.each.includes(x.lane));
+    const row = p0Rows(waiting).find(
+      (r) => r.unblock?.repo === body.unblock.repo && r.unblock?.number === body.unblock.number,
+    );
+    const card = row && waiting.find((x: any) => x.url === row.url);
+    if (!row?.unblock || !card) return json({ ok: false, why: "that card is not a P0 waiting on you now" }, 409);
+    const r = await openFixPane(unblockKey(row.unblock), unblockPrompt({ ...row.unblock, lane: card.lane }));
     return json(r, r.ok ? 200 : 500);
   }
   const machine = typeof body?.machine === "string" ? body.machine : "";

@@ -1126,6 +1126,13 @@
   .alert:has(.row-link):hover .row-link {
     color: var(--blue-2);
   }
+  /* The copy column has a fixed reading width (James, 2026-11-11: "it's too long"): long text wraps sooner, and the
+     buttons and age keep their columns at the right edge. */
+  .alert > span:not(.n):not(.aside):not(.act):not(.since),
+  .alert > a {
+    flex: 0 1 72ch;
+    max-width: 72ch;
+  }
   .alert .n {
     font: 500 11px / 20px var(--mono);
     color: var(--faint);
@@ -1194,6 +1201,7 @@
     .alert > span:not(.n):not(.aside):not(.act):not(.since),
     .alert > a {
       flex: 1 1 calc(100% - 60px);
+      max-width: none;
       min-width: 0;
       overflow-wrap: anywhere;
     }

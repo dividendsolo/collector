@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  githubToasts,
-  internetPortCount,
-  networkToasts,
-  newAlarms,
-  serviceToasts,
-  sortToasts,
-  sshToasts,
-} from "@/lib/toasts";
+import { githubToasts, internetPortCount, networkToasts, serviceToasts, sortToasts, sshToasts } from "@/lib/toasts";
 
 /**
  * The toasts (collector#67). James, 2026-11-06: "a little toast notification that will pop up if one of our services
@@ -117,15 +109,20 @@ describe("the Network count in the sidebar", () => {
   });
 });
 
-describe("the alarm sound", () => {
-  it("sounds for a new red toast only: never for Slow, never twice for the same problem", () => {
-    const down = serviceToasts([svc("down", "502")]);
-    expect(newAlarms(down, new Set())).toHaveLength(1);
-    expect(newAlarms(down, new Set([`${down[0].key}|${down[0].state}`]))).toEqual([]);
-    expect(newAlarms(serviceToasts([svc("slow")]), new Set())).toEqual([]);
-    // The same service with a new error is a new problem.
-    const heard = new Set([`${down[0].key}|${down[0].state}`]);
-    expect(newAlarms(serviceToasts([svc("down", "503")]), heard)).toHaveLength(1);
+// James, 2026-11-11: "remove the alert sound on the dashboard, don't need it". The red toast is the alert, silently.
+describe("the alert sound", () => {
+  it("is gone: no page code makes a sound", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const files = (dir: string): string[] =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+        const p = path.join(dir, e.name);
+        return e.isDirectory() ? files(p) : /\.(ts|tsx)$/.test(e.name) ? [p] : [];
+      });
+    const loud = [...files("components"), ...files("lib"), ...files("app")].filter((f) =>
+      /AudioContext|createOscillator|new Audio\(|newAlarms/.test(fs.readFileSync(f, "utf8")),
+    );
+    expect(loud).toEqual([]);
   });
 });
 

@@ -53,11 +53,19 @@ function DebugFix({
   debug,
   label = "Debug and fix",
 }: {
-  debug: { machine: string; id: string } | { triage: { repo: string; number: number } };
+  debug:
+    | { machine: string; id: string }
+    | { triage: { repo: string; number: number } }
+    | { unblock: { repo: string; number: number } };
   label?: string;
 }) {
   const { data, mutate } = useFixes();
-  const key = "triage" in debug ? "triage" : `${debug.machine}/${debug.id}`;
+  const key =
+    "triage" in debug
+      ? "triage"
+      : "unblock" in debug
+        ? `unblock/${debug.unblock.repo}#${debug.unblock.number}`
+        : `${debug.machine}/${debug.id}`;
   const open = data?.fixes?.[key];
   const [busy, setBusy] = useState(false);
   const [why, setWhy] = useState("");
@@ -188,6 +196,11 @@ function PriorityTasks() {
               ) : null}
               {x.action ? (
                 <AlertAction action={x.action} done={() => setFixed({ post: x.action.post, at: Date.now() / 1000 })} />
+              ) : x.unblock ? (
+                // A P0 waiting on James: a session gets it moving and brings him only what needs him (2026-11-11).
+                <span className="act">
+                  <DebugFix debug={{ unblock: x.unblock }} label="Unblock" />
+                </span>
               ) : x.triage ? (
                 // One card to triage: a session opens beside James's own to triage it with him (2026-11-11).
                 <span className="act">

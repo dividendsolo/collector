@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { triageRow } from "@/lib/priority";
+import { p0Rows, triageRow } from "@/lib/priority";
 import {
   debugPrompt,
   FIX_STEPS,
@@ -9,6 +9,8 @@ import {
   STEP_OPTION,
   tmuxArgs,
   triagePrompt,
+  unblockKey,
+  unblockPrompt,
   workLoopPrompt,
 } from "@/lib/server/debug-fix";
 
@@ -271,5 +273,57 @@ describe("the loop row's refusal", () => {
     expect(LOOP_GONE).toBe("Foreman isn't looping any more (it ran once a minute since). Nothing to fix.");
     const route = (await import("node:fs")).readFileSync("app/api/debug-fix/route.ts", "utf8");
     expect(route).toContain("why: LOOP_GONE");
+  });
+});
+
+// James, 2026-11-11: "let's get a button for working the p0's as well (open in tmux like the debug one)", and he
+// picked "Unblock". The card waits on James; the session gets it moving and brings him only what needs him.
+describe("the Unblock button", () => {
+  const p0 = { lane: "needs-info", priority: "P0", repo: "dividendsolo/zero-phase", number: 497, title: "t", url: "u" };
+  it("rides on every P0 row", () => {
+    expect(p0Rows([p0])[0].unblock).toEqual({ repo: "dividendsolo/zero-phase", number: 497 });
+  });
+
+  it("asks the session to verify the blocker, do what an agent can, and bring James only what needs him", () => {
+    const p = unblockPrompt({ repo: "dividendsolo/zero-phase", number: 497, lane: "needs-info" });
+    expect(p).toContain("dividendsolo/zero-phase#497");
+    expect(p).toContain("gh issue view 497 -R dividendsolo/zero-phase --comments");
+    expect(p).toContain("needs-info");
+    expect(p).toMatch(/verify/i);
+    expect(p).toMatch(/failing test/i);
+    expect(p).toMatch(/shipit/);
+    expect(p).toMatch(/only what needs James/i);
+    expect(p).toContain("~/.local/bin/status");
+  });
+
+  it("keys its pane by card, and shows it as working", () => {
+    expect(unblockKey({ repo: "dividendsolo/zero-phase", number: 497 })).toBe("unblock/dividendsolo/zero-phase#497");
+    expect(parseFixes("%3\tunblock/dividendsolo/zero-phase#497\tstarting\n")).toEqual({
+      "unblock/dividendsolo/zero-phase#497": { pane: "%3", step: "working" },
+    });
+  });
+
+  // The 500 James hit (2026-11-11): the board names a card's repo without its owner ("zero-phase"), so the button
+  // must take owner/repo from the card's URL.
+  it("takes owner/repo from the card's URL, the way the board gives it", () => {
+    const board = {
+      lane: "needs-info",
+      priority: "P0",
+      repo: "zero-phase",
+      number: 497,
+      title: "t",
+      url: "https://github.com/dividendsolo/zero-phase/issues/497",
+    };
+    const card = p0Rows([board])[0].unblock;
+    expect(card).toEqual({ repo: "dividendsolo/zero-phase", number: 497 });
+    expect(() => unblockPrompt({ ...(card as any), lane: "needs-info" })).not.toThrow();
+    const one = triageRow([{ ...board, lane: "needs-triage" }]);
+    expect(one?.triage).toEqual({ repo: "dividendsolo/zero-phase", number: 497 });
+  });
+
+  it("refuses a repo, number or status that is not a card's", () => {
+    expect(() => unblockPrompt({ repo: "o/a; rm -rf ~", number: 1, lane: "needs-info" })).toThrow();
+    expect(() => unblockPrompt({ repo: "o/a", number: 0, lane: "needs-info" })).toThrow();
+    expect(() => unblockPrompt({ repo: "o/a", number: 1, lane: "x`id`" })).toThrow();
   });
 });
