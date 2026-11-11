@@ -99,7 +99,7 @@ function BlockView({ block }: { block: Block }) {
   if (block.kind === "table") return <Table block={block} />;
   const List = block.ordered ? "ol" : "ul";
   return (
-    <List>
+    <List start={block.start}>
       {block.items.map((item, i) => (
         <li key={i}>
           <Inline parts={item} />
