@@ -123,6 +123,7 @@ describe("a job's notice on the page", () => {
     const rows = read(file(line()));
     expect(warnings({ ...base, machines: [machine(rows)] })).toEqual([
       {
+        group: "good-news",
         level: "warn",
         text: "Situation is listed on Example Directory",
         url: "https://example.com/situation",

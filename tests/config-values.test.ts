@@ -97,7 +97,7 @@ describe("a subscription's renewal date (collector#78)", () => {
 
   it("warns for a renewal inside the week, and says nothing for one outside it", () => {
     expect(rows({ renews: inDays(3) })).toEqual([
-      { level: "warn", text: `Hosting renews on ${inDays(3)} for ${money(20)}` },
+      { group: "money", level: "warn", text: `Hosting renews on ${inDays(3)} for ${money(20)}` },
     ]);
     expect(rows({ renews: inDays(30) })).toEqual([]);
     expect(rows({})).toEqual([]);

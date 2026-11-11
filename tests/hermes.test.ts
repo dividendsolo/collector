@@ -95,12 +95,12 @@ describe("Needs attention with the Hermes gateway", () => {
   });
   it("names a gateway that is not running, with the Start Hermes button", () => {
     expect(warnings({ ...base, machines: [machine({ hermes_gateway: gw({ running: false, pid: null }) })] })).toEqual([
-      { level: "error", text: "Hermes gateway is down on altair", action: START },
+      { group: "cant-work", level: "error", text: "Hermes gateway is down on altair", action: START },
     ]);
   });
   it("names a ticker that stopped, with its age", () => {
     expect(warnings({ ...base, machines: [machine({ hermes_gateway: gw({ ticker_age_s: 900 }) })] })).toEqual([
-      { level: "warn", text: "Hermes cron ticker stopped 15 min ago on altair", action: START },
+      { group: "cant-work", level: "warn", text: "Hermes cron ticker stopped 15 min ago on altair", action: START },
     ]);
     expect(warnings({ ...base, machines: [machine({ hermes_gateway: gw({ ticker_age_s: 4 * 3600 }) })] })[0].text).toBe(
       "Hermes cron ticker stopped 4 h ago on altair",
@@ -111,14 +111,16 @@ describe("Needs attention with the Hermes gateway", () => {
       ...base,
       machines: [machine({ hermes_gateway: gw({ running: false, ticker_age_s: 9000 }) })],
     });
-    expect(w).toEqual([{ level: "error", text: "Hermes gateway is down on altair", action: START }]);
+    expect(w).toEqual([
+      { group: "cant-work", level: "error", text: "Hermes gateway is down on altair", action: START },
+    ]);
   });
   it("offers no button for a machine read over ssh: the click would act on the wrong machine", () => {
     const w = warnings({
       ...base,
       machines: [machine({ name: "ezio", local: false, hermes_gateway: gw({ running: false }) })],
     });
-    expect(w).toEqual([{ level: "error", text: "Hermes gateway is down on ezio" }]);
+    expect(w).toEqual([{ group: "cant-work", level: "error", text: "Hermes gateway is down on ezio" }]);
   });
   it("says nothing on a machine with no gateway job", () => {
     expect(warnings({ ...base, machines: [machine({ hermes_gateway: null })] })).toEqual([]);

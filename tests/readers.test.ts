@@ -374,7 +374,7 @@ describe("env and AI", () => {
 
 describe("warnings", () => {
   const at = (seconds: number[]) => seconds.map((s) => 1_700_000_000 + s);
-  it("lists errors before warnings and tags each job with its machine and note", () => {
+  it("lists the rows in James's group order and tags each job with its machine and note", () => {
     const machines = [
       {
         name: "m1",
@@ -395,8 +395,17 @@ describe("warnings", () => {
       x: { credits: { total: 2, free: 0, prepaid: 2, free_expires: null } },
       ai: [],
     });
-    expect(w.map((x) => x.level)).toEqual(["error", "error", "error", "error", "error", "warn", "warn"]);
-    expect(w[0].text).toBe("a on m1: last run error (boom)");
+    // James's group order (lib/priority.ts, 2026-11-11), no longer errors first: can't work, then jobs, then money.
+    expect(w.map((x) => x.group)).toEqual([
+      "cant-work",
+      "cant-work",
+      "cant-work",
+      "cant-work",
+      "jobs",
+      "money",
+      "money",
+    ]);
+    expect(w.find((x) => x.group === "jobs")?.text).toBe("a on m1: last run error (boom)");
     expect(w.some((x) => x.text.startsWith("The same script (x.py) starts from 2 jobs on m1"))).toBe(true);
     expect(machines[0].jobs[0]).toMatchObject({ machine: "m1", what: "Does A" });
   });
@@ -466,6 +475,7 @@ describe("warnings", () => {
     });
     expect(w).toEqual([
       {
+        group: "cant-work",
         level: "error",
         text: "collector: the checks fail on main at laptop (bun run build, at 7f3a2b1), so laptop builds no collector cards",
       },
@@ -522,7 +532,11 @@ describe("warnings", () => {
       ai: [],
     });
     expect(w).toEqual([
-      { level: "error", text: "Foreman on m1 started 5 times in 60 s: it is starting itself in a loop" },
+      {
+        group: "cant-work",
+        level: "error",
+        text: "Foreman on m1 started 5 times in 60 s: it is starting itself in a loop",
+      },
     ]);
   });
   const netWarnings = (machines: unknown[]) =>
@@ -567,6 +581,7 @@ describe("warnings", () => {
     const sockets = Array.from({ length: 13 }, (_, i) => port(5000 + i, "internet", "udp"));
     expect(netWarnings([{ name: "vps", network: { networks: {}, sockets, ssh: null } }])).toEqual([
       {
+        group: "security",
         level: "error",
         text: "13 ports on vps are open to anyone on the internet: udp 5000, udp 5001, udp 5002, udp 5003, udp 5004, udp 5005, udp 5006, udp 5007, udp 5008, udp 5009, and 3 more (see the Network page)",
       },
@@ -650,6 +665,7 @@ describe("warnings", () => {
     });
     expect(w).toEqual([
       {
+        group: "money",
         level: "error",
         text: "GitHub Actions: 2,100 of 2,000 included minutes used this month (each extra minute is billed)",
         url: "https://github.com/settings/billing",
@@ -668,9 +684,10 @@ describe("warnings", () => {
       x: null,
       ai: [],
     });
+    // Could not list tickets is can't work, so it goes above the Actions row (money).
     expect(w.map((x) => [x.level, x.aside])).toEqual([
-      ["warn", "$0.00 billed"],
       ["warn", undefined],
+      ["warn", "$0.00 billed"],
     ]);
   });
 });
