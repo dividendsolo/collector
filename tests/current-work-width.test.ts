@@ -98,6 +98,15 @@ describe("the Current work table's Status column (collector#99)", () => {
     expect(r).toMatch(/white-space:\s*normal/);
   });
 
+  it("breaks lines only between refs, never inside one (review on #100: `darndest#1` / `0,` read as card #1)", () => {
+    // No emergency break inside a word: it let the column shrink to 98 px at 425 px wide and split each ref.
+    expect(rule("#current-work td.status {")).not.toMatch(/overflow-wrap|word-break/);
+    // Each ref is one unbreakable piece; the break opportunity is the space after its comma.
+    expect(rule("#current-work td.status .sub a {")).toMatch(/white-space:\s*nowrap/);
+    const cell = onDeckCell(draw());
+    expect(cell).toMatch(/<\/a><\/span><span>, <a /);
+  });
+
   it("leaves the panel's own scroll in place: the width is fixed, the scroll bar is not hidden", () => {
     expect(rule(".wrap {")).toMatch(/overflow-x:\s*auto/);
   });
