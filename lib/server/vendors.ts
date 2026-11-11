@@ -1,7 +1,10 @@
+import fs from "node:fs";
+import path from "node:path";
 import { webUrl } from "../links";
 import { swr } from "./cache";
 import { config, type Vendor } from "./config";
 import { getJson } from "./http";
+import { ROOT } from "./paths";
 import { check } from "./services";
 
 export const IMPACT: Record<string, number> = { none: 0, minor: 1, major: 2, critical: 3 };
@@ -241,13 +244,47 @@ async function vendor(v: Vendor): Promise<VendorRow> {
   return row;
 }
 
-const cache = swr<{ at: number; vendors: VendorRow[] }>("vendors", 300_000, async () => ({
-  at: Date.now() / 1000,
-  vendors: await Promise.all((config().vendors || []).map(vendor)),
-}));
+/** Where the last vendor read lives: beside config.json, gitignored, so a restart shows the incidents at once
+ * instead of popping the row in when the status pages answer (James, 2026-11-11). */
+const VENDORS_SEEN = () => process.env.COLLECTOR_VENDORS_SEEN || path.join(ROOT, ".vendors-seen.json");
 
-/** Every vendor in config.json "vendors", checked every five minutes. */
-export const lastVendors = () => cache.peek()?.vendors ?? [];
+type VendorRead = { at: number; vendors: VendorRow[] };
+
+export function saveVendors(read: VendorRead) {
+  try {
+    fs.writeFileSync(VENDORS_SEEN(), `${JSON.stringify(read)}\n`);
+  } catch {
+    // A read-only folder loses the saved read on restart, nothing more.
+  }
+}
+
+function savedVendors(): VendorRead | undefined {
+  try {
+    const read = JSON.parse(fs.readFileSync(VENDORS_SEEN(), "utf8"));
+    return Array.isArray(read?.vendors) ? read : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const cache = swr<VendorRead>(
+  "vendors",
+  300_000,
+  async () => {
+    const read = { at: Date.now() / 1000, vendors: await Promise.all((config().vendors || []).map(vendor)) };
+    saveVendors(read);
+    return read;
+  },
+  savedVendors,
+);
+
+/** Every vendor in config.json "vendors", checked every five minutes. The dashboard reads it here: the last read at
+ * once (the saved one after a restart), and a stale one starts a fresh read in the background, so an incident the
+ * vendor resolved leaves Priority tasks within five minutes (it stayed until a restart before, 2026-11-11). */
+export const lastVendors = () => {
+  vendors().catch(() => {});
+  return cache.peek()?.vendors ?? [];
+};
 
 export const vendors = () =>
   cache.get({ key: (config().vendors || []).map((v) => `${v.name}:${v.criticality || ""}`).join(",") });
