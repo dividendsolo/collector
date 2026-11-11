@@ -11,7 +11,7 @@ const base = { github: {}, cfg: {}, services: [], domains: [], ticketsError: nul
 
 describe("Priority tasks groups", () => {
   it("are the six groups in James's order", () => {
-    expect(PRIORITY_GROUPS).toEqual(["cant-work", "security", "triage", "p0", "jobs", "money", "briefs", "good-news"]);
+    expect(PRIORITY_GROUPS).toEqual(["cant-work", "security", "p0", "triage", "jobs", "money", "briefs", "good-news"]);
   });
 
   it("put a service down above open ports, open ports above a failed job, and a failed job above a renewal", () => {
@@ -139,13 +139,14 @@ describe("the P0 rows", () => {
     expect(p0Rows([card(4, "needs-triage", "P0")])).toEqual([]);
   });
 
-  it("sits below needs triage, above a failed job", () => {
+  // James, 2026-11-11: "i was wrong i want p0 before the triage cards".
+  it("sits above needs triage and a failed job", () => {
     const rows = priorityOrder([
       { group: "jobs", text: "job" },
       { group: "p0", text: "p0" },
       { group: "triage", text: "triage" },
     ] as any);
-    expect(rows.map((r: any) => r.text)).toEqual(["triage", "p0", "job"]);
+    expect(rows.map((r: any) => r.text)).toEqual(["p0", "triage", "job"]);
   });
 });
 
