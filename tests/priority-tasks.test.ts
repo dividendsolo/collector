@@ -22,3 +22,23 @@ describe("Priority tasks on the Dashboard", () => {
     expect(panels.indexOf("PriorityTasks")).toBeLessThan(panels.indexOf("CurrentWork"));
   });
 });
+
+// James, 2026-11-11: "when all the priority tasks are finished, let's show a link to smooth scroll down to waiting for
+// you - also we need a hr above the acked tasks in that panel please".
+describe("Priority tasks when it is done", () => {
+  const css = readFileSync(path.join(__dirname, "..", "app", "globals.css"), "utf8");
+  it("links to Waiting on you, through the glide every jump link uses", () => {
+    const start = source.indexOf('<div className="empty">');
+    const empty = source.slice(start, source.indexOf("</div>", start));
+    expect(empty).toContain("Nothing in priority tasks.");
+    expect(empty).toContain('href={jumpHref("dashboard", "waiting-panel")}');
+    expect(empty).toContain("Waiting on you");
+  });
+
+  it("draws a line above the acknowledged rows", () => {
+    expect(source).toContain('<hr className="acked-rule" />');
+    expect(css).toMatch(/\.acked-rule \{[^}]*border-top: 1px solid var\(--line\)/);
+    // The row above drops its own border, so the break is one line with a gap, not a double rule.
+    expect(css).toMatch(/\.alert:has\(\+ \.acked-rule\) \{\s*border-bottom: 0;/);
+  });
+});

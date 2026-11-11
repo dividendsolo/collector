@@ -72,6 +72,25 @@ export interface WarningInputs {
   ai: AiRow[];
 }
 
+const GITHUB = "GitHub";
+/** The foreman's error when a CI run never started: GitHub kept no log for it. */
+const NO_RUN_LOG = /failed to get run log|log not found/i;
+
+/** True when a watched GitHub vendor row has an open incident that names Actions. */
+function githubActionsDown(w: WarningInputs): boolean {
+  const watched = (w.cfg.vendors || []).some((v) => v.name === GITHUB && v.attention);
+  const gh = (w.vendors || []).find((v) => v.name === GITHUB);
+  return watched && !!gh?.incidents.some((i) => !i.stale && (i.where || []).some((p) => /actions/i.test(p)));
+}
+
+/** ". omarchy4mac builds wait on it (altair, ezio)", one sentence per repo; nothing when none waits. */
+function waitText(waiting: Map<string, string[]>): string {
+  return [...waiting.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([repo, hosts]) => `. ${repo} builds wait on it (${hosts.join(", ")})`)
+    .join("");
+}
+
 /** One host-broken marker as a sentence: what fails, where, and what it stops. */
 export function hostBrokenText(b: { repo: string; line?: string; error?: string }, host: string) {
   const m = (b.line || "").match(/^(.*?):\s*base\s+([0-9a-f]{7,40})/);
@@ -111,12 +130,23 @@ export function warnings(w: WarningInputs): Warning[] {
   const work = w.cfg.work_script || {};
   const workJobs = new Set(work.jobs || []);
   const workLabel = work.label || "The work script";
+  // GitHub's own Actions outage (James, 2026-11-11): a main whose CI run has no log at all, while GitHub has an open
+  // incident naming Actions, is GitHub's, not ours. Those rows fold into the GitHub incident row below, which names
+  // the builds that wait on it; the foreman rechecks main on its own when GitHub recovers.
+  const actionsDown = githubActionsDown(w);
+  const waitingOnGithub = new Map<string, string[]>();
   for (const m of w.machines) {
     // The foreman's host-broken-<repo> marker: the repo's checks fail on its main branch at this machine, so no
     // card of that repo is built here. The row says what failed, not whose fault it is (James, 2026-11-11: "It's not
     // a great error"): the step and short SHA from the marker's line, and the first error line of the foreman's log.
-    for (const b of m.host_broken || [])
-      if (b?.repo) out.push({ group: "cant-work", level: "error", text: hostBrokenText(b, m.name) });
+    for (const b of m.host_broken || []) {
+      if (!b?.repo) continue;
+      if (actionsDown && NO_RUN_LOG.test(b.error || "")) {
+        waitingOnGithub.set(b.repo, [...(waitingOnGithub.get(b.repo) || []), m.name]);
+        continue;
+      }
+      out.push({ group: "cant-work", level: "error", text: hostBrokenText(b, m.name) });
+    }
     // collect.py's tailnet state; null with no Tailscale on that machine. A stopped tailnet breaks every ssh job
     // there, so the jobs' rows carry the reason and, on this machine, the button that starts it again.
     const tailnetDown = !!m.tailscale && m.tailscale !== "Running";
@@ -329,11 +359,18 @@ export function warnings(w: WarningInputs): Warning[] {
       out.push({
         group: "cant-work",
         level: v.state === "major" || v.state === "critical" ? "error" : "warn",
-        text: `${v.name} incident: ${v.incidents.map((i) => `${i.name} (${i.impact})`).join("; ")}`,
+        text: `${v.name} incident: ${v.incidents.map((i) => `${i.name.replace(/\.\s*$/, "")} (${i.impact})`).join("; ")}${
+          v.name === GITHUB ? waitText(waitingOnGithub) : ""
+        }`,
         url: v.url,
         // Nothing to fix on our side: acknowledged, it stays faded until the vendor's incidents change (James,
-        // 2026-11-11).
-        ack: { key: `vendor|${v.name}|${v.incidents.map((i) => i.name).join("|")}`, next: null },
+        // 2026-11-11). A new build waiting on GitHub changes the key, so it shows again.
+        ack: {
+          key: `vendor|${v.name}|${v.incidents.map((i) => i.name).join("|")}${
+            v.name === GITHUB && waitingOnGithub.size ? `|waits:${[...waitingOnGithub.keys()].sort().join(",")}` : ""
+          }`,
+          next: null,
+        },
         // The age is when the vendor opened its oldest open incident (James, 2026-11-11: "time ago since it showed on
         // the board, that's useless").
         ...(oldest(v.incidents.map((i) => i.opened)) ? { since: oldest(v.incidents.map((i) => i.opened)) } : {}),

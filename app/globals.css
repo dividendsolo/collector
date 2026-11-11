@@ -1242,6 +1242,24 @@
     padding: 14px 16px;
     color: var(--muted);
   }
+  /* Priority tasks done: a link to the next stop, Waiting on you, at the right edge. */
+  .empty .empty-next {
+    margin-left: auto;
+    color: var(--blue-2);
+  }
+  .empty .empty-next:hover {
+    text-decoration: underline;
+  }
+  /* The line above the acknowledged rows in Priority tasks. */
+  .acked-rule {
+    margin: 8px 0 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+  /* The open row just above the line drops its own border, so the line reads as one break, not a double rule. */
+  .alert:has(+ .acked-rule) {
+    border-bottom: 0;
+  }
   .empty .i {
     color: var(--blue);
     filter: drop-shadow(0 0 6px var(--blue));
