@@ -88,6 +88,32 @@ export function triagePrompt(card: { repo: string; number: number }): string {
   ].join("\n");
 }
 
+/** The pane key of an Unblock session: one per card. */
+export const unblockKey = (card: { repo: string; number: number }) => `unblock/${card.repo}#${card.number}`;
+
+/** The first message of an Unblock session (James, 2026-11-11): a P0 card waiting on James. The session checks why it
+ * waits, does every part an agent can, and brings James only what needs him. The repo, number and status go into
+ * the prompt's commands, so only a card's own shape is accepted. */
+export function unblockPrompt(card: { repo: string; number: number; lane: string }): string {
+  if (
+    !/^[\w.-]+\/[\w.-]+$/.test(card.repo) ||
+    !Number.isInteger(card.number) ||
+    card.number < 1 ||
+    !/^[a-z-]+$/.test(card.lane)
+  )
+    throw new Error(`not a card: ${card.repo}#${card.number} (${card.lane})`);
+  const ref = `${card.repo}#${card.number}`;
+  return [
+    `Unblock ${ref}. It is a P0 card in ${card.lane}, waiting on James.`,
+    "",
+    `1. Read the card and why it waits: \`gh issue view ${card.number} -R ${card.repo} --comments\`. Load the product-stage skill and read the repo's CONTEXT.md.`,
+    "2. Verify the blocker yourself, against the code, the logs or the live system. A blocker an agent can clear is not James's.",
+    "3. Do every part an agent can. A fix in code starts with a failing test, run to see it fail; ship it through the shipit skill.",
+    "4. Bring only what needs James: one decision or one step, in a few lines. Change nothing he must decide before he says so.",
+    "5. When the card can move: post what was done on the card, and move it with `~/.local/bin/status`.",
+  ].join("\n");
+}
+
 /** The tmux pane options of a Debug and fix pane: the job it fixes (machine/id), and the step it is on, which the
  * session writes itself (James, 2026-11-11: the button "should show ... what it's currently doing"). */
 export const JOB_OPTION = "@collector_fix";

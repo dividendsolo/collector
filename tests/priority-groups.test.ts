@@ -129,10 +129,11 @@ describe("the P0 rows", () => {
       card(2, "needs-info", "P1"),
       card(3, "needs-manual-qa", "P0"),
     ]);
-    expect(rows).toEqual([
+    expect(rows.map(({ since, unblock, ...r }) => r)).toEqual([
       { level: "error", group: "p0", text: "P0: Card 1 (situation#1, ready-for-human)", url: card(1, "", "").url },
       { level: "error", group: "p0", text: "P0: Card 3 (situation#3, needs-manual-qa)", url: card(3, "", "").url },
     ]);
+    expect(rows.map((r) => r.unblock?.number)).toEqual([1, 3]);
   });
 
   it("leaves a P0 in needs-triage to the triage row", () => {

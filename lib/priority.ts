@@ -40,6 +40,13 @@ export function priorityOrder<T extends { group?: PriorityGroup }>(rows: T[]): T
     .map((x) => x.r);
 }
 
+/** A card's owner/repo: from its issue URL, since the board names the repo alone (the 500 James hit on Unblock,
+ * 2026-11-11); else the repo as given. */
+function fullRepo(t: { repo?: string | null; url?: string | null }): string {
+  const m = String(t.url ?? "").match(/github\.com\/([^/]+\/[^/]+)\/issues\//);
+  return m ? m[1] : String(t.repo ?? "");
+}
+
 /** The needs-triage row: how many cards wait for triage, and where they are (Waiting on you, filtered to them). Null
  * when none does. Built in the browser from the same board read Waiting on you uses, so the two always agree. */
 export function triageRow(
@@ -49,6 +56,7 @@ export function triageRow(
     repo?: string | null;
     number?: number | null;
     created?: string | null;
+    url?: string | null;
   }[],
 ) {
   const cards = tickets.filter((t) => t.lane === TRIAGE_LANE && !t.checking);
@@ -71,7 +79,7 @@ export function triageRow(
     since: openedAt(cards),
     // One card: a Triage button that opens a session to triage it with James (James, 2026-11-11).
     ...(n === 1 && cards[0].repo && cards[0].number
-      ? { triage: { repo: String(cards[0].repo), number: Number(cards[0].number) } }
+      ? { triage: { repo: fullRepo(cards[0]), number: Number(cards[0].number) } }
       : {}),
   };
 }
@@ -110,6 +118,8 @@ export function p0Rows(
       text: `P0: ${t.title} (${String(t.repo).split("/").pop()}#${t.number}, ${t.lane})`,
       url: t.url,
       since: openedAt([t]),
+      // Unblock: a session that gets the card moving and brings James only what needs him (2026-11-11).
+      ...(t.repo && t.number ? { unblock: { repo: fullRepo(t), number: Number(t.number) } } : {}),
     }));
 }
 

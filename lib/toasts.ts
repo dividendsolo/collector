@@ -4,8 +4,7 @@
  *
  * A toast has no Dismiss: it stays while the problem lasts and goes away by itself when the problem is resolved
  * (James, 2026-11-06: "we want that toast to be there until everything's resolved"). Each toast has a `key` (which
- * thing it is about) and a `state` (what is wrong with it now); the alarm sound uses the pair to sound once per new
- * problem.
+ * thing it is about) and a `state` (what is wrong with it now): a dismissed toast shows again in a new state.
  *
  * Pure functions here; the component (`components/toasts.tsx`) reads the services and the state.
  */
@@ -17,7 +16,7 @@ import { webUrl } from "./links";
 export interface Toast {
   /** Which thing it is about: `service:<url>` or `network:<machine>`. */
   key: string;
-  /** What is wrong with it now: a new state is a new problem, and sounds the alarm again. */
+  /** What is wrong with it now: a new state is a new problem. */
   state: string;
   level: "error" | "warn";
   title: string;
@@ -190,7 +189,7 @@ export function internetPortCount(machines: MachineIn[] | null | undefined): num
 
 /** A machine's job notices (collector#82): one amber toast per line a job wrote into `~/.hermes/notices/*.jsonl` —
  * a new directory listing, say — its title the line's own text, linking to the listing. It is good news, so it is
- * never an error and makes no alarm sound, and a line whose key is acknowledged makes no toast: the row on the
+ * never an error and draws no red, and a line whose key is acknowledged makes no toast: the row on the
  * Dashboard carries the Acknowledge, and both read the same acks, so one click clears the pair. */
 export function noticeToasts(machines: MachineIn[] | null | undefined, acks: string[] = []): Toast[] {
   const out: Toast[] = [];
@@ -220,12 +219,6 @@ export function noticeToasts(machines: MachineIn[] | null | undefined, acks: str
 export function sortToasts(all: Toast[]): Toast[] {
   const rank = { error: 0, warn: 1 };
   return [...all].sort((a, b) => rank[a.level] - rank[b.level]);
-}
-
-/** The red toasts that are new since the last look: an error whose key and state were not showing before. A toast
- * already showing makes no sound twice; a warning (Slow) makes none. */
-export function newAlarms(shown: Toast[], heard: Set<string>): Toast[] {
-  return shown.filter((t) => t.level === "error" && !heard.has(`${t.key}|${t.state}`));
 }
 
 interface LimitIn {

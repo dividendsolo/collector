@@ -130,7 +130,7 @@ describe("a job's notice on the page", () => {
         ack: { key: "directory-listing:https://example.com/situation", next: null },
       },
     ]);
-    // Good news is not an error: no alarm sound and no red row.
+    // Good news is not an error: no red row.
     expect(acked(warnings({ ...base, machines: [machine(rows)] })[0], [])).toBe(false);
   });
 

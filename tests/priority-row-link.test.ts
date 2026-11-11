@@ -35,3 +35,14 @@ describe("a row's age on a phone", () => {
     );
   });
 });
+
+// James, 2026-11-11: "we need a fixed width for the copy column, it's too long". A row's words stop at a reading
+// width, and its buttons and age keep their columns at the right edge.
+describe("a row's copy column", () => {
+  it("has a fixed reading width", async () => {
+    const css = (await import("node:fs")).readFileSync("app/globals.css", "utf8");
+    expect(css).toMatch(
+      /\.alert > span:not\(\.n\):not\(\.aside\):not\(\.act\):not\(\.since\),\s*\.alert > a \{\s*flex: 0 1 72ch;\s*max-width: 72ch;/,
+    );
+  });
+});

@@ -177,7 +177,7 @@ export function warnings(w: WarningInputs): Warning[] {
     // A job's good news (collector#82): each line of the machine's `~/.hermes/notices/*.jsonl` is one row —
     // "Situation is listed on App Rater" — linking to the listing and acknowledged by the line's own key, so it
     // shows once and goes away when acknowledged rather than waiting for a run that will never clear it. Info is a
-    // warning, not an error: nothing is wrong, and the row makes no alarm sound.
+    // warning, not an error: nothing is wrong, and the row draws no red.
     for (const n of m.notices || []) {
       // The line's href is outside data, like a feed's incident link: only a web address goes in the row's href
       // (collector#84).

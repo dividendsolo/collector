@@ -485,10 +485,8 @@ links to the page with the details.
 away by itself when the problem is resolved (James, 2026-11-06). Each toast has a `key` (`service:<url>`,
 `network:<machine>`) and a `state` (the status and error, or the sorted list of open ports).
 
-A red toast this page has not sounded for yet (a key and state it has not seen) plays a short two-tone alarm made
-with Web Audio; Slow makes no sound, and one problem sounds once. A browser plays no sound before the first click or
-key on the page, so the red toasts showing at load sound on that first click or key; after it, a new one sounds at
-once.
+A toast makes no sound (James, 2026-11-11: "remove the alert sound on the dashboard, don't need it"). The two-tone
+Web Audio alarm a new red toast played is gone, and `tests/toasts.test.ts` fails if page code makes a sound again.
 
 Every toast's title links to its page and the thing on it, the same way for every toast (James, 2026-11-06):
 `#/<page>?to=<element id>` (`jumpHref` in `lib/jump.ts`). `useJump` (`components/jump.tsx`, mounted in the Shell)
@@ -531,7 +529,7 @@ job's file cannot take a machine's whole read down (the clean-machine rule of ca
 is kept: a job that wrote one meant it.
 
 `lib/server/warnings.ts` turns each row into a `warn` row naming what it read, linked to `href` (an info level is
-never an error, so it makes no alarm sound and draws no red), with the existing Acknowledge: `ack.key` is the line's
+never an error, so it draws no red), with the existing Acknowledge: `ack.key` is the line's
 own key, so acknowledging a listing covers it however many times the machine is read again. An acknowledged row with
 no next run reads `Acknowledged.` — the Dashboard only says "Waiting for the next run" when `ack.next` names one.
 
