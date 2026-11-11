@@ -1175,6 +1175,18 @@
   #current-work tr.done td {
     opacity: 0.6;
   }
+  /* Current work's Status column: the refs a card waits on (its blockers, the cards on deck) are a list, so they
+     wrap inside a capped cell. Without the cap the column took the width of the whole list and the table scrolled
+     sideways (collector#99). The pills keep their one line: they have a fixed height, so a wrapped label would
+     spill out of them. */
+  #current-work td.status {
+    max-width: 320px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #current-work td.status .pill {
+    white-space: nowrap;
+  }
   table {
     border-collapse: collapse;
     width: 100%;
