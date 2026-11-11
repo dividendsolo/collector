@@ -31,13 +31,18 @@ interface BriefData {
 /** `/api/briefs` once a minute: the same snapshot every other page reads, split into the two lists. */
 export const useBriefs = () => useApi<BriefsData>("/api/briefs");
 
-/** The date a brief reads by: the UTC day it went out, which is the day its own subject names. */
-const day = (sent_at: string | null | undefined) => {
+/**
+ * The date a brief reads by: the day it went out in the viewer's own time zone, the same day their mail app shows.
+ * Not UTC: a brief sent in the evening in New York fell on the next UTC day (James, 2026-11-11). `timeZone` is for
+ * tests; the page leaves it out, so the browser's zone is used.
+ */
+export const briefDay = (sent_at: string | null | undefined, timeZone?: string) => {
   const at = sent_at ? new Date(sent_at) : null;
   return at && !Number.isNaN(at.getTime())
-    ? at.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })
+    ? at.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(timeZone ? { timeZone } : {}) })
     : "—";
 };
+const day = (sent_at: string | null | undefined) => briefDay(sent_at);
 
 /** One click's write (Read on open, or Archive). Its answer is the whole view, handed to the shared `/api/briefs`
  * read so the sidebar count and the Inbox change on the click rather than at the next minute's refresh. */

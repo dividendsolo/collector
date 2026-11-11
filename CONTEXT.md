@@ -646,6 +646,9 @@ is that folder, worked the way an email inbox works.
   went out. The file name starts with the UTC stamp the writer saved it at, so sorting the names is sorting by time; a
   dot-file is one being written (the writer renames into place) and anything that is not `.md` is not a brief, so both
   are skipped. No folder is no briefs rather than an error, as every other read here is without its file.
+- The date column shows the day a brief went out in the viewer's own time zone (`briefDay`), the day their mail
+  app shows. Never UTC: an evening send fell on the next UTC day (James, 2026-11-11). Collector is public, so the
+  day is the viewer's, not one zone's. A brief's subject carries no date; this column is the reference.
 - One brief's Markdown is read on demand: `collect(machine, cfg, file)` runs the same script over the same ssh with
   one more argument — `python3 - '<config>' brief '<file>'` — which `collect.py`'s `brief_file` answers with that one
   file (front matter and body), or `null` for a name that is not a plain file name or a file that is gone. The folder
