@@ -305,6 +305,11 @@ A row's age, the last column, is when its thing happened, not when Collector fir
 oldest open incident), a failed job its failed run's time, a P0 or needs-triage card its open time. Only a row with no
 such time falls back to Collector's first sight of it (`.first-seen.json`).
 
+The vendor incidents are read from slow status pages, so the last read is saved in `.vendors-seen.json` (gitignored,
+beside config.json). After a restart the incident row is there at once, from that saved read, and a fresh read
+replaces it in the background instead of popping the row in late (James, 2026-11-11). Every dashboard read asks for a
+fresh vendor read once the last is five minutes old, so a resolved incident leaves within five minutes.
+
 The rows of types 3, 4 and 7 are built in the browser, from the same reads as Waiting on you and the Briefs page. The
 Dashboard's sidebar count is the panel's open rows, these with them (`attentionTag`), so the two always agree; an
 acknowledged row leaves both.
