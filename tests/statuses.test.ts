@@ -60,7 +60,8 @@ describe("statusSets", () => {
       ticket("#1", "ready-for-human", { priority: "P1" }),
       ticket("#5", "my-own-lane", { priority: "P1" }),
     ];
-    expect(waitingList(tickets, s.waiting).map((t) => t.id)).toEqual(["#1", "#2", "#3", "#4", "#5"]);
+    // needs-triage goes first whatever the order (James, 2026-11-11); the rest keep the agent stack's order.
+    expect(waitingList(tickets, s.waiting).map((t) => t.id)).toEqual(["#4", "#1", "#2", "#3", "#5"]);
     // An explicit statuses.waiting keeps its own order.
     expect(statusSets({ tickets: { each }, statuses: { waiting: ["needs-triage", "needs-info"] } }).waiting).toEqual([
       "needs-triage",
@@ -101,15 +102,25 @@ describe("waitingList", () => {
       ticket("p1-human-old", "ready-for-human", { priority: "P1", created: "2026-10-02" }),
       ticket("p0-triage", "needs-triage", { priority: "P0", created: "2026-10-21" }),
     ];
+    // James, 2026-11-11: needs-triage first, whatever the priority: a card triaged can go straight to an agent,
+    // so triage takes it off his plate at once. Inside each part: priority, then the set's order, then oldest.
     expect(waitingList(rows, AGENT_STACK_STATUSES.waiting).map((r) => r.id)).toEqual([
       "p0-triage",
+      "p1-triage",
       "p1-human-old",
       "p1-human-new",
       "p1-qa",
       "p1-info",
-      "p1-triage",
       "p2-human",
     ]);
+  });
+
+  it("puts a P2 needs-triage card above a P0 card in any other status", () => {
+    const rows = [
+      ticket("p0-human", "ready-for-human", { priority: "P0" }),
+      ticket("p2-triage", "needs-triage", { priority: "P2" }),
+    ];
+    expect(waitingList(rows, AGENT_STACK_STATUSES.waiting).map((r) => r.id)).toEqual(["p2-triage", "p0-human"]);
   });
 
   it("leaves the list it was given alone", () => {
