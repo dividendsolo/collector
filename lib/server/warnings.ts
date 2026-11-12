@@ -77,6 +77,11 @@ export interface WarningInputs {
 const GITHUB = "GitHub";
 /** The foreman's error when a CI run never started: GitHub kept no log for it. */
 const NO_RUN_LOG = /failed to get run log|log not found/i;
+/** The card the foreman filed for a red main, at the end of the marker line (`<step>: base <sha> card #<n>`,
+ * agent-stack#398; agent-stack PR #401 writes it). */
+const MARKER_CARD = / card #\d+\s*$/;
+/** A preflight marker's line: the machine cannot run the check at all, and no card is filed for it. */
+const PREFLIGHT = /^preflight:/;
 
 /** True when a watched GitHub vendor row has an open incident that names Actions. */
 function githubActionsDown(w: WarningInputs): boolean {
@@ -93,10 +98,12 @@ function waitText(waiting: Map<string, string[]>): string {
     .join("");
 }
 
-/** A host-broken marker's line, "<step>: base <sha>", as its step and short SHA; a line without a base is the step. */
+/** A host-broken marker's line, "<step>: base <sha>", as its step and short SHA; a line without a base is the step.
+ * The card the foreman filed for this red main is not part of the step (agent-stack#398). */
 export function brokenStep(line?: string): { step: string; sha: string } {
-  const m = (line || "").match(/^(.*?):\s*base\s+([0-9a-f]{7,40})/);
-  return m ? { step: m[1], sha: m[2].slice(0, 7) } : { step: line || "", sha: "" };
+  const rest = (line || "").replace(MARKER_CARD, "");
+  const m = rest.match(/^(.*?):\s*base\s+([0-9a-f]{7,40})/);
+  return m ? { step: m[1], sha: m[2].slice(0, 7) } : { step: rest, sha: "" };
 }
 
 /** The foreman's name for the repo's unit tests in GitHub Actions (agent-stack CI_LABEL, "Jog CI ci.yml"). */
@@ -169,6 +176,10 @@ export function warnings(w: WarningInputs): Warning[] {
         if (actionsDown) waitingOnGithub.set(b.repo, [...(waitingOnGithub.get(b.repo) || []), m.name]);
         continue;
       }
+      // agent-stack#398: the foreman filed a card for this red main, so the card on the board is the work. A
+      // preflight marker names a machine that cannot run the check at all (no card is filed for it), so it keeps its
+      // row whatever its line says.
+      if (MARKER_CARD.test(b.line || "") && !PREFLIGHT.test(b.line || "")) continue;
       const url = ciRunsUrl(w.cfg, b.repo, b.line);
       out.push({
         group: "cant-work",
