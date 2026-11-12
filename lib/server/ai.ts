@@ -11,7 +11,7 @@ import { check } from "./services";
 export const AI_LOW_USD = 5;
 export { AI_LOW_PERCENT } from "../format"; // under these, a provider goes to Needs attention
 
-import { AI_LOW_PERCENT, resetText } from "../format";
+import { AI_LOW_PERCENT, limitLow, resetText } from "../format";
 
 export interface AiRow {
   provider: string;
@@ -26,11 +26,16 @@ export interface AiRow {
   /** Nothing left to call: a window at 0%, or no Nous credit. Low is a warning; out stops the lanes. */
   out?: boolean;
   alert?: string;
-  windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string }[];
+  /** Nous keep-going is off: past a plan limit Hermes waits for the reset and the top-up is not used. */
+  waits?: boolean;
+  /** `limit`: a plan limit (a Nous gauge), not a balance. */
+  windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string; limit?: boolean }[];
 }
 type Reading = Omit<AiRow, "provider" | "profiles" | "link" | "kind">;
 
-/** Nous credits through Hermes's own portal client: the portal login lives in Hermes's auth.json. */
+/** Nous credits and plan limits through Hermes's own portal client: the portal login lives in Hermes's auth.json.
+ * `raw_account` is the `/api/oauth/account` payload itself, so it carries `usage_window` — the plan's day, week and
+ * month limits, which the normalized dataclass drops (James, 2026-11-12). */
 const NOUS_SCRIPT = `
 import json, os, sys
 sys.path.insert(0, os.path.expanduser("~/.hermes/hermes-agent"))
@@ -42,7 +47,8 @@ print(json.dumps({"logged_in": bool(getattr(info, "logged_in", False)), "plan": 
                   "usable": getattr(access, "total_usable_credits", None), "monthly": getattr(sub, "monthly_credits", None), "charge": getattr(sub, "monthly_charge", None),
                   "plan_left": getattr(access, "subscription_credits_remaining", None),
                   "topup": getattr(access, "purchased_credits_remaining", None),
-                  "renews": getattr(sub, "current_period_end", None)}))
+                  "renews": getattr(sub, "current_period_end", None),
+                  "usage_window": (getattr(info, "raw_account", None) or {}).get("usage_window")}))
 `;
 const LINKS: Record<string, string> = {
   anthropic: "https://claude.ai/settings/usage",
@@ -90,31 +96,58 @@ async function nous(): Promise<Reading> {
   return nousReading(data);
 }
 
-/** The Nous row from the portal's numbers. */
+/** One of the portal's usage gauges as a window. `used_bp` is basis points (6549 = 65.49%), and the portal shows the
+ * whole percent below it, so 6549 reads 65% (James, 2026-11-12, the portal's own Usage page). */
+export function nousGauge(g: any) {
+  const label = typeof g?.label === "string" && g.label ? g.label : String(g?.id ?? "");
+  const at = isNum(g?.resets_at_ms) ? new Date(g.resets_at_ms) : null;
+  return {
+    label,
+    limit: true,
+    used: Math.floor(g.used_bp / 100),
+    // A reset time the payload cannot place is no reset time: the payload is outside data, and a throw here would
+    // take every provider's row down with it (`readAll`'s Promise.all).
+    resets: at && !Number.isNaN(at.getTime()) ? at.toISOString() : null,
+  };
+}
+
+/** The Nous row from the portal's numbers: the plan's own limits first — a paid plan runs on included usage with
+ * daily, weekly and monthly windows, not on credits (James, 2026-11-12) — then the top-up balance. */
 export function nousReading(data: any): Reading {
   const usable = data.usable;
-  const low = isNum(usable) && usable < AI_LOW_USD;
   const topup = isNum(data.topup) ? data.topup : usable;
   const topupWindow = isNum(topup) ? nousTopup(topup) : null;
-  // The plan is named by what it costs (James, 2026-11-12: "100% of the $20 subscription is used"). Since 2026-11-12 the
-  // portal can say 0 monthly credits for a paid plan: then nothing of the plan is left, so it reads 100% used.
+  // The plan is named by what it costs (James, 2026-11-12: "100% of the $20 subscription is used"). At 0 monthly
+  // credits the plan has no credits bar at all: its limits are the gauges below it.
   const charge = isNum(data.charge) && data.charge > 0 ? data.charge : null;
   const planUsed =
     isNum(data.monthly) && data.monthly > 0 && isNum(data.plan_left)
       ? Math.round(Math.min(100, Math.max(0, (1 - data.plan_left / data.monthly) * 100)))
-      : charge !== null && isNum(data.plan_left) && data.plan_left <= 0
-        ? 100
-        : null;
+      : null;
   const planLabel = charge !== null ? `Plan ($${charge.toFixed(0)}/month)` : "Plan credits";
+  const uw = data.usage_window || {};
+  // The payload's own order and labels, so a gauge Nous adds or removes shows without a code change (card #131).
+  const gauges = (Array.isArray(uw.gauges) ? uw.gauges : []).filter((g: any) => isNum(g?.used_bp)).map(nousGauge);
+  const going = typeof uw.keep_going_on_credits === "boolean" ? uw.keep_going_on_credits : null;
   return {
     plan: charge !== null ? `${data.plan} ($${charge.toFixed(0)}/month)` : data.plan,
     left: isNum(topup) ? `$${topup.toFixed(2)}` : null,
     windows: [
-      ...(planUsed === null ? [] : [{ label: planLabel, used: planUsed, resets: data.renews ?? null, low }]),
-      ...(topupWindow ? [{ ...topupWindow, low }] : []),
+      ...(planUsed === null ? [] : [{ label: planLabel, used: planUsed, resets: data.renews ?? null }]),
+      ...gauges,
+      ...(topupWindow ? [topupWindow] : []),
     ],
-    low,
-    out: isNum(usable) && usable <= 0,
+    detail:
+      going === null
+        ? undefined
+        : going
+          ? "Past a limit, Hermes keeps going on the top-up."
+          : "Past a limit, Hermes waits for the reset; the top-up is not used.",
+    // A limit at 90% or more, and the credits nearly gone, mark the row low; a limit used up while keep-going is
+    // off, or no credit at all, marks it out ("waits for the reset").
+    ...(going === false ? { waits: true } : {}),
+    low: gauges.some((g: { used: number }) => limitLow(g.used)) || (isNum(usable) && usable < AI_LOW_USD),
+    out: (going === false && gauges.some((g: { used: number }) => g.used >= 100)) || (isNum(usable) && usable <= 0),
   };
 }
 

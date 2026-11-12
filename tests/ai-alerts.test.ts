@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resetText } from "@/lib/format";
+import { nousReading } from "@/lib/server/ai";
 import { warnings } from "@/lib/server/warnings";
 import { aiToasts } from "@/lib/toasts";
 
@@ -166,5 +167,91 @@ describe("the Claude toast says only why it is up", () => {
     expect(resetText(new Date(2026, 10, 11, 20, 49, 59).toISOString(), now)).toBe("8:50 PM");
     expect(resetText(new Date(2026, 10, 13, 9, 30).toISOString(), now)).toBe("Fri 9:30 AM");
     expect(resetText(new Date(2026, 10, 25, 9, 0).toISOString(), now)).toBe("Nov 25");
+  });
+});
+
+/**
+ * Review of PR #132 (card #131): on Hermes Plus a limit is not the credits. With keep-going off, a used-up limit means
+ * Hermes waits for the reset and the top-up is not used, so the toast names the limit and has no Top up; the credit
+ * titles stay for the credits. The row and the toast read one threshold: a limit at 90% or more is low.
+ */
+describe("the Nous toast on plan limits", () => {
+  const now = new Date(2026, 10, 12, 9, 0).getTime();
+  const dayReset = new Date(2026, 10, 12, 11, 5).getTime();
+  const weekReset = new Date(2026, 10, 19, 0, 0).getTime();
+  const monthReset = new Date(2026, 10, 20, 9, 7).getTime();
+  const nous = (day: number, keepGoing = false, credits = 25.071492236524648, week = 1868) => ({
+    provider: "nous",
+    profiles: 3,
+    kind: "usage",
+    link: "https://portal.nousresearch.com",
+    ...nousReading({
+      logged_in: true,
+      plan: "Hermes Plus",
+      usable: credits,
+      monthly: 0,
+      charge: 20,
+      plan_left: 0,
+      topup: credits,
+      usage_window: {
+        gauges: [
+          { id: "day", label: "Today", used_bp: day, resets_at_ms: dayReset },
+          { id: "week", label: "This week", used_bp: week, resets_at_ms: weekReset },
+          { id: "month", label: "This month", used_bp: 622, resets_at_ms: monthReset },
+        ],
+        keep_going_on_credits: keepGoing,
+      },
+    }),
+  });
+
+  it("names a used-up limit and says Hermes waits for the reset, with no Top up while keep-going is off", () => {
+    const [t] = aiToasts([nous(10000)], now);
+    expect(t.title).toBe("Nous: the daily limit is used up");
+    expect(t.text).toBe("Hermes waits for the reset at 11:05 AM.");
+    expect(t.action).toBeUndefined();
+  });
+
+  it("keeps the Top up while keep-going is on, since the top-up is then used", () => {
+    const [t] = aiToasts([nous(10000, true)], now);
+    expect(t.title).toBe("Nous: the daily limit is used up");
+    expect(t.text).toBe("Hermes keeps going on the top-up: $25.07 left.");
+    expect(t.action).toEqual({ label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" });
+  });
+
+  it("says the credits are out only when they are at 0", () => {
+    const [t] = aiToasts([nous(1000, false, 0)], now);
+    expect(t.title).toBe("Nous credits are out");
+    expect(t.action).toEqual({ label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" });
+  });
+
+  it("gives a low limit a title about the limit, not the credits", () => {
+    const [t] = aiToasts([nous(9500)], now);
+    expect(t.title).toBe("Nous: the daily limit is nearly used up");
+    expect(t.text).toBe("Only 5% of the daily limit is left. Resets 11:05 AM.");
+    expect(t.action).toBeUndefined();
+  });
+
+  it("keeps the credit title for credits under $5", () => {
+    const [t] = aiToasts([nous(1000, false, 3.5)], now);
+    expect(t.title).toBe("Nous credits are nearly out");
+    expect(t.text).toBe("$3.50 left");
+  });
+
+  it("gives a reason at exactly 90%, the same threshold the row reads", () => {
+    const row = nous(9000);
+    expect(row.low).toBe(true);
+    const [t] = aiToasts([row], now);
+    expect(t.text).toBe("Only 10% of the daily limit is left. Resets 11:05 AM.");
+  });
+
+  it("names the weekly limit as weekly", () => {
+    const [t] = aiToasts([nous(1000, false, 25, 9600)], now);
+    expect(t.text).toBe("Only 4% of the weekly limit is left. Resets Nov 19.");
+  });
+
+  it("shows a used-up toast again after the low one was dismissed", () => {
+    const [low] = aiToasts([nous(9500)], now);
+    const [used] = aiToasts([nous(10000)], now);
+    expect(used.state).not.toBe(low.state);
   });
 });

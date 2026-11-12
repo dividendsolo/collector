@@ -754,8 +754,20 @@ describe("nousTopup", () => {
   });
 });
 
-// James, 2026-11-12: "It should show 100% of the $20 subscription is used." The portal's numbers that day.
+// James, 2026-11-12: a paid plan's limits are not credits — "we need a card to put the today limit, the daily
+// limit, the weekly limit, and the monthly limit ... we need to rebuild that card to accurately represent." The
+// portal's Usage page and its `/api/oauth/account` payload, read at 15:22 ET that day.
 describe("nousReading", () => {
+  const gauge = (id: string, label: string, used: number, at: number) => ({
+    id,
+    scope: "all",
+    label,
+    used_bp: used,
+    resets_at_ms: at,
+  });
+  const day = 1794585910086;
+  const week = 1795104310086;
+  const month = 1795183622000;
   const portal = {
     logged_in: true,
     plan: "Hermes Plus",
@@ -765,12 +777,66 @@ describe("nousReading", () => {
     plan_left: 0,
     topup: 25.071492236524648,
     renews: "2026-11-20T14:07:02.000Z",
+    usage_window: {
+      gauges: [
+        gauge("day", "Today", 6549, day),
+        gauge("week", "This week", 1868, week),
+        gauge("month", "This month", 622, month),
+      ],
+      keep_going_on_credits: false,
+    },
   };
-  it("names the plan by what it costs and shows its credits used up", () => {
+  it("shows the portal's three limits and the top-up, and no plan bar at 0 plan credits", () => {
     const r = nousReading(portal);
     expect(r.plan).toBe("Hermes Plus ($20/month)");
-    expect(r.windows?.[0]).toMatchObject({ label: "Plan ($20/month)", used: 100, resets: portal.renews });
-    expect(r.windows?.[1]).toMatchObject({ label: "Top-up ($25)", used: 0, left: "$25.07 of $25 left" });
+    expect(r.windows).toEqual([
+      { label: "Today", limit: true, used: 65, resets: new Date(day).toISOString() },
+      { label: "This week", limit: true, used: 18, resets: new Date(week).toISOString() },
+      { label: "This month", limit: true, used: 6, resets: new Date(month).toISOString() },
+      { label: "Top-up ($25)", used: 0, resets: null, left: "$25.07 of $25 left" },
+    ]);
+    expect(r.windows?.some((w) => w.label.startsWith("Plan"))).toBe(false);
+    expect(r.detail).toBe("Past a limit, Hermes waits for the reset; the top-up is not used.");
+    expect(r.low).toBe(false);
+    expect(r.out).toBe(false);
+  });
+  it("keeps the plan bar while the plan still has credits", () => {
+    const r = nousReading({ ...portal, monthly: 100, plan_left: 40 });
+    expect(r.windows?.[0]).toMatchObject({ label: "Plan ($20/month)", used: 60, resets: portal.renews });
+    expect(r.windows?.length).toBe(5);
+  });
+  it("reads a gauge at 90% or more as low", () => {
+    const r = nousReading({
+      ...portal,
+      usage_window: { ...portal.usage_window, gauges: [gauge("day", "Today", 9200, day)] },
+    });
+    expect(r.low).toBe(true);
+    expect(r.out).toBe(false);
+  });
+  it("reads a limit used up with keep-going off as out, and not with it on", () => {
+    const gauges = [gauge("day", "Today", 10000, day)];
+    const off = nousReading({ ...portal, usage_window: { gauges, keep_going_on_credits: false } });
+    expect(off.out).toBe(true);
+    const on = nousReading({ ...portal, usage_window: { gauges, keep_going_on_credits: true } });
+    expect(on.out).toBe(false);
+    expect(on.detail).toBe("Past a limit, Hermes keeps going on the top-up.");
+  });
+  it("reads an older payload with no usage_window as the top-up alone", () => {
+    const r = nousReading({ ...portal, usage_window: undefined });
+    expect(r.windows).toEqual([{ label: "Top-up ($25)", used: 0, resets: null, left: "$25.07 of $25 left" }]);
+    expect(r.detail).toBeUndefined();
+  });
+  // The payload is outside data: a reset time it cannot place is no reset time, never a read that throws on every
+  // provider's row (the whole panel comes from one Promise.all in lib/server/ai.ts).
+  it("reads an unplaceable reset time as no reset", () => {
+    const r = nousReading({
+      ...portal,
+      usage_window: {
+        gauges: [{ ...gauge("day", "Today", 6549, day), resets_at_ms: 1e300 }],
+        keep_going_on_credits: false,
+      },
+    });
+    expect(r.windows?.[0]).toMatchObject({ label: "Today", limit: true, used: 65, resets: null });
   });
 });
 

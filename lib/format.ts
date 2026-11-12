@@ -186,6 +186,9 @@ export function fetchedText(at: number | null | undefined): string {
 /** Under this percent left, an AI plan's window is low (lib/server/ai.ts and the toast read the same number). */
 export const AI_LOW_PERCENT = 10;
 
+/** A Nous plan limit at 90% or more is low: the row (lib/server/ai.ts) and its toast read this one test (card #131). */
+export const limitLow = (used: number) => 100 - used <= AI_LOW_PERCENT;
+
 /** When a limit resets, in local time, the one way every surface writes it (James, 2026-11-11: the toast said "Thu 9
  * PM" and the AI plans panel "10 PM" for one reset at 9:59:59 PM; "we need to get the dates consistent ... local time
  * only, not UTC"). Rounded to the nearest minute, so 9:59:59 PM is 10 PM. Within a day "8:50 PM"; within six days
