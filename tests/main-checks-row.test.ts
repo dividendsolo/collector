@@ -51,6 +51,38 @@ describe("the row for a main that fails its checks", () => {
   });
 });
 
+/**
+ * agent-stack#398: a red main a builder can fix goes to a builder. The foreman files a P0 `ready-for-agent` card in
+ * the repo and writes its number at the end of the marker line (` card #<n>`, agent-stack PR #401). The card is on the
+ * board like any other P0, so the fixMain row would be a second place to fix the same thing.
+ */
+describe("a red main the foreman filed a card for", () => {
+  const carded = {
+    repo: "omarchy4mac",
+    line: "Jog CI ci.yml: base 699408145ffa card #398",
+    error: "tests/menu-test.sh failed",
+  };
+
+  it("gives no Priority tasks row: the card on the board is the work", () => {
+    expect(at(carded).some((x) => x.fixMain)).toBe(false);
+    expect(at(carded).some((x) => x.text.includes("omarchy4mac"))).toBe(false);
+  });
+
+  it("keeps the row when the filing wrote no card: a failed filing is never silent", () => {
+    const uncarded = { ...carded, line: "Jog CI ci.yml: base 699408145ffa" };
+    expect(at(uncarded)[0].fixMain).toEqual({ machine: "altair", repo: "omarchy4mac" });
+  });
+
+  it("keeps the row for a preflight marker, card or not, and never shows the card tail", () => {
+    const plain = at({ repo: "zero-phase", line: "preflight: missing bun" });
+    expect(plain[0].fixMain).toEqual({ machine: "altair", repo: "zero-phase" });
+    expect(plain[0].text).toContain("Failed: `preflight: missing bun`.");
+    const withCard = at({ repo: "zero-phase", line: "preflight: missing bun card #401" });
+    expect(withCard[0].fixMain).toEqual({ machine: "altair", repo: "zero-phase" });
+    expect(withCard[0].text).not.toContain("card #401");
+  });
+});
+
 describe("the Debug and fix session for a failing main", () => {
   const p = mainChecksPrompt(
     { machine: "ezio", ssh: "div@ezio", local: false },
