@@ -2054,6 +2054,48 @@
   .heat .grid i[data-l="4"] {
     background: var(--blue);
   }
+  /* Waiting on you's release check (James, 2026-11-12): inside the badge, the badge's own color; the hit area is
+     the badge's full height and 24px wide (design-rules: 24px floor), with no layout shift on hover. */
+  .release {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .release .pill {
+    padding-right: 0;
+  }
+  .release-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 20px;
+    margin-left: -2px;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid currentColor;
+    border-radius: 0 999px 999px 0;
+    background: transparent;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+  }
+  .release-btn:hover,
+  .release-btn:focus-visible {
+    opacity: 1;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .release-btn:disabled {
+    cursor: progress;
+    opacity: 0.4;
+  }
+  .release-btn .i {
+    width: 12px;
+    height: 12px;
+  }
+  .release .why {
+    color: var(--red, #e5484d);
+    font-size: 11px;
+  }
   .pill.human {
     color: var(--green);
     background: var(--green-bg);

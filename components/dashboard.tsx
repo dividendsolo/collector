@@ -340,6 +340,50 @@ export function useWaiting() {
   return { d, list, p0 };
 }
 
+/** A waiting row's status badge, with a check inside it that hands the card to the agents (James, 2026-11-12: "a little
+ * button inside of that badge, like a check mark ... click it and then it could just automatically update the status to
+ * ready for agent"). `POST /api/release` moves it with the agents' own card tool; the row leaves at once and the card
+ * shows in Current work on the next board read. A refusal (the card moved meanwhile) shows beside the badge. */
+function ReleasePill({ t, done }: { t: any; done: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState("");
+  const release = async () => {
+    setBusy(true);
+    setWhy("");
+    try {
+      const r = await fetch("/api/release", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repo: t.repo, number: t.number, from: t.lane }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) done();
+      else setWhy(body.why || `failed (${r.status})`);
+    } catch (e) {
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <span className="release">
+      <Pill cls={t.lane === "ready-for-human" ? "human" : "warning"} dot={false}>
+        {t.lane}
+        <button
+          type="button"
+          className="release-btn"
+          onClick={release}
+          disabled={busy}
+          title="Ready for agent"
+          aria-label={`Move ${t.repo}#${t.number} to ready-for-agent`}
+        >
+          <Icon name="check" />
+        </button>
+      </Pill>
+      {why ? <span className="why">{why}</span> : null}
+    </span>
+  );
+}
+
 /** Waiting on you: every ticket in the "each" lanes, needs-triage first, then by priority, then lane (waitingOrder), then oldest. The chip counts only the P0s, in red. */
 function Waiting() {
   const w = useWaiting();
@@ -361,7 +405,8 @@ function Waiting() {
     addEventListener("hashchange", read);
     return () => removeEventListener("hashchange", read);
   }, []);
-  const list = w?.list || [];
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  const list = (w?.list || []).filter((t: any) => !gone.has(t.url));
   const counts: [string, number][] = w
     ? w.d.count.map((l: string) => [l, w.d.tickets.filter((t: any) => t.lane === l).length]).filter(([, n]: any) => n)
     : [];
@@ -413,9 +458,7 @@ function Waiting() {
                 {shown.map((t: any) => (
                   <tr key={t.url}>
                     <td>
-                      <Pill cls={t.lane === "ready-for-human" ? "human" : "warning"} dot={false}>
-                        {t.lane}
-                      </Pill>
+                      <ReleasePill t={t} done={() => setGone((g) => new Set(g).add(t.url))} />
                     </td>
                     <td>
                       <a
