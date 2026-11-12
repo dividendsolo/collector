@@ -161,6 +161,8 @@ export function unblockPrompt(card: { repo: string; number: number; lane: string
  * session writes itself (James, 2026-11-11: the button "should show ... what it's currently doing"). */
 export const JOB_OPTION = "@collector_fix";
 export const STEP_OPTION = "@collector_step";
+/** The field separator of the pane read. Not a tab: under launchd (no locale) tmux prints a tab in -F as "_". */
+const SEP = "|";
 
 /** The steps the button can say, in order: a fixed list (James, 2026-11-11: "just make it a static list"). The session
  * sets each one with its exact command; a word not on the list reads as "working". */
@@ -256,7 +258,7 @@ export const fixKey = (machine: string, id: string) => `${machine}/${id}`;
 /** The Debug and fix panes open now, by job (machine/id): each one's step. A pane closed is gone from tmux, so the
  * button comes back by itself. No tmux running reads as none open. */
 export async function openFixes(run = runText): Promise<Record<string, { pane: string; step: string }>> {
-  const r = await run(["tmux", "list-panes", "-a", "-F", `#{pane_id}\t#{${JOB_OPTION}}\t#{${STEP_OPTION}}`], {
+  const r = await run(["tmux", "list-panes", "-a", "-F", `#{pane_id}${SEP}#{${JOB_OPTION}}${SEP}#{${STEP_OPTION}}`], {
     timeout: 5,
   });
   return parseFixes(r.error ? "" : r.stdout);
@@ -265,7 +267,7 @@ export async function openFixes(run = runText): Promise<Record<string, { pane: s
 export function parseFixes(out: string): Record<string, { pane: string; step: string }> {
   const fixes: Record<string, { pane: string; step: string }> = {};
   for (const line of out.split("\n")) {
-    const [pane, key, step] = line.split("\t");
+    const [pane, key, step] = line.split(SEP);
     if (!pane || !key) continue;
     // A Triage session writes no steps: it is a talk with James, so its button says so.
     if (key === TRIAGE_KEY) fixes[key] = { pane, step: "triaging" };

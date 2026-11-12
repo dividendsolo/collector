@@ -114,9 +114,26 @@ describe("the button's step", () => {
   });
 
   it("reads each open fix pane's job and step, and skips every other pane", () => {
-    expect(parseFixes("%0\t\t\n%7\tezio/b07ecfc6da04\twriting the failing test\n%8\tezio/abc\t\n")).toEqual({
+    expect(parseFixes("%0||\n%7|ezio/b07ecfc6da04|writing the failing test\n%8|ezio/abc|\n")).toEqual({
       "ezio/b07ecfc6da04": { pane: "%7", step: "writing the failing test" },
       "ezio/abc": { pane: "%8", step: "working" },
+    });
+  });
+
+  // James, 2026-11-12: "I clicked debug and fix, and it still says debug and fix." Collector runs under launchd with
+  // no locale, and there tmux prints each tab in a -F format as "_", so the pane line never split and no fix was open.
+  it("reads the open fix pane when tmux runs with no locale", async () => {
+    const tmuxNoLocale = async (cmd: string[]) => {
+      const format = cmd[cmd.indexOf("-F") + 1].replaceAll("\t", "_");
+      const line = (fix: string, step: string) =>
+        format
+          .replace("#{pane_id}", "%2")
+          .replace(/#\{@collector_fix\}/, fix)
+          .replace(/#\{@collector_step\}/, step);
+      return { ok: true, stdout: `${line("", "")}\n${line("ezio/671cc7c4cc4a", "finding the cause")}\n`, error: null };
+    };
+    expect(await openFixes(tmuxNoLocale)).toEqual({
+      "ezio/671cc7c4cc4a": { pane: "%2", step: "finding the cause" },
     });
   });
 
@@ -147,7 +164,7 @@ describe("the fixed list of steps", () => {
   });
 
   it("shows a step not on the list as working", () => {
-    expect(parseFixes("%7\tezio/a\treading the logs\n%8\tezio/b\tshipping\n")).toEqual({
+    expect(parseFixes("%7|ezio/a|reading the logs\n%8|ezio/b|shipping\n")).toEqual({
       "ezio/a": { pane: "%7", step: "working" },
       "ezio/b": { pane: "%8", step: "shipping" },
     });
@@ -281,7 +298,7 @@ describe("the Triage button", () => {
   });
 
   it("shows its open session as triaging", () => {
-    expect(parseFixes("%9\ttriage\tstarting\n")).toEqual({ triage: { pane: "%9", step: "triaging" } });
+    expect(parseFixes("%9|triage|starting\n")).toEqual({ triage: { pane: "%9", step: "triaging" } });
   });
 
   it("refuses a repo or number that is not a card's", () => {
@@ -322,7 +339,7 @@ describe("the Unblock button", () => {
 
   it("keys its pane by card, and shows it as working", () => {
     expect(unblockKey({ repo: "dividendsolo/zero-phase", number: 497 })).toBe("unblock/dividendsolo/zero-phase#497");
-    expect(parseFixes("%3\tunblock/dividendsolo/zero-phase#497\tstarting\n")).toEqual({
+    expect(parseFixes("%3|unblock/dividendsolo/zero-phase#497|starting\n")).toEqual({
       "unblock/dividendsolo/zero-phase#497": { pane: "%3", step: "working" },
     });
   });
