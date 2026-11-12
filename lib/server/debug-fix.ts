@@ -176,6 +176,17 @@ export const FIX_STEPS = [
   "stuck",
 ] as const;
 
+/** What a step means for the row's button (James, 2026-11-12: "I need that row to be resolved. Like, it's stuck
+ * right now. ... the button needs to come back and say, I don't know, something else"). A session that reached its
+ * last step is not working any more: `done` finished, `stuck` needs James, and only `working` spins. */
+export type StepKind = "working" | "done" | "stuck";
+
+export function stepState(step: string): { kind: StepKind; label: string } {
+  if (step === "stuck") return { kind: "stuck", label: "Stuck: needs you" };
+  if (step.startsWith("done")) return { kind: "done", label: "Done" };
+  return { kind: "working", label: step };
+}
+
 /** The first message of the new session. */
 export function debugPrompt(m: DebugMachine, j: DebugJob): string {
   const step = (name: (typeof FIX_STEPS)[number]) => `\`tmux set -p -t "$TMUX_PANE" ${STEP_OPTION} "${name}"\``;
@@ -267,23 +278,37 @@ export async function openFixPane(
 
 export const fixKey = (machine: string, id: string) => `${machine}/${id}`;
 
+/** Close a fix pane by its key (the row's Close button): a session that finished or is stuck is read, then shut, and
+ * the row's button comes back to Debug and fix. Only a pane Collector itself tagged is closed, found by its key in
+ * the pane list, so nothing the page sends can name one of James's own panes. */
+export async function closeFixPane(key: string, run = runText): Promise<{ ok: true } | { ok: false; why: string }> {
+  const open = await openFixes(run);
+  const fix = open[key];
+  if (!fix) return { ok: false, why: "that session is not open any more" };
+  const r = await run(["tmux", "kill-pane", "-t", fix.pane], { timeout: 5 });
+  return r.error ? { ok: false, why: r.error } : { ok: true };
+}
+
 /** The Debug and fix panes open now, by job (machine/id): each one's step. A pane closed is gone from tmux, so the
  * button comes back by itself. No tmux running reads as none open. */
-export async function openFixes(run = runText): Promise<Record<string, { pane: string; step: string }>> {
+export async function openFixes(
+  run = runText,
+): Promise<Record<string, { pane: string; step: string; state: StepKind }>> {
   const r = await run(["tmux", "list-panes", "-a", "-F", `#{pane_id}${SEP}#{${JOB_OPTION}}${SEP}#{${STEP_OPTION}}`], {
     timeout: 5,
   });
   return parseFixes(r.error ? "" : r.stdout);
 }
 
-export function parseFixes(out: string): Record<string, { pane: string; step: string }> {
-  const fixes: Record<string, { pane: string; step: string }> = {};
+export function parseFixes(out: string): Record<string, { pane: string; step: string; state: StepKind }> {
+  const fixes: Record<string, { pane: string; step: string; state: StepKind }> = {};
+  const at = (step: string) => ({ step, state: stepState(step).kind });
   for (const line of out.split("\n")) {
     const [pane, key, step] = line.split(SEP);
     if (!pane || !key) continue;
     // A Triage session writes no steps: it is a talk with James, so its button says so.
-    if (key === TRIAGE_KEY) fixes[key] = { pane, step: "triaging" };
-    else fixes[key] = { pane, step: (FIX_STEPS as readonly string[]).includes(step) ? step : "working" };
+    if (key === TRIAGE_KEY) fixes[key] = { pane, ...at("triaging") };
+    else fixes[key] = { pane, ...at((FIX_STEPS as readonly string[]).includes(step) ? step : "working") };
   }
   return fixes;
 }

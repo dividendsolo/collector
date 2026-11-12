@@ -406,8 +406,14 @@
     background: var(--panel-2);
     color: var(--text);
   }
-  .btn:hover {
+  .btn:hover:not(:disabled) {
     background: var(--hover);
+  }
+  /* A button that cannot be clicked does not look or feel clickable (James, 2026-11-12: "it's still clickable and
+     it shouldn't be while it's doing a loading thing"). */
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
   }
   /* A link drawn as a button: centered like one, never underlined. */
   a.btn {
@@ -1150,6 +1156,19 @@
     gap: 6px;
     max-width: 260px;
     cursor: default;
+  }
+  /* A session that reached its last step: finished, or waiting on James. Its colour says which, and it carries no
+     spinner, because nothing is running (James, 2026-11-12). */
+  .alert .act .btn.fixing.done {
+    border-color: var(--green-line, var(--line-2));
+    color: var(--green, var(--text));
+    opacity: 1;
+  }
+  .alert .act .btn.fixing.stuck {
+    background: var(--amber-bg, var(--panel-2));
+    border-color: var(--amber-line, var(--line-2));
+    color: var(--amber, var(--text));
+    opacity: 1;
   }
   .alert .act .btn.fixing .spinner {
     display: inline-block;
