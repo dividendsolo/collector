@@ -96,6 +96,23 @@ describe("openDebugSession", () => {
     expect(calls[2]).toEqual(["tmux", "set", "-p", "-t", "%7", "@collector_step", "starting"]);
   });
 
+  // James, 2026-11-12: "name the window in the TMUX session so it's very easy to see which one it's actually working
+  // on ... I want it at the top." Every pane read "π - james": pi sets the pane title, so the name is our own tag.
+  it("names the pane in its top border, with the job, the machine and the step", async () => {
+    const calls: string[][] = [];
+    await openDebugSession({ machine: "ezio", ssh: "div@ezio", local: false }, job, async (cmd) => {
+      calls.push(cmd);
+      return { ok: true, stdout: "%7\n", error: null };
+    });
+    const sets = calls.slice(1).map((c) => c.slice(5));
+    expect(sets).toContainEqual(["@collector_name", "cve-watch · ezio"]);
+    expect(calls).toContainEqual(["tmux", "set", "-w", "-t", "%7", "pane-border-status", "top"]);
+    expect(calls).toContainEqual(["tmux", "set", "-w", "-t", "%7", "pane-border-format", ""]);
+    const format = calls.find((c) => c[2] === "-p" && c[5] === "pane-border-format")?.[6] ?? "";
+    expect(format).toContain("#{@collector_name}");
+    expect(format).toContain("#{@collector_step}");
+  });
+
   it("says when no tmux server runs", async () => {
     const r = await openDebugSession({ machine: "ezio", ssh: null, local: true }, job, async () => ({
       ok: false,
