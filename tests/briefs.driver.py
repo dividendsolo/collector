@@ -20,7 +20,18 @@ import collect  # noqa: E402  (the app's own reader, imported once the repo root
 def main():
     case = json.load(sys.stdin)
     folder = tempfile.mkdtemp()
+    outside = tempfile.mkdtemp()
     for name, spec in (case.get("files") or {}).items():
+        if "link" in spec:
+            # A symlink in the folder to a file outside it that holds `link` (collector#125).
+            target = os.path.join(outside, name)
+            with open(target, "w") as f:
+                f.write(spec["link"])
+            os.symlink(target, os.path.join(folder, name))
+            continue
+        if spec.get("fifo"):
+            os.mkfifo(os.path.join(folder, name))
+            continue
         with open(os.path.join(folder, name), "w") as f:
             f.write(spec.get("content", ""))
     print(
