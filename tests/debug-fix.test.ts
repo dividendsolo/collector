@@ -132,8 +132,8 @@ describe("the button's step", () => {
 
   it("reads each open fix pane's job and step, and skips every other pane", () => {
     expect(parseFixes("%0||\n%7|ezio/b07ecfc6da04|writing the failing test\n%8|ezio/abc|\n")).toEqual({
-      "ezio/b07ecfc6da04": { pane: "%7", step: "writing the failing test" },
-      "ezio/abc": { pane: "%8", step: "working" },
+      "ezio/b07ecfc6da04": { pane: "%7", step: "writing the failing test", state: "working" },
+      "ezio/abc": { pane: "%8", step: "working", state: "working" },
     });
   });
 
@@ -150,7 +150,7 @@ describe("the button's step", () => {
       return { ok: true, stdout: `${line("", "")}\n${line("ezio/671cc7c4cc4a", "finding the cause")}\n`, error: null };
     };
     expect(await openFixes(tmuxNoLocale)).toEqual({
-      "ezio/671cc7c4cc4a": { pane: "%2", step: "finding the cause" },
+      "ezio/671cc7c4cc4a": { pane: "%2", step: "finding the cause", state: "working" },
     });
   });
 
@@ -182,8 +182,8 @@ describe("the fixed list of steps", () => {
 
   it("shows a step not on the list as working", () => {
     expect(parseFixes("%7|ezio/a|reading the logs\n%8|ezio/b|shipping\n")).toEqual({
-      "ezio/a": { pane: "%7", step: "working" },
-      "ezio/b": { pane: "%8", step: "shipping" },
+      "ezio/a": { pane: "%7", step: "working", state: "working" },
+      "ezio/b": { pane: "%8", step: "shipping", state: "working" },
     });
   });
 });
@@ -315,7 +315,9 @@ describe("the Triage button", () => {
   });
 
   it("shows its open session as triaging", () => {
-    expect(parseFixes("%9|triage|starting\n")).toEqual({ triage: { pane: "%9", step: "triaging" } });
+    expect(parseFixes("%9|triage|starting\n")).toEqual({
+      triage: { pane: "%9", step: "triaging", state: "working" },
+    });
   });
 
   it("refuses a repo or number that is not a card's", () => {
@@ -357,7 +359,7 @@ describe("the Unblock button", () => {
   it("keys its pane by card, and shows it as working", () => {
     expect(unblockKey({ repo: "dividendsolo/zero-phase", number: 497 })).toBe("unblock/dividendsolo/zero-phase#497");
     expect(parseFixes("%3|unblock/dividendsolo/zero-phase#497|starting\n")).toEqual({
-      "unblock/dividendsolo/zero-phase#497": { pane: "%3", step: "working" },
+      "unblock/dividendsolo/zero-phase#497": { pane: "%3", step: "working", state: "working" },
     });
   });
 

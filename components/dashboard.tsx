@@ -42,8 +42,13 @@ function AlertAction({ action, done }: { action: { label: string; post: string }
   );
 }
 
-/** The Debug and fix panes open now, by job (machine/id), each with the step its session wrote (every 3 seconds). */
-const useFixes = () => useApi<{ fixes: Record<string, { pane: string; step: string }> }>("/api/debug-fix", 3_000);
+/** The Debug and fix panes open now, by job (machine/id), each with the step its session wrote and what that step
+ * means: `working` (still going), `done` (finished) or `stuck` (needs James). Every 3 seconds. */
+const useFixes = () =>
+  useApi<{ fixes: Record<string, { pane: string; step: string; state: "working" | "done" | "stuck" }> }>(
+    "/api/debug-fix",
+    3_000,
+  );
 
 /** A failed cron row's Debug and fix (James, 2026-11-11): opens a new pi session in a new tmux pane, split beside the
  * one James is looking at, which debugs the failure test first, ships the fix and reruns the job. While its pane is
@@ -89,13 +94,52 @@ function DebugFix({
     }
     setBusy(false);
   };
-  if (open)
+  // Close a session that finished or is stuck: the pane closes, so the row's button comes back to Debug and fix,
+  // and a row whose cause is fixed leaves Priority tasks at the next machine read.
+  const close = async () => {
+    setBusy(true);
+    setWhy("");
+    try {
+      const r = await fetch("/api/debug-fix", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) await mutate();
+      else setWhy(body.why || `failed (${r.status})`);
+    } catch (e) {
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  // A session that reached its last step is not working any more (James, 2026-11-12: "I need that row to be
+  // resolved. Like, it's stuck right now"). `done` and `stuck` say so, drop the spinner, and give James the way
+  // out: a Close that ends the session and brings the button back.
+  if (open) {
+    const working = open.state === "working";
+    const text = open.state === "stuck" ? "Stuck: needs you" : open.state === "done" ? "Done" : open.step;
+    const title =
+      open.state === "stuck"
+        ? `The session needs you: read it in tmux pane ${open.pane}`
+        : open.state === "done"
+          ? `The session finished: read it in tmux pane ${open.pane}`
+          : `Debug and fix is open in tmux pane ${open.pane}`;
     return (
-      <button className="btn fixing" type="button" disabled title={`Debug and fix is open in tmux pane ${open.pane}`}>
-        <span className="spinner" aria-hidden="true" />
-        <span className="step">{open.step}</span>
-      </button>
+      <>
+        {why ? <span className="why">{why}</span> : null}
+        <button className={`btn fixing ${open.state}`} type="button" disabled title={title}>
+          {working ? <span className="spinner" aria-hidden="true" /> : null}
+          <span className="step">{text}</span>
+        </button>
+        {working ? null : (
+          <button className="btn" type="button" onClick={close} disabled={busy}>
+            {busy ? "Closing…" : "Close"}
+          </button>
+        )}
+      </>
     );
+  }
   return (
     <>
       {why ? <span className="why">{why}</span> : null}

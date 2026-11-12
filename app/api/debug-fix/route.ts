@@ -2,6 +2,7 @@ import { p0Rows, triageRow } from "@/lib/priority";
 import { ticketsView } from "@/lib/server/board";
 import { config } from "@/lib/server/config";
 import {
+  closeFixPane,
   fixKey,
   LOOP_GONE,
   mainChecksPrompt,
@@ -109,4 +110,17 @@ export async function GET(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;
   return json({ fixes: await openFixes() });
+}
+
+/** The Close button of a session that finished or is stuck (James, 2026-11-12: "I need that row to be resolved"):
+ * closes that fix pane, so the row's button comes back to Debug and fix. Only a pane Collector tagged with that key
+ * is closed; the key is matched against the open fixes, never passed to tmux as a target. */
+export async function DELETE(req: Request) {
+  const refusal = guard(req);
+  if (refusal) return refusal;
+  const body = await req.json().catch(() => null);
+  const key = typeof body?.key === "string" ? body.key : "";
+  if (!key) return json({ ok: false, why: "no session named" }, 400);
+  const r = await closeFixPane(key);
+  return r.ok ? json({ ok: true }) : json(r, 409);
 }
