@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kimiReading, nousTopup, renewsText } from "@/lib/server/ai";
+import { kimiReading, nousReading, nousTopup, renewsText } from "@/lib/server/ai";
 import { perMonth, polarRevenue, stripeRevenue } from "@/lib/server/billing";
 import { daysLeft, parseRdap, parseWhois } from "@/lib/server/domains";
 import { parseEnv } from "@/lib/server/env";
@@ -743,12 +743,34 @@ describe("nousTopup", () => {
   it("reads the balance as the share of the current $25 top-up used", () => {
     expect(nousTopup(15.35)).toMatchObject({ label: "Top-up ($25)", used: 39, left: "$15.35 of $25 left" });
   });
-  it("counts the full top-ups still waiting behind the current one", () => {
-    expect(nousTopup(40)).toMatchObject({ used: 40, left: "$15.00 of $25 left · 1 more $25 top-up waiting" });
-    expect(nousTopup(75)).toMatchObject({ used: 0, left: "$25.00 of $25 left · 2 more $25 top-ups waiting" });
+  // James, 2026-11-12: "there's $25 and it should show how much is left of the $25 ... I don't know what the fuck one
+  // more $25 top-up waiting means." The balance is shown as it is, never split into blocks.
+  it("shows the whole balance left, with no top-ups waiting", () => {
+    expect(nousTopup(25.071492236524648)).toMatchObject({ used: 0, left: "$25.07 of $25 left" });
+    expect(nousTopup(40)).toMatchObject({ used: 0, left: "$40.00 of $25 left" });
   });
   it("shows a spent top-up as 100% used", () => {
     expect(nousTopup(0)).toMatchObject({ used: 100, left: "$0.00 of $25 left" });
+  });
+});
+
+// James, 2026-11-12: "It should show 100% of the $20 subscription is used." The portal's numbers that day.
+describe("nousReading", () => {
+  const portal = {
+    logged_in: true,
+    plan: "Hermes Plus",
+    usable: 25.071492236524648,
+    monthly: 0,
+    charge: 20,
+    plan_left: 0,
+    topup: 25.071492236524648,
+    renews: "2026-11-20T14:07:02.000Z",
+  };
+  it("names the plan by what it costs and shows its credits used up", () => {
+    const r = nousReading(portal);
+    expect(r.plan).toBe("Hermes Plus ($20/month)");
+    expect(r.windows?.[0]).toMatchObject({ label: "Plan ($20/month)", used: 100, resets: portal.renews });
+    expect(r.windows?.[1]).toMatchObject({ label: "Top-up ($25)", used: 0, left: "$25.07 of $25 left" });
   });
 });
 

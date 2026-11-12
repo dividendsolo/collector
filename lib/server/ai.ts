@@ -39,7 +39,7 @@ from hermes_cli.nous_account import get_nous_portal_account_info
 info = get_nous_portal_account_info(force_fresh=True)
 access, sub = getattr(info, "paid_service_access_info", None), getattr(info, "subscription", None)
 print(json.dumps({"logged_in": bool(getattr(info, "logged_in", False)), "plan": getattr(sub, "plan", None),
-                  "usable": getattr(access, "total_usable_credits", None), "monthly": getattr(sub, "monthly_credits", None),
+                  "usable": getattr(access, "total_usable_credits", None), "monthly": getattr(sub, "monthly_credits", None), "charge": getattr(sub, "monthly_charge", None),
                   "plan_left": getattr(access, "subscription_credits_remaining", None),
                   "topup": getattr(access, "purchased_credits_remaining", None),
                   "renews": getattr(sub, "current_period_end", None)}))
@@ -66,16 +66,14 @@ export function renewsText(iso: string | null | undefined, now = new Date()): st
 
 export const NOUS_TOPUP_USD = 25;
 
-/** James tops up Nous $25 at a time, so the top-up reads as the share of the current $25 used. */
+/** James tops up Nous $25 at a time: the bar is the share of $25 used, and the text is the whole balance left
+ * (James, 2026-11-12: "it should show how much is left of the $25"; a balance is never split into waiting top-ups). */
 export function nousTopup(left: number, size = NOUS_TOPUP_USD) {
-  const blocks = Math.max(1, Math.ceil(left / size));
-  const current = left - (blocks - 1) * size;
-  const waiting = blocks - 1;
   return {
     label: `Top-up ($${size})`,
-    used: Math.round(Math.min(100, Math.max(0, (1 - current / size) * 100))),
+    used: Math.round(Math.min(100, Math.max(0, (1 - left / size) * 100))),
     resets: null,
-    left: `$${current.toFixed(2)} of $${size} left${waiting ? ` · ${waiting} more $${size} top-up${waiting === 1 ? "" : "s"} waiting` : ""}`,
+    left: `$${left.toFixed(2)} of $${size} left`,
   };
 }
 
@@ -89,19 +87,30 @@ async function nous(): Promise<Reading> {
   const py = path.join(HERMES_HOME, "hermes-agent", "venv", "bin", "python");
   const [data, err] = await run([py, "-c", NOUS_SCRIPT], { timeout: 30 });
   if (!data?.logged_in) return { note: nousNote(data, err) };
+  return nousReading(data);
+}
+
+/** The Nous row from the portal's numbers. */
+export function nousReading(data: any): Reading {
   const usable = data.usable;
   const low = isNum(usable) && usable < AI_LOW_USD;
   const topup = isNum(data.topup) ? data.topup : usable;
   const topupWindow = isNum(topup) ? nousTopup(topup) : null;
+  // The plan is named by what it costs (James, 2026-11-12: "100% of the $20 subscription is used"). Since 2026-11-12 the
+  // portal can say 0 monthly credits for a paid plan: then nothing of the plan is left, so it reads 100% used.
+  const charge = isNum(data.charge) && data.charge > 0 ? data.charge : null;
   const planUsed =
     isNum(data.monthly) && data.monthly > 0 && isNum(data.plan_left)
       ? Math.round(Math.min(100, Math.max(0, (1 - data.plan_left / data.monthly) * 100)))
-      : null;
+      : charge !== null && isNum(data.plan_left) && data.plan_left <= 0
+        ? 100
+        : null;
+  const planLabel = charge !== null ? `Plan ($${charge.toFixed(0)}/month)` : "Plan credits";
   return {
-    plan: isNum(data.monthly) ? `${data.plan} ($${data.monthly.toFixed(0)}/month)` : data.plan,
+    plan: charge !== null ? `${data.plan} ($${charge.toFixed(0)}/month)` : data.plan,
     left: isNum(topup) ? `$${topup.toFixed(2)}` : null,
     windows: [
-      ...(planUsed === null ? [] : [{ label: "Plan credits", used: planUsed, resets: data.renews ?? null, low }]),
+      ...(planUsed === null ? [] : [{ label: planLabel, used: planUsed, resets: data.renews ?? null, low }]),
       ...(topupWindow ? [{ ...topupWindow, low }] : []),
     ],
     low,
