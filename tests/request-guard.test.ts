@@ -285,6 +285,7 @@ describe("every route in the repo", () => {
       "app/api/hermes/route.ts",
       "app/api/projects/route.ts",
       "app/api/proposals/route.ts",
+      "app/api/release/route.ts",
       "app/api/tailscale/route.ts",
     ]);
   });
