@@ -18,6 +18,7 @@ import plistlib
 import re
 import socket
 import sqlite3
+import stat
 import subprocess
 import sys
 import time
@@ -2182,6 +2183,19 @@ def brief_parts(text):
     return ({}, text or "")
 
 
+def brief_open(path):
+    """One brief file opened for reading, never through a symlink (collector#125): the folder is writable from a
+    container, and a link there must not show Collector's reader any file it can read. O_NOFOLLOW makes the open
+    itself refuse a link (OSError), so no check-then-open race is left. O_NONBLOCK and the regular-file check keep a
+    FIFO named `x.md` from hanging the snapshot: anything that is not a plain file is OSError too.
+    """
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise OSError(f"not a regular file: {path}")
+    return os.fdopen(fd, errors="replace")
+
+
 def briefs_read(directory=BRIEFS_DIR, head=BRIEF_HEAD):
     """One row per brief in the folder, oldest first: its file name, the brief's name, its subject and when it went
     out. The file name starts with the UTC stamp the writer saved it at, so sorting the names is sorting by time. A
@@ -2198,7 +2212,7 @@ def briefs_read(directory=BRIEFS_DIR, head=BRIEF_HEAD):
         if name.startswith(".") or not name.endswith(".md"):
             continue
         try:
-            with open(os.path.join(directory, name), errors="replace") as f:
+            with brief_open(os.path.join(directory, name)) as f:
                 text = f.read(head)
         except OSError:
             continue
@@ -2219,7 +2233,7 @@ def brief_file(name, directory=BRIEFS_DIR, limit=BRIEF_MAX_BODY):
     if not os.path.isfile(path):
         return None
     try:
-        with open(path, errors="replace") as f:
+        with brief_open(path) as f:
             text = f.read(limit)
     except OSError:
         return None

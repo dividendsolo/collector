@@ -120,6 +120,7 @@ describe("collect.py's brief folder read (collector#64)", () => {
         cwd: process.cwd(),
         input: JSON.stringify(spec),
         encoding: "utf8",
+        timeout: 10_000, // a reader that hangs (a FIFO in the folder) fails the test instead of hanging the run
       }),
     ) as { rows: any[]; one: any; missing: any };
 
@@ -189,6 +190,33 @@ describe("collect.py's brief folder read (collector#64)", () => {
     expect(out.one).toBe(null);
     const gone = read({ files: {}, missing: file("2026-11-01T000000Z", "lead-watch", "zzzzzz") });
     expect(gone.missing).toBe(null);
+  });
+
+  describe("a symlink in the folder is no brief (collector#125)", () => {
+    const LINK = "2026-11-12T000000Z-x-000000.md";
+    const SECRET = "SECRET_LINE=outside-the-briefs-folder";
+    const files = { [LEAD]: brief("---\nbrief: Lead Watch\n---\n"), [LINK]: { link: `${SECRET}\n` } };
+
+    it("lists only the regular brief", () => {
+      const out = read({ files });
+      expect(out.rows.map((r: any) => r.file)).toEqual([LEAD]);
+      expect(JSON.stringify(out)).not.toContain(SECRET);
+    });
+
+    it("reads the symlink as no brief, and the file it points to nowhere", () => {
+      const out = read({ files, read: LINK });
+      expect(out.one).toBe(null);
+      expect(JSON.stringify(out)).not.toContain(SECRET);
+    });
+
+    it("skips a FIFO named like a brief instead of waiting on it forever", () => {
+      const out = read({
+        files: { [LEAD]: brief("---\nbrief: Lead Watch\n---\n"), [LINK]: { fifo: true } },
+        read: LINK,
+      });
+      expect(out.rows.map((r: any) => r.file)).toEqual([LEAD]);
+      expect(out.one).toBe(null);
+    });
   });
 
   it("reads no folder as no briefs, the way every other read here reads without its file", () => {
