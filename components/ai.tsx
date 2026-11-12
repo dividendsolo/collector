@@ -52,45 +52,55 @@ export function AiPlan({ a }: { a: any }) {
         </span>
       </div>
       {a.windows?.length || (a.kind === "usage" && !a.note) ? (
-        <div className="stats">
-          {(a.windows || []).map((w: any) => (
-            <div className="stat" key={w.label}>
-              <span className="label">
-                <BlurText text={w.label} />
-              </span>
-              <span className="value">
-                {w.used}%{" "}
-                <small>
-                  used{w.resets ? ` · resets ${resetText(w.resets)}` : ""}
-                  {w.left ? (
-                    <>
-                      {" · "}
-                      <BlurText text={w.left} />
-                    </>
-                  ) : null}
-                </small>
-              </span>
-              {/* A bar keeps its provider's color at any usage (James, 2026-11-09): a low plan is the
-                  notifications' job, not the panel's. */}
-              <div className={`bar ${a.provider}`}>
-                <span style={{ width: `${Math.min(100, w.used)}%` }} />
-              </div>
-            </div>
-          ))}
-          {a.kind === "usage" && !a.windows?.length ? (
-            <div className="stat">
-              <span className="label">Balance</span>
-              <span className="value">
-                <Left a={a} />
-              </span>
-              {a.detail ? (
-                <span className="sub">
-                  <BlurText text={a.detail} />
+        <>
+          {/* The Nous row's four limits sit in one row at desktop and two by two below it (card #131); every
+              other provider keeps the shared auto-fit grid. */}
+          <div className={`stats${a.provider === "nous" ? " four" : ""}`}>
+            {(a.windows || []).map((w: any) => (
+              <div className="stat" key={w.label}>
+                <span className="label">
+                  <BlurText text={w.label} />
                 </span>
-              ) : null}
+                <span className="value">
+                  {w.used}%{" "}
+                  <small>
+                    used{w.resets ? ` · resets ${resetText(w.resets)}` : ""}
+                    {w.left ? (
+                      <>
+                        {" · "}
+                        <BlurText text={w.left} />
+                      </>
+                    ) : null}
+                  </small>
+                </span>
+                {/* A bar keeps its provider's color at any usage (James, 2026-11-09): a low plan is the
+                    notifications' job, not the panel's. */}
+                <div className={`bar ${a.provider}`}>
+                  <span style={{ width: `${Math.min(100, w.used)}%` }} />
+                </div>
+              </div>
+            ))}
+            {a.kind === "usage" && !a.windows?.length ? (
+              <div className="stat">
+                <span className="label">Balance</span>
+                <span className="value">
+                  <Left a={a} />
+                </span>
+                {a.detail ? (
+                  <span className="sub">
+                    <BlurText text={a.detail} />
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          {/* What a limit used up means: waits for the reset, or goes on the top-up (card #131). */}
+          {a.kind === "usage" && a.windows?.length && a.detail ? (
+            <div className="note sub">
+              <BlurText text={a.detail} />
             </div>
           ) : null}
-        </div>
+        </>
       ) : (
         <div className="note sub">
           <BlurText text={a.note || a.detail || ""} />

@@ -2194,6 +2194,35 @@
   .plans .stats .stat:last-child {
     border-right: 0;
   }
+  /* The Nous row's four limits (collector#131): four across at desktop, two by two below. The separator is the
+     left edge of every stat that does not start a row, so neither layout leaves a line at the panel's edge. */
+  .plans .stats.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .plans .stats.four .stat {
+    border-right: 0;
+    border-left: 1px solid var(--line);
+    /* Four stats in a 575px panel leave each one 143px, which the shared 160px bar and an auto column overflow. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .plans .stats.four .bar {
+    width: auto;
+    max-width: 160px;
+  }
+  .plans .stats.four .stat:nth-child(2n + 1) {
+    border-left: 0;
+  }
+  @media (min-width: 900px) {
+    .plans .stats.four {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .plans .stats.four .stat:nth-child(2n + 1) {
+      border-left: 1px solid var(--line);
+    }
+    .plans .stats.four .stat:first-child {
+      border-left: 0;
+    }
+  }
   .plans .note {
     padding: 6px 16px 14px;
   }
