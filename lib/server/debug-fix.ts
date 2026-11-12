@@ -232,12 +232,18 @@ export function tmuxArgs(cwd: string, prompt: string): string[] {
 
 /** Open the session for a failed job. Fails, with the reason, when no tmux session is open on this machine. */
 export const openDebugSession = (m: DebugMachine, j: DebugJob, run = runText) =>
-  openFixPane(fixKey(m.machine, j.id), debugPrompt(m, j), run);
+  openFixPane(fixKey(m.machine, j.id), debugPrompt(m, j), `${j.name} · ${m.machine}`, run);
 
-/** Split James's pane, start pi on the prompt, and tag the pane with its key and first step. */
+/** The fix pane's top border: its name and the step its session wrote (James, 2026-11-12: "name the window ... so
+ * it's very easy to see which one it's actually working on"). A pane option, so James's own panes keep theirs. */
+export const NAME_OPTION = "@collector_name";
+export const BORDER_FORMAT = ` #{${NAME_OPTION}}: #{${STEP_OPTION}} `;
+
+/** Split James's pane, start pi on the prompt, and tag the pane with its key, its name and first step. */
 export async function openFixPane(
   key: string,
   prompt: string,
+  name: string,
   run = runText,
 ): Promise<{ ok: true; pane: string } | { ok: false; why: string }> {
   const r = await run(["tmux", ...tmuxArgs(homedir(), prompt)], { timeout: 10 });
@@ -249,6 +255,12 @@ export async function openFixPane(
   if (pane) {
     await run(["tmux", "set", "-p", "-t", pane, JOB_OPTION, key], { timeout: 5 });
     await run(["tmux", "set", "-p", "-t", pane, STEP_OPTION, "starting"], { timeout: 5 });
+    await run(["tmux", "set", "-p", "-t", pane, NAME_OPTION, name], { timeout: 5 });
+    await run(["tmux", "set", "-p", "-t", pane, "pane-border-format", BORDER_FORMAT], { timeout: 5 });
+    // The border line is a window setting. The window's format is blank, so James's own panes there show an empty
+    // line, and only a fix pane, with its own format, shows a name.
+    await run(["tmux", "set", "-w", "-t", pane, "pane-border-format", ""], { timeout: 5 });
+    await run(["tmux", "set", "-w", "-t", pane, "pane-border-status", "top"], { timeout: 5 });
   }
   return { ok: true, pane };
 }

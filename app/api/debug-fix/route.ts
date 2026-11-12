@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const card = row?.triage;
     if (!card || card.repo !== body.triage.repo || card.number !== body.triage.number)
       return json({ ok: false, why: "that card is not the one card waiting for triage now" }, 409);
-    const r = await openFixPane(TRIAGE_KEY, triagePrompt(card));
+    const r = await openFixPane(TRIAGE_KEY, triagePrompt(card), `triage ${card.repo}#${card.number}`);
     return json(r, r.ok ? 200 : 500);
   }
   // The Unblock button (James, 2026-11-11): only for a P0 card waiting on James now, by Collector's own read.
@@ -50,7 +50,11 @@ export async function POST(req: Request) {
     );
     const card = row && waiting.find((x: any) => x.url === row.url);
     if (!row?.unblock || !card) return json({ ok: false, why: "that card is not a P0 waiting on you now" }, 409);
-    const r = await openFixPane(unblockKey(row.unblock), unblockPrompt({ ...row.unblock, lane: card.lane }));
+    const r = await openFixPane(
+      unblockKey(row.unblock),
+      unblockPrompt({ ...row.unblock, lane: card.lane }),
+      `unblock ${row.unblock.repo}#${row.unblock.number}`,
+    );
     return json(r, r.ok ? 200 : 500);
   }
   // A main that fails its checks on a machine (James, 2026-11-11): only while that machine's marker is up.
@@ -64,7 +68,7 @@ export async function POST(req: Request) {
       { machine: m.name, ssh, local: Boolean(m.local) },
       { repo: b.repo, ...brokenStep(b.line), error: b.error },
     );
-    const r = await openFixPane(mainKey({ machine: m.name, repo: b.repo }), prompt);
+    const r = await openFixPane(mainKey({ machine: m.name, repo: b.repo }), prompt, `${b.repo} main · ${m.name}`);
     return json(r, r.ok ? 200 : 500);
   }
   const machine = typeof body?.machine === "string" ? body.machine : "";
@@ -87,7 +91,7 @@ export async function POST(req: Request) {
     } as any).find((w) => w.debug?.id === WORK_LOOP);
     if (!row) return json({ ok: false, why: LOOP_GONE }, 409);
     const prompt = workLoopPrompt({ machine, ssh: ssh0, local: Boolean(m.local) }, cfg.work_script || {}, row.text);
-    const r = await openFixPane(fixKey(machine, WORK_LOOP), prompt);
+    const r = await openFixPane(fixKey(machine, WORK_LOOP), prompt, `work loop · ${machine}`);
     return json(r, r.ok ? 200 : 500);
   }
   const j = (m?.jobs || []).find((x: any) => x.id === id);
