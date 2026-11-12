@@ -790,9 +790,9 @@ describe("nousReading", () => {
     const r = nousReading(portal);
     expect(r.plan).toBe("Hermes Plus ($20/month)");
     expect(r.windows).toEqual([
-      { label: "Today", used: 65, resets: new Date(day).toISOString() },
-      { label: "This week", used: 18, resets: new Date(week).toISOString() },
-      { label: "This month", used: 6, resets: new Date(month).toISOString() },
+      { label: "Today", limit: true, used: 65, resets: new Date(day).toISOString() },
+      { label: "This week", limit: true, used: 18, resets: new Date(week).toISOString() },
+      { label: "This month", limit: true, used: 6, resets: new Date(month).toISOString() },
       { label: "Top-up ($25)", used: 0, resets: null, left: "$25.07 of $25 left" },
     ]);
     expect(r.windows?.some((w) => w.label.startsWith("Plan"))).toBe(false);
@@ -836,7 +836,7 @@ describe("nousReading", () => {
         keep_going_on_credits: false,
       },
     });
-    expect(r.windows?.[0]).toMatchObject({ label: "Today", used: 65, resets: null });
+    expect(r.windows?.[0]).toMatchObject({ label: "Today", limit: true, used: 65, resets: null });
   });
 });
 

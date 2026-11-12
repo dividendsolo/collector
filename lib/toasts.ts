@@ -10,7 +10,7 @@
  */
 
 import type { Check } from "./checks";
-import { AI_LOW_PERCENT, resetText } from "./format";
+import { AI_LOW_PERCENT, limitLow, resetText } from "./format";
 import { jumpHref } from "./jump";
 import { webUrl } from "./links";
 
@@ -302,7 +302,9 @@ interface AiIn {
   link?: string;
   /** A limit is used up (lib/server/ai.ts). */
   out?: boolean;
-  windows?: { label: string; used: number; resets: string | null }[];
+  /** Nous keep-going is off: past a limit Hermes waits for the reset (lib/server/ai.ts). */
+  waits?: boolean;
+  windows?: { label: string; used: number; resets: string | null; limit?: boolean }[];
 }
 
 /** The limit names a toast says ("the weekly limit"), by the window's label in lib/server/ai.ts. */
@@ -310,19 +312,67 @@ const LIMIT_NAMES: Record<string, string> = {
   Week: "weekly",
   "5-hour session": "5-hour session",
   "5-hour window": "5-hour",
+  // The Nous portal's own gauge labels (card #131).
+  Today: "daily",
+  "This week": "weekly",
+  "This month": "monthly",
 };
+
+const limitName = (w: { label: string }) => LIMIT_NAMES[w.label] || w.label.toLowerCase();
+
+/** "the daily limit is", "the daily and weekly limits are". */
+const theLimits = (ws: { label: string }[]) =>
+  `the ${ws.map(limitName).join(" and ")} ${ws.length > 1 ? "limits are" : "limit is"}`;
 
 /** Why the toast is up, and nothing else (James, 2026-11-11: "Just put why the notification is up"): each low window as
  * "Only 7% of the weekly limit is left. Resets Thu 10 PM." A reading with no windows (a balance) says what is left. */
-function whyLow(a: AiIn, now: number): string {
-  const low = (a.windows || []).filter((w) => 100 - w.used < AI_LOW_PERCENT);
+function whyLow(a: AiIn, now: number, low = (a.windows || []).filter((w) => 100 - w.used < AI_LOW_PERCENT)): string {
   if (!low.length) return `${a.left ?? "?"} left`;
   return low
     .map((w) => {
       const reset = resetText(w.resets, now);
-      return `Only ${Math.max(0, 100 - w.used)}% of the ${LIMIT_NAMES[w.label] || w.label.toLowerCase()} limit is left.${reset ? ` Resets ${reset}.` : ""}`;
+      return `Only ${Math.max(0, 100 - w.used)}% of the ${limitName(w)} limit is left.${reset ? ` Resets ${reset}.` : ""}`;
     })
     .join(" ");
+}
+
+/** The Nous toast when a plan limit, not the credits, is why it is up (card #131). With keep-going off a top-up is
+ * not used, so it gets no Top up button; a used-up limit says when Hermes goes again (the latest of their resets). */
+function nousLimitToast(a: AiIn, now: number): Pick<Toast, "state" | "title" | "text" | "action"> | null {
+  const limits = (a.windows || []).filter((w) => w.limit);
+  const usedUp = limits.filter((w) => w.used >= 100);
+  if (a.waits && usedUp.length) {
+    // ISO times sort as text; one unknown reset makes the latest unknown.
+    const last = usedUp.some((w) => !w.resets)
+      ? null
+      : usedUp
+          .map((w) => w.resets as string)
+          .sort()
+          .at(-1);
+    const reset = resetText(last, now);
+    return {
+      state: `out:${usedUp.map((w) => w.label).join(",")}`,
+      title: `Nous: ${theLimits(usedUp)} used up`,
+      text: `Hermes waits for the reset${reset ? ` ${/^\d/.test(reset) ? "at" : "on"} ${reset}` : ""}.`,
+    };
+  }
+  if (a.left === "$0.00") return null;
+  // Keep-going on: past a limit Hermes runs on the top-up, so the toast is about that balance, with its button.
+  if (usedUp.length)
+    return {
+      state: `on:${usedUp.map((w) => w.label).join(",")}:${a.left}`,
+      title: `Nous: ${theLimits(usedUp)} used up`,
+      text: `Hermes keeps going on the top-up: ${a.left ?? "?"} left.`,
+      action: AI_TOASTS.nous.action,
+    };
+  const low = limits.filter((w) => limitLow(w.used));
+  if (!low.length) return null;
+  return {
+    state: `low:${low.map((w) => w.label).join(",")}`,
+    title: `Nous: ${theLimits(low)} nearly used up`,
+    text: whyLow(a, now, low),
+    ...(a.waits ? {} : { action: AI_TOASTS.nous.action }),
+  };
 }
 
 export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast[] {
@@ -330,6 +380,18 @@ export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast
   for (const a of ai || []) {
     const t = AI_TOASTS[a.provider];
     if (!t || !a.low) continue;
+    const limit = a.provider === "nous" ? nousLimitToast(a, now) : null;
+    if (limit) {
+      out.push({
+        key: `ai:${a.provider}`,
+        level: "error",
+        noDot: true,
+        href: a.link || jumpHref("dashboard", "ai-plans"),
+        dismissible: true,
+        ...limit,
+      });
+      continue;
+    }
     const empty = !!a.out || a.left === "$0.00" || a.left === "0%";
     const action = (empty && t.outAction) || t.action;
     out.push({

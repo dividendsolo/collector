@@ -11,7 +11,7 @@ import { check } from "./services";
 export const AI_LOW_USD = 5;
 export { AI_LOW_PERCENT } from "../format"; // under these, a provider goes to Needs attention
 
-import { AI_LOW_PERCENT, resetText } from "../format";
+import { AI_LOW_PERCENT, limitLow, resetText } from "../format";
 
 export interface AiRow {
   provider: string;
@@ -26,7 +26,10 @@ export interface AiRow {
   /** Nothing left to call: a window at 0%, or no Nous credit. Low is a warning; out stops the lanes. */
   out?: boolean;
   alert?: string;
-  windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string }[];
+  /** Nous keep-going is off: past a plan limit Hermes waits for the reset and the top-up is not used. */
+  waits?: boolean;
+  /** `limit`: a plan limit (a Nous gauge), not a balance. */
+  windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string; limit?: boolean }[];
 }
 type Reading = Omit<AiRow, "provider" | "profiles" | "link" | "kind">;
 
@@ -100,6 +103,7 @@ export function nousGauge(g: any) {
   const at = isNum(g?.resets_at_ms) ? new Date(g.resets_at_ms) : null;
   return {
     label,
+    limit: true,
     used: Math.floor(g.used_bp / 100),
     // A reset time the payload cannot place is no reset time: the payload is outside data, and a throw here would
     // take every provider's row down with it (`readAll`'s Promise.all).
@@ -141,7 +145,8 @@ export function nousReading(data: any): Reading {
           : "Past a limit, Hermes waits for the reset; the top-up is not used.",
     // A limit at 90% or more, and the credits nearly gone, mark the row low; a limit used up while keep-going is
     // off, or no credit at all, marks it out ("waits for the reset").
-    low: gauges.some((g: { used: number }) => 100 - g.used <= AI_LOW_PERCENT) || (isNum(usable) && usable < AI_LOW_USD),
+    ...(going === false ? { waits: true } : {}),
+    low: gauges.some((g: { used: number }) => limitLow(g.used)) || (isNum(usable) && usable < AI_LOW_USD),
     out: (going === false && gauges.some((g: { used: number }) => g.used >= 100)) || (isNum(usable) && usable <= 0),
   };
 }
