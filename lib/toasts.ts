@@ -281,7 +281,8 @@ const AI_TOASTS: Record<
     name: "Nous",
     out: "Nous credits are out",
     low: "Nous credits are nearly out",
-    action: { label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" },
+    // Only when the top-up is used up (James, 2026-11-12), never on a limit or on credits that are only low.
+    outAction: { label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" },
   },
   // Claude sometimes grants a free limit reset; its "Reset for free" button is on Settings > Usage, and Collector cannot
   // see whether one is there (James, 2026-11-11: "Check for reset is good"). Only when Claude is out: "when it's
@@ -336,9 +337,11 @@ function whyLow(a: AiIn, now: number, low = (a.windows || []).filter((w) => 100 
     .join(" ");
 }
 
-/** The Nous toast when a plan limit, not the credits, is why it is up (card #131). With keep-going off a top-up is
- * not used, so it gets no Top up button; a used-up limit says when Hermes goes again (the latest of their resets). */
-function nousLimitToast(a: AiIn, now: number): Pick<Toast, "state" | "title" | "text" | "action"> | null {
+/** The Nous toast when a plan limit, not the credits, is why it is up (card #131). A limit toast never has a Top up
+ * button: with keep-going off the top-up is not used, and with it on the top-up still has money (James, 2026-11-12:
+ * "the top up button only should show when the top-up is used up, not when the daily limit is used up"). The button
+ * is on the credits toasts, "out" and "nearly out", below. A used-up limit says when Hermes goes again. */
+function nousLimitToast(a: AiIn, now: number): Pick<Toast, "state" | "title" | "text"> | null {
   const limits = (a.windows || []).filter((w) => w.limit);
   const usedUp = limits.filter((w) => w.used >= 100);
   if (a.waits && usedUp.length) {
@@ -357,13 +360,12 @@ function nousLimitToast(a: AiIn, now: number): Pick<Toast, "state" | "title" | "
     };
   }
   if (a.left === "$0.00") return null;
-  // Keep-going on: past a limit Hermes runs on the top-up, so the toast is about that balance, with its button.
+  // Keep-going on: past a limit Hermes runs on the top-up, so the toast says what is left of it.
   if (usedUp.length)
     return {
       state: `on:${usedUp.map((w) => w.label).join(",")}:${a.left}`,
       title: `Nous: ${theLimits(usedUp)} used up`,
       text: `Hermes keeps going on the top-up: ${a.left ?? "?"} left.`,
-      action: AI_TOASTS.nous.action,
     };
   const low = limits.filter((w) => limitLow(w.used));
   if (!low.length) return null;
@@ -371,7 +373,6 @@ function nousLimitToast(a: AiIn, now: number): Pick<Toast, "state" | "title" | "
     state: `low:${low.map((w) => w.label).join(",")}`,
     title: `Nous: ${theLimits(low)} nearly used up`,
     text: whyLow(a, now, low),
-    ...(a.waits ? {} : { action: AI_TOASTS.nous.action }),
   };
 }
 

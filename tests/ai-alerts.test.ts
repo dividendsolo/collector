@@ -211,10 +211,24 @@ describe("the Nous toast on plan limits", () => {
     expect(t.action).toBeUndefined();
   });
 
-  it("keeps the Top up while keep-going is on, since the top-up is then used", () => {
+  // James, 2026-11-12: "the top up button only should show when the top-up is used up, not when the daily limit is
+  // used up". With keep-going on and $25.07 left there is nothing to top up yet.
+  it("has no Top up while keep-going runs on a top-up that still has money", () => {
     const [t] = aiToasts([nous(10000, true)], now);
     expect(t.title).toBe("Nous: the daily limit is used up");
     expect(t.text).toBe("Hermes keeps going on the top-up: $25.07 left.");
+    expect(t.action).toBeUndefined();
+  });
+
+  it("has no Top up on a nearly used-up limit with keep-going on", () => {
+    const [t] = aiToasts([nous(9500, true)], now);
+    expect(t.title).toBe("Nous: the daily limit is nearly used up");
+    expect(t.action).toBeUndefined();
+  });
+
+  it("shows Top up once the top-up itself is used up, limit or no limit", () => {
+    const [t] = aiToasts([nous(10000, true, 0)], now);
+    expect(t.title).toBe("Nous credits are out");
     expect(t.action).toEqual({ label: "Top up", url: "https://portal.nousresearch.com/manage-subscription" });
   });
 
@@ -235,6 +249,7 @@ describe("the Nous toast on plan limits", () => {
     const [t] = aiToasts([nous(1000, false, 3.5)], now);
     expect(t.title).toBe("Nous credits are nearly out");
     expect(t.text).toBe("$3.50 left");
+    expect(t.action).toBeUndefined();
   });
 
   it("gives a reason at exactly 90%, the same threshold the row reads", () => {
