@@ -51,7 +51,7 @@ export function AiPlan({ a }: { a: any }) {
           {a.profiles} {a.profiles === 1 ? "profile" : "profiles"}
         </span>
       </div>
-      {a.windows?.length || a.kind === "usage" ? (
+      {a.windows?.length || (a.kind === "usage" && !a.note) ? (
         <div className="stats">
           {(a.windows || []).map((w: any) => (
             <div className="stat" key={w.label}>

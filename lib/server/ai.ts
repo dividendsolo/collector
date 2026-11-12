@@ -79,10 +79,16 @@ export function nousTopup(left: number, size = NOUS_TOPUP_USD) {
   };
 }
 
+/** Why the Nous row is empty: a lost login needs James to sign in again, anything else is a read error. */
+export function nousNote(data: any, err?: string | null): string {
+  if (data && data.logged_in === false) return "Nous signed out. Run: hermes auth add nous";
+  return `Could not read the Nous portal: ${err || "no answer"}`;
+}
+
 async function nous(): Promise<Reading> {
   const py = path.join(HERMES_HOME, "hermes-agent", "venv", "bin", "python");
   const [data, err] = await run([py, "-c", NOUS_SCRIPT], { timeout: 30 });
-  if (!data?.logged_in) return { note: `Could not read the Nous portal: ${err || "not logged in"}` };
+  if (!data?.logged_in) return { note: nousNote(data, err) };
   const usable = data.usable;
   const low = isNum(usable) && usable < AI_LOW_USD;
   const topup = isNum(data.topup) ? data.topup : usable;
