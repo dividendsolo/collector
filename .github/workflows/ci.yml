@@ -16,8 +16,14 @@ jobs:
       contents: read
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v5.1.0
+      - name: Lockfile check (every action pinned to a commit)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh extension list | grep -q 'gh-actions-lock' || gh extension install github/gh-actions-lock --pin v0.4.1
+          gh actions-lock --verify
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: 1.4.1
       - run: bun install --frozen-lockfile --ignore-scripts
