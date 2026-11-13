@@ -314,6 +314,18 @@ describe("the Triage button", () => {
     expect(p).not.toContain("@collector_step");
   });
 
+  // James, 2026-11-13: the session must hold the triage skill. It is `disable-model-invocation`, so pi never picks it
+  // by itself and only its own command loads it. pi reads the skill's name up to the first space of the whole
+  // message (`_expandSkillCommand`), so the request starts on the same line as the command: a first line of bare
+  // "/skill:triage" expands to nothing, and the skill is silently skipped.
+  it("starts with the triage skill's own command, so pi loads the skill", () => {
+    const p = triagePrompt({ repo: "dividendsolo/omarchy4mac", number: 45 });
+    const first = p.split("\n")[0];
+    expect(first.startsWith("/skill:triage ")).toBe(true);
+    expect(first.split(" ")[0]).toBe("/skill:triage");
+    expect(first).toContain("dividendsolo/omarchy4mac#45");
+  });
+
   it("shows its open session as triaging", () => {
     expect(parseFixes("%9|triage|starting\n")).toEqual({
       triage: { pane: "%9", step: "triaging", state: "working" },

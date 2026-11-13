@@ -1,0 +1,71 @@
+collector#138 — the Triage button's session loads the triage skill
+==================================================================
+
+Proof run: 2026-11-13, on altair, by hand — the card allows "the pane command run by hand"
+instead of a real click. The live Collector on port 4000 serves the build from before this
+card, so a click there would run the old prompt.
+
+The Triage button's session is `openFixPane(TRIAGE_KEY, triagePrompt(card), ...)`
+(`app/api/debug-fix/route.ts`), which starts the pane with `tmuxArgs(homedir(), prompt)`
+(`lib/server/debug-fix.ts`): cwd `$HOME`, as the card asks.
+
+1. The pane command, run against a tmux session of this run's own (name `collector138`), never
+   James's pane. `-t collector138:` is the only addition to the argv `tmuxArgs` builds:
+
+   tmux split-window -t collector138: -h -c /Users/james -P -F '#{pane_id}' /bin/zsh -lc \
+     'PATH="$HOME/.local/bin:$PATH"; exec pi --provider claude-code --model claude-opus-5-5 "$0"' \
+     '/skill:triage Triage dividendsolo/omarchy4mac#45 with James. It is the one card in
+      needs-triage on the board. ... 6. Then run the after-triage-sweep skill on the same repo.'
+
+2. pi expanded the skill into that pane session's first message. From the pane's own session
+   file (~/.pi/agent/sessions/--Users-james--/2026-11-13T16-53-46-952Z_01a1d5d4-....jsonl),
+   first user message, 7341 bytes:
+
+     <skill name="triage" location="/Users/james/.claude/skills/triage/SKILL.md"> ... # Triage ... </skill>
+     /skill:triage Triage dividendsolo/omarchy4mac#45 with James. ... 6. Then run the
+     after-triage-sweep skill on the same repo.
+
+   So the pane's pi finds the skill: `~/.pi/agent/settings.json` names `~/.claude/skills` under
+   `skills`, and pi reads it whatever the pane's cwd is. No change to `tmuxArgs` was needed.
+
+3. The session at work in the pane (`tmux capture-pane -p -t collector138 -S -3000`), walking the
+   triage skill's own flow — check the board, the lanes, the card:
+
+     Issue 45 is closed with no status, even though the task calls it the one needs-triage card on
+     the board. The needs-triage list came back empty, so I'll look at the board directly across
+     repos.
+
+     codemode
+     const r = await Promise.allSettled([
+       tools.bash({ command: "~/.local/bin/status list needs-triage --json 2>&1 | head -60" }),
+       tools.bash({ command: "gh issue list -R dividendsolo/omarchy4mac --state open --limit 30 ..." }),
+     ]);
+
+     ✓ bash {"command":"~/.local/bin/status list needs-triage --json 2>&1 | head -60"} 1.3s
+     ✓ bash {"command":"gh issue list -R dividendsolo/omarchy4mac --state open --limit 30... 446ms
+
+     ==> text 1/2 <==
+     []
+     ==> text 2/2 <==
+
+     Issue 45 is closed and has no status, and the board shows nothing in needs-triage, which
+     doesn't match what the task said. I'll check the board's items directly, since the status
+     list might depend on the repo roster.
+
+     ── ⠋ Working ──
+     (claude-code) claude-opus-5-5 • medium
+
+   (Excerpt: the session's later reads — the board's own item list — are left out, since the board
+   id is one of the facts this public repo keeps out of its files, the way `config.json` does.)
+
+   The session read only. It was killed at once (tmux kill-session), and it changed no card.
+
+4. The line rule the prompt has to keep. pi reads the skill's name up to the first space of the
+   whole message. The same prompt with `/skill:triage` alone on its first line does not expand —
+   pi sent 60 bytes with no skill block, and the model answered "I don't have a `triage` skill
+   loaded." The request therefore starts on the command's own line, which is the form pi
+   documents: `/skill:name <request>`.
+
+Files from the run (gitignored, `.artifacts/138/`): `pane-cmd.sh` (the command above),
+`pane-full.txt` (the capture), `prompt.txt` (the prompt), `make-pane-cmd.ts` (builds the script
+from `tmuxArgs` itself).
