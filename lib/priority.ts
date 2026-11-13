@@ -41,8 +41,8 @@ export function priorityOrder<T extends { group?: PriorityGroup }>(rows: T[]): T
 }
 
 /** A card's owner/repo: from its issue URL, since the board names the repo alone (the 500 James hit on Unblock,
- * 2026-11-11); else the repo as given. */
-function fullRepo(t: { repo?: string | null; url?: string | null }): string {
+ * 2026-11-11; the triage badge needs it too, 2026-11-13); else the repo as given. */
+export function fullRepo(t: { repo?: string | null; url?: string | null }): string {
   const m = String(t.url ?? "").match(/github\.com\/([^/]+\/[^/]+)\/issues\//);
   return m ? m[1] : String(t.repo ?? "");
 }

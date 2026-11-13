@@ -293,26 +293,50 @@ export async function closeFixPane(key: string, run = runText): Promise<{ ok: tr
   return r.error ? { ok: false, why: r.error } : { ok: true };
 }
 
-/** The Debug and fix panes open now, by job (machine/id): each one's step. A pane closed is gone from tmux, so the
- * button comes back by itself. No tmux running reads as none open. */
-export async function openFixes(
-  run = runText,
-): Promise<Record<string, { pane: string; step: string; state: StepKind }>> {
-  const r = await run(["tmux", "list-panes", "-a", "-F", `#{pane_id}${SEP}#{${JOB_OPTION}}${SEP}#{${STEP_OPTION}}`], {
-    timeout: 5,
-  });
+/** One open Debug and fix pane: its step, and, for the one triage pane, the card it is on. */
+export interface OpenFix {
+  pane: string;
+  step: string;
+  state: StepKind;
+  /** The triage pane only: the card that session is on, from the pane's own name. */
+  card?: { repo: string; number: number };
+}
+
+/** The Debug and fix panes open now, by job (machine/id): each one's step, and, for the one triage pane, the card
+ * it is on (the pane's name says which, 2026-11-13). A pane closed is gone from tmux, so the button comes back by
+ * itself. No tmux running reads as none open. */
+export async function openFixes(run = runText): Promise<Record<string, OpenFix>> {
+  const r = await run(
+    [
+      "tmux",
+      "list-panes",
+      "-a",
+      "-F",
+      `#{pane_id}${SEP}#{${JOB_OPTION}}${SEP}#{${STEP_OPTION}}${SEP}#{${NAME_OPTION}}`,
+    ],
+    { timeout: 5 },
+  );
   return parseFixes(r.error ? "" : r.stdout);
 }
 
-export function parseFixes(out: string): Record<string, { pane: string; step: string; state: StepKind }> {
-  const fixes: Record<string, { pane: string; step: string; state: StepKind }> = {};
+/** The card a triage pane is on, from the name openFixPane gave it (`triage owner/repo#12`). */
+function triageCard(name: string | undefined): { repo: string; number: number } | null {
+  const m = (name ?? "").match(/^triage ([\w.-]+\/[\w.-]+)#(\d+)$/);
+  return m ? { repo: m[1], number: Number(m[2]) } : null;
+}
+
+export function parseFixes(out: string): Record<string, OpenFix> {
+  const fixes: Record<string, OpenFix> = {};
   const at = (step: string) => ({ step, state: stepState(step).kind });
   for (const line of out.split("\n")) {
-    const [pane, key, step] = line.split(SEP);
+    const [pane, key, step, name] = line.split(SEP);
     if (!pane || !key) continue;
-    // A Triage session writes no steps: it is a talk with James, so its button says so.
-    if (key === TRIAGE_KEY) fixes[key] = { pane, ...at("triaging") };
-    else fixes[key] = { pane, ...at((FIX_STEPS as readonly string[]).includes(step) ? step : "working") };
+    // A Triage session writes no steps: it is a talk with James, so its button says so. Which card it is on comes
+    // from its pane name, so the page can show that card as triaging and hold the other buttons.
+    if (key === TRIAGE_KEY) {
+      const card = triageCard(name);
+      fixes[key] = { pane, ...at("triaging"), ...(card ? { card } : {}) };
+    } else fixes[key] = { pane, ...at((FIX_STEPS as readonly string[]).includes(step) ? step : "working") };
   }
   return fixes;
 }

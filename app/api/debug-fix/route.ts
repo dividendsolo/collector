@@ -1,4 +1,4 @@
-import { p0Rows, triageRow } from "@/lib/priority";
+import { fullRepo, p0Rows, TRIAGE_LANE } from "@/lib/priority";
 import { ticketsView } from "@/lib/server/board";
 import { config } from "@/lib/server/config";
 import {
@@ -32,14 +32,29 @@ export async function POST(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;
   const body = await req.json().catch(() => null);
-  // The Triage button (James, 2026-11-11): only for the one card in needs-triage now, by Collector's own read.
+  // The Triage button (James, 2026-11-11) and the needs-triage badge of any card (James, 2026-11-13): a card that
+  // is in needs-triage by Collector's own read, whatever else is waiting. One triage session at a time.
   if (body?.triage) {
     const t = ticketsView();
-    const row = triageRow(t.tickets.filter((x: any) => t.each.includes(x.lane)));
-    const card = row?.triage;
-    if (!card || card.repo !== body.triage.repo || card.number !== body.triage.number)
-      return json({ ok: false, why: "that card is not the one card waiting for triage now" }, 409);
-    const r = await openFixPane(TRIAGE_KEY, triagePrompt(card), `triage ${card.repo}#${card.number}`);
+    const card = t.tickets.find(
+      (x: any) =>
+        t.each.includes(x.lane) &&
+        x.lane === TRIAGE_LANE &&
+        fullRepo(x) === body.triage.repo &&
+        Number(x.number) === body.triage.number,
+    );
+    if (!card) return json({ ok: false, why: "that card is not in needs-triage now" }, 409);
+    const open = (await openFixes())[TRIAGE_KEY];
+    if (open)
+      return json(
+        {
+          ok: false,
+          why: `a triage session is already open${open.card ? ` for ${open.card.repo}#${open.card.number}` : ""}`,
+        },
+        409,
+      );
+    const ref = { repo: fullRepo(card), number: Number(card.number) };
+    const r = await openFixPane(TRIAGE_KEY, triagePrompt(ref), `triage ${ref.repo}#${ref.number}`);
     return json(r, r.ok ? 200 : 500);
   }
   // The Unblock button (James, 2026-11-11): only for a P0 card waiting on James now, by Collector's own read.
