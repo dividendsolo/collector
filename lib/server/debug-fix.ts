@@ -70,14 +70,18 @@ export function workLoopPrompt(
 }
 
 /** The first message of a Triage session (James, 2026-11-11): one card in needs-triage, triaged with James the way
- * he triages in a session. The repo and number go into a shell command in the prompt, so only a card's own shape is
- * accepted. */
+ * he triages in a session. It opens with the triage skill's own command (James, 2026-11-13), so pi loads that skill
+ * — its frontmatter sets `disable-model-invocation`, so pi never picks it by itself — and the rest of the message is
+ * the request the skill runs on: what the skill does not hold (this repo's stage, the agent stack's priority and
+ * status, `status`, the sweep). pi reads the command's name up to the first space of the **whole** message, so the
+ * request has to start on the command's own line: a first line of bare `/skill:triage` expands to nothing.
+ * The repo and number go into a shell command in the prompt, so only a card's own shape is accepted. */
 export function triagePrompt(card: { repo: string; number: number }): string {
   if (!/^[\w.-]+\/[\w.-]+$/.test(card.repo) || !Number.isInteger(card.number) || card.number < 1)
     throw new Error(`not a card: ${card.repo}#${card.number}`);
   const ref = `${card.repo}#${card.number}`;
   return [
-    `Triage ${ref} with James. It is the one card in needs-triage on the board.`,
+    `/skill:triage Triage ${ref} with James. It is the one card in needs-triage on the board.`,
     "",
     `1. Load the product-stage skill, and read the repo's CONTEXT.md \`## Stage\`. Then read the card: \`gh issue view ${card.number} -R ${card.repo} --comments\`.`,
     "2. Check every claim in the card against the code, the logs or the live system yourself before you propose anything.",
