@@ -30,7 +30,7 @@ export interface Reason {
   at: string;
 }
 
-/** Why a ticket sits in its lane: the newest Ask lane posted up to the move (shown as "kind: ask"), else the comment
+/** Why a ticket sits in its lane: the Ask lane posted for the current stay (shown as "kind: ask"), else the comment
  * that moved it there (the newest one up to when the lane label went on,
  * else the newest that reads like a reason, else the newest), cut to one sentence. */
 /** The Ask `lane set` posts before it moves a card into a James lane (agent-stack#139): "**Ask (kind):** text". */
@@ -38,8 +38,14 @@ const ASK = /\*\*Ask \(([a-z]+)\):\*\*\s*([^\n]+)/;
 
 export function pickReason(comments: Comment[], labeledAt: string[]): Reason | null {
   const moved = labeledAt[labeledAt.length - 1];
-  const asks = comments.filter((c) => ASK.test(c.body) && (!moved || c.createdAt <= moved));
-  const ask = asks[asks.length - 1];
+  const asks = comments.filter((c) => ASK.test(c.body));
+  // A new Ask posted while the card already waits beats the one that moved it in (collector#142): a `--ask` on a card
+  // already in the lane posts no label event, so the newest Ask from the start of the current stay to now is read
+  // first, and the cut at the move no longer drops it. No Ask in this stay keeps the old pick: the newest Ask posted
+  // up to the move, the one that moved it in.
+  const inStay = moved ? asks.filter((c) => c.createdAt >= moved) : asks;
+  const beforeMove = moved ? asks.filter((c) => c.createdAt <= moved) : [];
+  const ask = inStay[inStay.length - 1] ?? beforeMove[beforeMove.length - 1];
   if (ask) {
     const [, kind, text] = ask.body.match(ASK) ?? [];
     const line = `${kind}: ${text.trim()}`;
@@ -47,7 +53,6 @@ export function pickReason(comments: Comment[], labeledAt: string[]): Reason | n
   }
   let pick: Comment | undefined;
   if (labeledAt.length) {
-    const moved = labeledAt[labeledAt.length - 1];
     const before = comments.filter((c) => c.createdAt <= moved);
     pick = before[before.length - 1];
   }
