@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { ago, fetchedText } from "@/lib/format";
 import { jumpHref } from "@/lib/jump";
-import { briefsRow, p0Rows, priorityOrder, triageRow } from "@/lib/priority";
+import { briefsRow, fullRepo, p0Rows, priorityOrder, TRIAGE_LANE, triageRow } from "@/lib/priority";
 import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
@@ -43,12 +43,16 @@ function AlertAction({ action, done }: { action: { label: string; post: string }
 }
 
 /** The Debug and fix panes open now, by job (machine/id), each with the step its session wrote and what that step
- * means: `working` (still going), `done` (finished) or `stuck` (needs James). Every 3 seconds. */
-const useFixes = () =>
-  useApi<{ fixes: Record<string, { pane: string; step: string; state: "working" | "done" | "stuck" }> }>(
-    "/api/debug-fix",
-    3_000,
-  );
+ * means: `working` (still going), `done` (finished) or `stuck` (needs James). The one triage pane also carries the
+ * card it is on. Every 3 seconds. */
+interface OpenFix {
+  pane: string;
+  step: string;
+  state: "working" | "done" | "stuck";
+  /** The triage pane only: the card that session is on, from the pane's own name. */
+  card?: { repo: string; number: number };
+}
+const useFixes = () => useApi<{ fixes: Record<string, OpenFix> }>("/api/debug-fix", 3_000);
 
 /** A failed cron row's Debug and fix (James, 2026-11-11): opens a new pi session in a new tmux pane, split beside the
  * one James is looking at, which debugs the failure test first, ships the fix and reruns the job. While its pane is
@@ -428,8 +432,61 @@ function ReleasePill({ t, done }: { t: any; done: () => void }) {
   );
 }
 
+/** A `needs-triage` row's badge (James, 2026-11-13): the check is gone, because the waiting crew already moves a
+ * complete card to `ready-for-agent`, so the cards left need a real triage with James. The button starts the same
+ * interactive triage session the Priority tasks Triage button starts, for that card. One triage session at a time:
+ * the card being triaged says so where its status was, and the other cards' buttons wait for it. */
+function TriagePill({ t }: { t: any }) {
+  const card = { repo: fullRepo(t), number: Number(t.number) };
+  const { data, mutate } = useFixes();
+  const open = data?.fixes?.triage;
+  const mine = open?.card?.repo === card.repo && open?.card?.number === card.number;
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState("");
+  const click = async () => {
+    setBusy(true);
+    setWhy("");
+    try {
+      const r = await fetch("/api/debug-fix", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ triage: card }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) await mutate();
+      else setWhy(body.why || `failed (${r.status})`);
+    } catch (e) {
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  const title = !open
+    ? "Interactive triage"
+    : mine
+      ? `Triaging ${card.repo}#${card.number} in tmux pane ${open.pane}`
+      : "A triage session is open";
+  return (
+    <span className="release">
+      <Pill cls="warning" dot={false}>
+        {mine ? "triaging" : t.lane}
+        <button
+          type="button"
+          className="release-btn"
+          onClick={click}
+          disabled={busy || Boolean(open)}
+          title={title}
+          aria-label={`Triage ${card.repo}#${card.number} with James`}
+        >
+          <Icon name="split" />
+        </button>
+      </Pill>
+      {why ? <span className="why">{why}</span> : null}
+    </span>
+  );
+}
+
 /** Waiting on you: every ticket in the "each" lanes, needs-triage first, then by priority, then lane (waitingOrder), then oldest. The chip counts only the P0s, in red. */
-function Waiting() {
+export function Waiting() {
   const w = useWaiting();
   const [lane, setLane] = useState("all");
   // A link that names a status opens the list on it: the triage row's click shows only the needs-triage cards.
@@ -502,7 +559,13 @@ function Waiting() {
                 {shown.map((t: any) => (
                   <tr key={t.url}>
                     <td>
-                      <ReleasePill t={t} done={() => setGone((g) => new Set(g).add(t.url))} />
+                      {/* A needs-triage card's badge starts its own triage session; the other lanes keep the
+                          check that hands the card to the agents (James, 2026-11-13). */}
+                      {t.lane === TRIAGE_LANE ? (
+                        <TriagePill t={t} />
+                      ) : (
+                        <ReleasePill t={t} done={() => setGone((g) => new Set(g).add(t.url))} />
+                      )}
                     </td>
                     <td>
                       <a
