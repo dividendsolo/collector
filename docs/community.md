@@ -75,9 +75,9 @@ describe what it cost them.
 
 Public handles, each with the post that shows the problem. The quotes are from the post or thread the link opens.
 
-Each person also has one draft message: one line, under 300 characters, ready to send as it stands. The `marketing`
-skill, section 7, says the first outreach message is one line. The link to the person's own post stays above it, so
-the message can be checked against what they actually wrote.
+Each person also has one draft message: one line, under 300 characters, ready to send as it stands. The
+`marketing-ours` skill, section 7, says the first outreach message is one line. The link to the person's own post
+stays above it, so the message can be checked against what they actually wrote.
 
 ### 1. u/lakshminp, r/ClaudeAI
 
