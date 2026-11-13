@@ -849,3 +849,33 @@ machine whatever the read interval does. `tests/outbound.test.ts` holds the beha
 answers and the call that times out, a 5xx that is retried until it recovers, a 404 that is not, the cap and the
 jitter, and a hung command under `runText`.
 
+## CI: every action is pinned to a commit (collector#144)
+
+`ci.yml` is started by hand by `ci-merge.py` on the PR branch, right before the merge, and its job carries the
+whole job token. `uses:` takes a tag, and a tag is a mutable pointer — whoever can move it runs their own code
+there — so every action is pinned through `.github/workflows/actions.lock`. `gh actions-lock`
+(github/gh-actions-lock) writes that file: it narrows a partial ref to the highest full semver tag
+(`actions/checkout@v5` reads `@v5.1.0` afterwards) and records that tag's commit.
+
+The job's second step is the check, right after `actions/checkout`, never before it: until the checkout runs the
+workspace has no `.github/workflows/`, and `--verify` exits 2 (`no workflow files found`) on every run. On a
+fresh runner the extension is not installed, so the step installs it first, at its own release tag (`--pin
+v0.4.1`), and the machine here runs the same version. A `uses:` the lockfile does not cover fails the run:
+
+```
+Scanning 1 workflow
+1 of 1 workflow failed
+✗ Not pinned actions/setup-node@v4
+  used in workflow but not pinned in lockfile (actions/setup-node@v4)
+  ↳ .github/workflows/ci.yml
+```
+
+So a workflow that adds or changes a `uses:` reruns the lock in the same commit, and `tests/actions-lock.test.ts`
+holds the same rule on this machine (every `uses:` is listed in the lockfile with a commit, and the check step
+sits after the checkout), where it costs no CI run. One command does the pinning, the step and the check, from
+the repo root of a worktree:
+
+```bash
+~/.local/share/agent-stack/current/vps/scripts/actions-lock.py lock
+```
+
