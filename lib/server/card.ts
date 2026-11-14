@@ -1,4 +1,4 @@
-import { config, projectRepos } from "./config";
+import { config, repoNames } from "./config";
 import { run } from "./run";
 import { once } from "./store";
 import { cardText } from "./text";
@@ -14,10 +14,7 @@ export async function card(repo: string, number: number) {
   const key = `${repo}#${number}`;
   const hit = cards.get(key);
   if (hit && Date.now() - hit.at < 600_000) return hit.card;
-  const chosen = projectRepos(config());
-  const exact = chosen.filter((p) => p.split("/").pop() === repo);
-  const names = exact.length ? exact : [...new Set(chosen.map((p) => p.split("/")[0]))].map((o) => `${o}/${repo}`);
-  for (const name of names) {
+  for (const name of repoNames(config(), repo)) {
     const [data] = await run(["gh", "issue", "view", String(number), "-R", name, "--json", "title,body,url"], {
       timeout: 20,
     });

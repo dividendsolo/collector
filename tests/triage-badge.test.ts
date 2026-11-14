@@ -62,9 +62,10 @@ const boardOf = (tickets: any[]) => ({
   work: null,
 });
 
-/** One row of the rendered table, by the card it shows. */
+/** One row of the rendered table, by the card it shows. The Card cell names the card (`agent-stack#1`) and opens
+ * its journey in Collector (collector#146), so the row no longer carries the issue's GitHub URL. */
 const rowOf = (html: string, number: number) =>
-  html.split("<tr").find((r) => r.includes(`${REPO}/issues/${number}`)) ?? "";
+  html.split("<tr").find((r) => r.includes(`agent-stack#${number}`)) ?? "";
 
 describe("a needs-triage row's badge", () => {
   beforeEach(() => {

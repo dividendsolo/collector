@@ -36,11 +36,14 @@ import {
   type FlowStatus,
   type FlowTone,
   isMainEdge,
+  type JourneyTrail,
+  journeyStepMs,
   narrowViewport,
   nodeDimmed,
   pulseBegins,
   tipAbove,
   tipAlign,
+  trailLit,
 } from "@/lib/flow";
 import { isAgentStack, otherStatuses, STATUS_GROUPS, STATUS_PILL, type StatusSets } from "@/lib/statuses";
 import { useLive } from "./data";
@@ -69,13 +72,15 @@ type StatusData = { status: FlowStatus };
 type StatusNode = Node<StatusData, "status">;
 
 /**
- * What is hovered, and whether the page should stay still, read by the boxes and the paths. It is a context and
- * not props on the nodes: passing a fresh nodes array on every hover makes React Flow rebuild its own DOM under
- * the pointer, which fires `mouseleave` and `mouseenter` again and sets the whole thing spinning. The arrays
- * handed to React Flow are therefore built once, and only the boxes and the paths below react to a hover.
+ * What is hovered, whether the page should stay still, and the trail a card's own journey lights (collector#146),
+ * read by the boxes and the paths. It is a context and not props on the nodes: passing a fresh nodes array on every
+ * hover makes React Flow rebuild its own DOM under the pointer, which fires `mouseleave` and `mouseenter` again and
+ * sets the whole thing spinning. The arrays handed to React Flow are therefore built once, and only the boxes and
+ * the paths below react to a hover.
  */
-type Highlight = { hover: string | null; setHover: (id: string | null) => void; still: boolean };
-const FlowHighlight = createContext<Highlight>({ hover: null, setHover: () => {}, still: false });
+type Trail = { nodes: string[]; edges: string[]; visits: Record<string, number>; now: string | null } | null;
+type Highlight = { hover: string | null; setHover: (id: string | null) => void; still: boolean; trail: Trail };
+const FlowHighlight = createContext<Highlight>({ hover: null, setHover: () => {}, still: false, trail: null });
 const useHighlight = () => useContext(FlowHighlight);
 
 /**
@@ -83,19 +88,31 @@ const useHighlight = () => useContext(FlowHighlight);
  * tooltip is a `NodeToolbar`: React Flow draws it outside the zoomed viewport, at the box's place on screen, so it
  * reads at its own 11px at any zoom (on a phone the canvas zoom made it a 71px box of 3.6px text, collector#51
  * review). It shows while the status is hovered, or tapped on a touch screen.
+ *
+ * A journey's trail fades every status the card never reached and counts the ones it passed more than once.
  */
 function StatusBox({ data }: NodeProps<StatusNode>) {
   const { status } = data;
-  const { hover } = useHighlight();
-  const dimmed = nodeDimmed(status.id, hover);
+  const { hover, trail } = useHighlight();
+  const lit = !trail || trail.nodes.includes(status.id);
+  const visits = trail?.visits[status.id] ?? 0;
+  const dimmed = nodeDimmed(status.id, hover) || !lit;
   return (
-    <div className={`flow-box tone-${status.tone}${dimmed ? " dim" : ""}`} data-status={status.id}>
+    <div
+      className={`flow-box tone-${status.tone}${dimmed ? " dim" : ""}${trail?.now === status.id ? " now" : ""}`}
+      data-status={status.id}
+    >
       <Handle type="target" position={Position.Top} className="flow-handle" isConnectable={false} />
       <span className="flow-label">
         {status.lines.map((line, i) => (
           <span key={`${line}-${i}`}>{line}</span>
         ))}
       </span>
+      {lit && visits > 1 ? (
+        <span className="flow-visits" title={`${visits} visits`}>
+          {visits}×
+        </span>
+      ) : null}
       <NodeToolbar
         isVisible={hover === status.id}
         position={tipAbove(status.y) ? Position.Top : Position.Bottom}
@@ -141,15 +158,17 @@ function PulsePath({
   targetPosition,
   data,
 }: EdgeProps<PulseEdgeType>) {
-  const { hover, still } = useHighlight();
+  const { hover, still, trail } = useHighlight();
   const [d] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   const tone = data ? TONE[data.tone] : TONE.park;
   const main = Boolean(data?.main);
-  const dim = data ? edgeDimmed({ id, from: data.from, to: data.to }, hover) : false;
+  // A journey lights the paths the card took, and dims every path it did not.
+  const onTrail = Boolean(trail?.edges.includes(id));
+  const dim = (data ? edgeDimmed({ id, from: data.from, to: data.to }, hover) : false) || (Boolean(trail) && !onTrail);
   const arrow = `flow-arrow-${id}`;
   return (
     <g
-      className={`flow-edge${main ? " main" : ""}${dim ? " dim" : ""}`}
+      className={`flow-edge${main ? " main" : ""}${onTrail ? " trail" : ""}${dim ? " dim" : ""}`}
       style={{ "--flow-tone": tone } as CSSProperties}
     >
       {/* One arrowhead per path, at the box the card moves to: the pulses say which way a card goes, and the head
@@ -192,8 +211,9 @@ function useMedia(query: string) {
   return matches;
 }
 
-/** `prefers-reduced-motion`: the pulses stop, the paths stay (James, 2026-11-02). */
-const useReducedMotion = () => useMedia("(prefers-reduced-motion: reduce)");
+/** `prefers-reduced-motion`: the pulses stop, the paths stay (James, 2026-11-02). Exported for the journey page,
+ * whose replay button draws nothing when nothing may move. */
+export const useReducedMotion = () => useMedia("(prefers-reduced-motion: reduce)");
 
 /** A phone-wide window, the same break as the page's own (`max-width: 700px` in `app/globals.css`). */
 const NARROW = "(max-width: 700px)";
@@ -202,13 +222,61 @@ const NARROW_VIEW = narrowViewport();
 const nodeTypes = { status: StatusBox, start: StartBox };
 const edgeTypes = { pulse: PulsePath };
 
-/** The drawing. Hovering a status is its only state: it decides what stays bright and what fades, on the boxes
- * and on the paths, and it is handed down through `FlowHighlight` so React Flow's own arrays never change. */
-function Drawing() {
-  const [hover, setHover] = useState<string | null>(null);
+/**
+ * The drawing. Hovering a status is its own state — or the journey page's, when it hands one down so its timeline
+ * rows light the same status. Hover decides what stays bright and what fades, on the boxes and on the paths, and it
+ * is handed down through `FlowHighlight` so React Flow's own arrays never change.
+ *
+ * A journey draws itself here (collector#146): node by node in time order, the whole walk in
+ * `JOURNEY_DRAW_SECONDS` whatever the number of steps, then it stays. `drawKey` is the Replay button; with
+ * `prefers-reduced-motion` the path is simply there, with nothing moving.
+ */
+export function Drawing({
+  journey,
+  drawKey = 0,
+  hoverNode,
+  onHover,
+}: {
+  /** The card's own path to light. Built by the page, and the page memoizes it: a fresh object every render would
+   * restart the draw. */
+  journey?: JourneyTrail | null;
+  /** Bumped by the Replay button: the walk draws again. */
+  drawKey?: number;
+  /** The node the page's pointer is over (its timeline rows). Left out, the drawing keeps its own hover. */
+  hoverNode?: string | null;
+  onHover?: (id: string | null) => void;
+}) {
   const still = useReducedMotion();
   const narrow = useMedia(NARROW);
   const scroller = useRef<HTMLDivElement>(null);
+  const [ownHover, setOwnHover] = useState<string | null>(null);
+  const controlled = hoverNode !== undefined;
+  const hover = (controlled ? hoverNode : ownHover) ?? null;
+  const setHover = useCallback(
+    (id: string | null) => (controlled ? onHover?.(id) : setOwnHover(id)),
+    [controlled, onHover],
+  );
+  const walk = useMemo(() => journey?.walk ?? [], [journey]);
+  const [drawn, setDrawn] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the Replay button's key is the trigger, not an input
+  useEffect(() => {
+    if (!walk.length || still) return;
+    setDrawn(0);
+    let step = 0;
+    const timer = setInterval(() => {
+      step += 1;
+      setDrawn(step);
+      if (step >= walk.length) clearInterval(timer);
+    }, journeyStepMs(walk.length));
+    return () => clearInterval(timer);
+  }, [walk, still, drawKey]);
+  const shown = still ? walk.length : drawn;
+  const trail = useMemo<Trail>(() => {
+    if (!journey || !walk.length) return null;
+    const lit = trailLit(walk, shown);
+    return { ...lit, visits: journey.visits, now: shown > 0 ? walk[Math.min(shown, walk.length) - 1] : null };
+  }, [journey, walk, shown]);
+
   // A phone opens the drawing on its middle, where needs-triage sits, not on its left edge.
   useEffect(() => {
     const el = scroller.current;
@@ -259,20 +327,23 @@ function Drawing() {
     [],
   );
 
-  const enter = useCallback((_: unknown, n: Node) => setHover(n.id), []);
-  const leave = useCallback(() => setHover(null), []);
+  const enter = useCallback((_: unknown, n: Node) => setHover(n.id), [setHover]);
+  const leave = useCallback(() => setHover(null), [setHover]);
   // A touch screen has no hover: a tap opens the status's tooltip (and its highlight), a tap on the ground closes
   // it, and the tooltip is scrolled into the screen, since on a phone the drawing is wider than the screen.
-  const tap = useCallback((_: unknown, n: Node) => {
-    if (n.type !== "status") return;
-    setHover(n.id);
-    requestAnimationFrame(() =>
-      document
-        .querySelector(`[data-tip="${CSS.escape(n.id)}"]`)
-        ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }),
-    );
-  }, []);
-  const highlight = useMemo<Highlight>(() => ({ hover, setHover, still }), [hover, still]);
+  const tap = useCallback(
+    (_: unknown, n: Node) => {
+      if (n.type !== "status") return;
+      setHover(n.id);
+      requestAnimationFrame(() =>
+        document
+          .querySelector(`[data-tip="${CSS.escape(n.id)}"]`)
+          ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }),
+      );
+    },
+    [setHover],
+  );
+  const highlight = useMemo<Highlight>(() => ({ hover, setHover, still, trail }), [hover, setHover, still, trail]);
 
   // On a phone the drawing is not fitted down to the screen's width (labels about 4px): it is drawn at a zoom
   // that keeps them at 9px or more, on a canvas as big as the drawing at that zoom, and the canvas scrolls

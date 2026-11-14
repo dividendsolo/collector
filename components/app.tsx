@@ -13,6 +13,7 @@ import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
 import { LiveProvider, useLive } from "./data";
 import { FlowPage } from "./flow";
+import { JourneyPage } from "./journey";
 import { useJump } from "./jump";
 import { NetworkPage } from "./network";
 import { ApisPage, ClosedPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, WorkPage } from "./pages";
@@ -81,19 +82,24 @@ export function route(hash: string) {
   const job = name.match(/^cron\/([^/]+)\/([^/]+)$/);
   // One brief open: `#/briefs/<machine>/<file>` (collector#64), the way a job's own page is addressed.
   const brief = name.match(/^briefs\/([^/]+)\/([^/]+)$/);
-  const page = repo
-    ? "project"
-    : agent
-      ? "agent"
-      : job
-        ? "job"
-        : brief
-          ? "brief"
-          : PAGES.has(name)
-            ? name
-            : "dashboard";
-  const lit =
-    repo || page === "keys"
+  // One card's journey: `#/card/<repo>/<n>`, where every card number on the page goes (collector#146).
+  const card = name.match(/^card\/([\w.-]+)\/(\d+)$/);
+  const page = card
+    ? "card"
+    : repo
+      ? "project"
+      : agent
+        ? "agent"
+        : job
+          ? "job"
+          : brief
+            ? "brief"
+            : PAGES.has(name)
+              ? name
+              : "dashboard";
+  const lit = card
+    ? "work"
+    : repo || page === "keys"
       ? "projects"
       : agent
         ? "agents"
@@ -111,6 +117,7 @@ export function route(hash: string) {
     agent: agent ? ([agent[1], agent[2]] as const) : null,
     job: job ? ([decodeURIComponent(job[1]), decodeURIComponent(job[2])] as const) : null,
     brief: brief ? ([decodeURIComponent(brief[1]), decodeURIComponent(brief[2])] as const) : null,
+    card: card ? ([card[1], Number(card[2])] as const) : null,
   };
 }
 
@@ -193,6 +200,12 @@ function Sidebar({ lit }: { lit: string }) {
 function Crumb({ r }: { r: ReturnType<typeof route> }) {
   const { state } = useLive();
   const label = NAV.find((n) => n.page === r.lit)?.label ?? "Dashboard";
+  if (r.card)
+    return (
+      <>
+        Work / Card journey / {r.card[0]}#{r.card[1]}
+      </>
+    );
   if (r.page === "keys") return <>Projects / Payment keys</>;
   if (r.page === "closed") return <>Work / Closed today</>;
   if (r.agent) return <>Agents / {r.agent[1]}</>;
@@ -233,6 +246,9 @@ function Topbar({ r }: { r: ReturnType<typeof route> }) {
 
 function Page({ r }: { r: ReturnType<typeof route> }) {
   switch (r.page) {
+    case "card":
+      // Keyed by the card, so the drawing and the timeline start fresh on the next card opened.
+      return r.card ? <JourneyPage key={r.card.join("/")} repo={r.card[0]} number={r.card[1]} /> : null;
     case "briefs":
       return <BriefsPage />;
     case "brief":

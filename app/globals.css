@@ -843,6 +843,53 @@
   .flow-edge.dim .flow-pulse {
     opacity: 0;
   }
+  /* A card's journey on the drawing (collector#146): the statuses the card reached stay bright — with the number of
+     visits on the ones it passed more than once — the ones it never reached fade, and every arrow it took is drawn
+     brightest. The status the draw has just reached keeps a glow, which is also where the path ends. */
+  .flow-box .flow-visits {
+    position: absolute;
+    top: 3px;
+    right: 6px;
+    font: 500 10px var(--mono);
+    color: var(--faint);
+  }
+  .flow-box.now {
+    border-color: var(--flow-tone);
+    box-shadow:
+      0 0 0 1px var(--flow-tone),
+      0 0 14px oklch(0.76 0.15 var(--hue) / 0.18);
+  }
+  .flow-edge.trail .flow-line {
+    stroke-width: 2.2;
+    opacity: 1;
+  }
+  .flow-edge.trail .flow-pulse {
+    opacity: 1;
+    filter: drop-shadow(0 0 5px var(--flow-tone));
+  }
+  /* One card's journey (collector#146): the one line the view is opened for, the flow with the card's own path on
+     it, and every step below it, full width. The five timeline columns and a drawing whose labels read do not fit
+     side by side in the page's own 1440px content width (the drawing needs about 970px), so the steps sit under
+     the drawing rather than beside it. */
+  .journey-now {
+    margin: 2px 0 16px;
+    padding: 0 16px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  /* The GitHub and Replay buttons drop under the card's own line on a phone, where the head cannot hold both. */
+  @media (max-width: 700px) {
+    .journey-page .panel-head {
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+  }
+  .journey-row.hot {
+    background: var(--hover);
+  }
+  .journey-row.hot .pill {
+    border-color: var(--line-2);
+  }
   .shell {
     flex: 1;
     min-width: 0;

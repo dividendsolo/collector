@@ -1,0 +1,927 @@
+{
+  "repo": "dividendsolo/dividend-solo",
+  "number": 146,
+  "recorded": "2026-11-13T23:11:18Z",
+  "issue": {
+    "title": "Our own analytics on ezio, replacing DataFast (all product sites)",
+    "url": "https://github.com/dividendsolo/dividend-solo/issues/146",
+    "state": "OPEN",
+    "createdAt": "2026-10-29T15:11:40Z"
+  },
+  "pages": [
+    {
+      "nodes": [
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-10-29T15:11:41Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "enhancement"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-10-29T15:11:42Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-triage"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-10-29T20:27:05Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "scheduled"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-10-29T20:27:06Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-triage"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-10-29T21:04:11Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "P2"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-10-30T04:00:46Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-triage"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-10-30T04:00:47Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "scheduled"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-10-30T04:00:48Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Scheduled date 2026-10-30 reached: moved to `needs-triage`.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6514633932"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-10-30T17:11:14Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "scheduled"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-10-30T17:11:15Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-triage"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-10-30T17:11:43Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-triage"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-10-30T17:11:44Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "scheduled"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-01T19:37:16Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Added 2026-11-01 (James, Illyism Watch review): scroll depth per page is a requirement. Show how far down each page visitors read, next to revenue per landing page, as Illyism's self-hosted analytics does (https://x.com/illyism/status/2115842527849009429).",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6562869000"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-01T19:42:27Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Added 2026-11-01 (James, Illyism Watch review): logging and server monitoring are a requirement from day one. The analytics service writes logs and has a health check that alerts when it is down, as Illyism added to his self-hosted DataFast replacement (https://x.com/illyism/status/2116023751376777711).",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6562927616"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-02T21:13:25Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "scheduled"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-02T21:13:26Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-triage"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-03T18:01:21Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Note from situation#863 (builder, 2026-11-03): the sites in this plan cannot count until the analytics deploy's `SITES` names them.\n\n`src/lib/config.ts` stores a pageview only for a site in `SITES`, and the ezio deploy has `dividendsolo.com` alone, so a beacon for situation.dividendsolo.com, zerophase.app, abide.dividendsolo.com or repsheet.fit is answered 403 and nothing is stored:\n\n```\n{\"ok\":false,\"reason\":\"site is not configured\"}   403\n```\n\nsituation#863 (the tracker tag plus `CF-Connecting-IP` in kamal-proxy), zero-phase#425 and abide#21 each end on \"a page load stores a pageview with site = ...\", so each one ships a tag whose beacons are refused the day it deploys, and analytics#3 has no beacon from those sites to match against a page fetch.\n\nThe change is one line: `SITES=dividendsolo.com,situation.dividendsolo.com,zerophase.app,abide.dividendsolo.com` with the analytics deploy values on ezio (`~/.config/analytics-production.env` into `.kamal/secrets`), then a deploy. Worth folding into the slice that turns on the other sites (scope 2) so the tag and the site list ship together. No status change here: the slicing is still James's.\n",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6611605899"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T05:00:22Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "**Ask (decision):** read the comparison of our visitor count with DataFast for dividendsolo.com (`bun run compare` in the analytics repo), then slice the next part with James\n\n> *Posted by status set.*",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6815091970"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T05:00:23Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-human"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T05:00:24Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "scheduled"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T05:00:25Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Scheduled date 2026-11-12 reached: moved to `ready-for-human`.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6815092938"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T05:21:31Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T05:22:16Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T20:37:01Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "2026-11-12, James's walk: `bun run compare -- --days 14 --site dividendsolo.com` read ours 0 visitors against DataFast's 68. The collector does store the beacons (92 pageviews since 2026-11-05), but the bot report marks every one a bot from an AWS range: the Vercel rewrite hands the collector Vercel's address, not the visitor's. Filed as analytics#25 (P1). The comparison is re-read after it merges, then the next slice is cut.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6835289140"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T20:37:05Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Blocked by analytics#25: moved to `blocked`. Housekeeping moves it to `ready-for-agent` when the last blocker closes.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6835290477"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T20:37:05Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "blocked"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T20:37:07Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-human"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:25:37Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:25:38Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "blocked"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T21:25:40Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Every blocker is closed: moved to `ready-for-agent`.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6836367081"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:25:50Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:25:51Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:26:05Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:26:30Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "verify-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:26:30Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:26:32Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:26:33Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T21:28:37Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Foreman on ezio: the verify gate did not pass (try 1 of 3), so no PR was opened or updated. The work is kept on branch `agent/146-wip`. The card goes back to ready-for-agent; the next build starts from `agent/146-wip` and fixes what failed.\n\nThe branch has no commits on top of `main`.\n\nBuilder log on ezio: /home/div/.hermes/foreman/build-dividend-solo-146-212609.log",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6836429881"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:28:40Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:28:40Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "verify-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:28:45Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:28:53Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:28:54Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:29:07Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:29:27Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "verify-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:29:28Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:29:29Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:29:30Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T21:29:47Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Foreman on ezio: the verify gate did not pass (try 2 of 3), so no PR was opened or updated. The work is kept on branch `agent/146-wip`. The card goes back to ready-for-agent; the next build starts from `agent/146-wip` and fixes what failed.\n\nThe branch has no commits on top of `main`.\n\nBuilder log on ezio: /home/div/.hermes/foreman/build-dividend-solo-146-212911.log",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6836454282"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:29:51Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:29:51Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "verify-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:30:04Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:30:11Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:30:12Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:30:26Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:30:46Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "verify-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:30:48Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:30:51Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:30:53Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T21:31:10Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Foreman on ezio: the verify gate did not pass (try 3 of 3), so no PR was opened or updated. The work is kept on branch `agent/146-wip`. This is failed gate 3 of 3, so the card goes to needs-info for a human.\n\nThe branch has no commits on top of `main`.\n\nBuilder log on ezio: /home/div/.hermes/foreman/build-dividend-solo-146-213031.log",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6836483675"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T21:31:14Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "**Ask (decision):** Read the failing gate above (3 tries) and decide: fix the card, split it, or close it; then move it back to ready-for-agent.\n\n> *Posted by status set.*",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6836484996"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:31:15Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-info"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:31:16Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "verify-in-progress"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-12T21:31:22Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Foreman on ezio: the card was claimed on ezio, but no foreman process and no builder runs for it, so the card goes back to ready-for-agent.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6836488194"
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:31:26Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-12T21:43:01Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-12T21:44:45Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T15:32:06Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Next part filed: dividendsolo/analytics#27 explains the gap between our counter (62 visitors) and DataFast (27) on dividendsolo.com, 2026-11-05 to 2026-11-11. The rest of the plan waits on it.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6857495799"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T16:09:08Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T16:09:51Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Waiting crew: the last comment says the rest of the plan waits on dividendsolo/analytics#27 (open, in review). Blocked by analytics#27: moved to `blocked`. Housekeeping moves it to `ready-for-agent` when the last blocker closes.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6858372672"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T16:09:54Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Blocked by analytics#27, analytics#25 (merged, not deployed yet): moved to `blocked`. Housekeeping moves it to `ready-for-agent` when the last blocker closes.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6858374024"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T16:09:55Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "blocked"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T16:09:56Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-info"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T16:10:25Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T19:10:51Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Blocked by analytics#25 (merged, not deployed yet): moved to `blocked`. Housekeeping moves it to `ready-for-agent` when the last blocker closes.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6862438517"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T19:10:52Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Released by hand (James, 2026-11-13): both blockers are live. analytics#25 (PR #26, `a2c05aa`) and analytics#27 (PR #29, `be24933`) are both in the commit ezio runs now, `cfdb8ea` (pull-deploy state, deployed 2026-11-13T17:16Z). Housekeeping held the card because a failed Dependabot run sits on `a2c05aa`, and `status.shipped()` reads every Actions run on the merge commit: agent-stack#408.\n",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6862438940"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T19:11:03Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T19:11:04Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "blocked"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T19:21:49Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T19:21:49Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ready-for-agent"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T19:21:50Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "<!-- foreman:claim role=build host=ezio run=ezio-1794597710-3400460 -->",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6862668677"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T19:22:03Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T19:39:13Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "## The comparison, read (2026-11-13, ezio, live)\n\n`bun run compare -- --days 14 --site dividendsolo.com` ran on ezio against the production database and DataFast's API, after the deploy of `cfdb8ea` (analytics#25, #27 and #28 all live).\n\n| window | ours visitors | ours pageviews | DataFast visitors | DataFast pageviews |\n| --- | --- | --- | --- | --- |\n| 2026-10-30 .. 2026-11-12 | 73 | 92 | 62 | 101 |\n| 2026-11-05 .. 2026-11-12 (the tag's own window) | 73 | 92 | 29 | 37 |\n\nOur counter holds rows from 2026-11-05, the day the tag shipped (#192); the days before that are DataFast's alone. For 2026-11-05 .. 2026-11-11 ours reads 60 visitors and 76 pageviews against DataFast's 27 and 35 - exactly the numbers analytics#27 published after its re-judge, so nothing regressed with #28. The visitor's own address now reaches the collector from this site (`req_x_visitor_ip`), so `EXCLUDED_IPS` applies here at last.\n\nOne thing the read turned up, and it is not settled: **the window is not judged on the live service.** The query against the production database reads 94 pageviews for 2026-11-05 .. 2026-11-12, 2 of them with a bot verdict and 92 without one. The loader dropped the hop verdicts once, at 17:55Z today, and judged 8 back in that run; the runs since then judge a handful each. The beacon lines are still there to judge - `proxy_requests` holds 7851 `POST /a/event` lines from 2026-11-03 to 2026-11-13 - so the re-judge that analytics#28 says it owes the deploy has not finished. I did not chase the cause: that is the loader's own business in the analytics repo. Until it lands, the bot part of the gap counts as people, and the two counts keep a known difference.\n\n## What is left is not in this repo\n\nThis card is the plan for the whole program, and its own body says triage slices it (\"it is too big for one build\"). Two slices have shipped from it: analytics#1 (the service) and #192 (this site's tag, first-party, beside DataFast). The rest of items 2 to 9 is left, and none of it can be built in this worktree:\n\n- Item 4's goals, item 3's Stripe and Polar revenue, item 5's MCP tools, item 6's dashboard, item 7's history import, and the re-judge above: dividendsolo/analytics (the collector).\n- Item 2's first-party for the other sites: situation.dividendsolo.com, zerophase.app and abide.dividendsolo.com each load the tracker from `analytics.dividendsolo.com` right now (checked live today), so an ad blocker stops it there. Each site's own `/a/*` forward goes in that site's repo, the way `next.config.mjs` does it here.\n- Item 2's rep-sheet: `repsheet.fit` answers 200 and loads no tracker at all, and the deploy's `SITES` line does not name it - the card's Sites line does.\n- Item 8's readers: the Monday Weekly Web Analytics cron and its pull script in agent-stack, the `weekly-analytics` skill in skills, the onboarding routine in zero-phase.\n- Item 9 - DataFast off on dividendsolo.com and the privacy line - is the only part of what is left that lives in this repo, and it comes after item 8: the readers still read DataFast, so turning the tag off would leave them reading zero for this site.\n\nA partial change in this repo cannot be the card. The foreman closes a card when its PR merges, and this card's Done-when is the whole program.\n\n## One cut of the rest, for the slice decision\n\n1. (the read's own follow-through) analytics: the re-judge - the loader judges a forwarded site's stored rows again, and the window reads judged afterwards (the numbers above are the failing case).\n2. (item 4, the collector's half) analytics: goals - `/a/event` stores a named goal beside a pageview, its own table, a daily count in `/api/stats`. The goals this site fires at DataFast today are the checklist: `subscribe`, `post_read`, the landing page's scroll goals, the download goals, `contact_submit`, `tier_click`, `x_link_click`, the two omarchy goals, `lab_click`, `blaster_fired`, `asteroid_destroyed`.\n3. (item 4, this site's half; blocked by 2) This repo: dividendsolo.com fires its own goals beside DataFast's, out of the one helper in `lib/datafast.ts`.\n4. (item 2) situation / zero-phase / abide / rep-sheet: each site serves the tracker first-party from its own domain, and rep-sheet gets the tag at all.\n5. (item 3) analytics: Stripe and Polar - each payment joined to its visitor and source, after each product's current payment path is confirmed.\n6. (item 5) analytics: the MCP tools we use (overview, timeseries, referrers, campaigns, goals, visitors, bot traffic) plus the read-only `sql_query`.\n7. (item 6) analytics: the dashboard, after the MCP.\n8. (item 7) analytics: the DataFast history imported for every site.\n9. (item 8) agent-stack, skills, zero-phase: every reader reads our counter.\n10. (item 9) This repo and each site: DataFast off, and the privacy line that goes with it.\n\n## Plan and Progress\n\nPlan: read the comparison on live data (done); find what of the card this worktree can hold (done - item 9 only, and it is gated behind item 8); hand the slicing over.\n\nProgress: no code changed and nothing to commit; the branch has no commits on top of `main`, and `git status --porcelain` in the worktree prints nothing.\n\n**Ask (decision):** cut the rest of #146 into agent cards (the list above is one cut of it) and move the card back to ready-for-agent - the comparison is read, and the work left is in dividendsolo/analytics, the site repos and agent-stack.\n",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6863031410"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T19:39:15Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "**Ask (decision):** Cut the rest of #146 into agent cards and move the card back to ready-for-agent; the builder comment is one cut of it\n\n> *Posted by status set.*",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6863032110"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T19:39:16Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-info"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T19:39:17Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "agent-in-progress"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T19:40:39Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "ezio"
+          }
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T20:16:00Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T20:17:43Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "waiting-check"
+          }
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T21:02:28Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Sliced 2026-11-13 (James: \"Yeah, go ahead. You can make those\"). The 13 cards, in order: analytics#34 (re-judge), analytics#35 (goals), dividend-solo#275 (this site's goals), situation#984, zero-phase#553, abide#34, rep-sheet#287 (first-party on each site), analytics#36 (revenue), analytics#37 (MCP), analytics#38 (dashboard), analytics#39 (DataFast history), agent-stack#420 (readers), dividend-solo#276 (DataFast off, last). Each waits on its own blockers through native blocked-by links. This parent is blocked by all 13 and closes when the last one does; no builder should pick it up again.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6864841854"
+        },
+        {
+          "__typename": "IssueComment",
+          "createdAt": "2026-11-13T21:02:31Z",
+          "author": {
+            "login": "dividendsolo"
+          },
+          "body": "Blocked by dividend-solo#276, agent-stack#420, analytics#39, analytics#38, analytics#37, analytics#36, rep-sheet#287, abide#34, zero-phase#553, situation#984, dividend-solo#275, analytics#35, analytics#34: moved to `blocked`. Housekeeping moves it to `ready-for-agent` when the last blocker closes.",
+          "url": "https://github.com/dividendsolo/dividend-solo/issues/146#issuecomment-6864842900"
+        },
+        {
+          "__typename": "LabeledEvent",
+          "createdAt": "2026-11-13T21:02:32Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "blocked"
+          }
+        },
+        {
+          "__typename": "UnlabeledEvent",
+          "createdAt": "2026-11-13T21:02:33Z",
+          "actor": {
+            "login": "dividendsolo"
+          },
+          "label": {
+            "name": "needs-info"
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpPPAAABoda4HigBqzM2MDczODE3MDc4"
+      }
+    }
+  ]
+}

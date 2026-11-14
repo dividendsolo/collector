@@ -19,6 +19,7 @@ import {
   type WorkRow,
   type WorkRun,
 } from "@/lib/work";
+import { CardRef } from "./card-link";
 import { useLive } from "./data";
 import { Dash, Icon, PanelHead, Pill, SkelRows } from "./ui";
 
@@ -99,25 +100,7 @@ export function RunningNow() {
                     </td>
                     <td>{runMachine(r)}</td>
                     <td className="mono">
-                      {r.card == null ? (
-                        <Dash />
-                      ) : lab ? (
-                        <a
-                          className="plain card-tip"
-                          href={LAB.url}
-                          target="_blank"
-                          rel="noopener"
-                          tabIndex={0}
-                          data-repo={LAB.repo}
-                          data-card={r.card}
-                        >
-                          #{r.card}
-                        </a>
-                      ) : (
-                        <span className="card-tip" tabIndex={0} data-repo={r.repo} data-card={r.card}>
-                          #{r.card}
-                        </span>
-                      )}
+                      {r.card == null ? <Dash /> : <CardRef repo={lab ? LAB.repo : r.repo} number={r.card} />}
                     </td>
                     <td>{r.repo ? r.repo : <span className="sub">no repo</span>}</td>
                     <RunTime r={r} />
@@ -303,21 +286,7 @@ export function CurrentWork() {
                     </td>
                     <td>{r ? runMachine(r) : row.local ? "local" : <Dash />}</td>
                     <td className="mono">
-                      {num == null ? (
-                        <Dash />
-                      ) : (
-                        <a
-                          className="plain card-tip"
-                          href={c?.url ?? (lab ? LAB.url : undefined)}
-                          target="_blank"
-                          rel="noopener"
-                          tabIndex={0}
-                          data-repo={c?.repo ?? (lab ? LAB.repo : repo)}
-                          data-card={num}
-                        >
-                          #{num}
-                        </a>
-                      )}
+                      <CardRef repo={c?.repo ?? (lab ? LAB.repo : repo)} number={num} />
                     </td>
                     <td>{repo ? repo : <span className="sub">no repo</span>}</td>
                     {r ? (
