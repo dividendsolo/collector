@@ -6,6 +6,7 @@ import { PROPOSAL_STATUSES, type Proposal, type ProposalStatus } from "@/lib/pro
 import { vendorOrder } from "@/lib/vendors";
 import type { ClosedRow } from "@/lib/work";
 import { AiPanels } from "./ai";
+import { CardRef } from "./card-link";
 import { useApi, useLive } from "./data";
 import { BlurToggle, Count, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
 
@@ -626,16 +627,7 @@ export function WorkPage() {
                   <tr key={t.url}>
                     <td>{t.repo}</td>
                     <td className="mono">
-                      <a
-                        className="plain card-tip"
-                        href={t.url}
-                        target="_blank"
-                        rel="noopener"
-                        data-repo={t.repo}
-                        data-card={t.number}
-                      >
-                        #{t.number}
-                      </a>
+                      <CardRef repo={t.repo} number={t.number} />
                     </td>
                     <td className="wide">{t.title}</td>
                     <td>

@@ -175,6 +175,15 @@ export function projectStage(cfg: Config, repo: string): string | undefined {
   return typeof stage === "string" ? stage : undefined;
 }
 
+/** The `owner/repo` names a short repo name may be: the chosen projects that end with it, else every chosen owner
+ * with this repo. One card number read from the page resolves to a repo this way, whether the page asks for the
+ * card's text (collector#64's tooltip) or for its journey (collector#146). */
+export function repoNames(cfg: Config, repo: string): string[] {
+  const chosen = projectRepos(cfg);
+  const exact = chosen.filter((p) => p.split("/").pop() === repo);
+  return exact.length ? exact : [...new Set(chosen.map((p) => p.split("/")[0]))].map((o) => `${o}/${repo}`);
+}
+
 /** The config.json values Collector would never use — a stage, a criticality or a renewal date outside the
  * allowed ones (collector#78) — each named the way a reader finds it in the file. Reported rather than obeyed,
  * as `unknownConfigKeys` is: `bun run check:config` and the Needs attention row both name them, since a setting

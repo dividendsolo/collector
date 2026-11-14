@@ -272,3 +272,33 @@ export function narrowViewport(zoom = 0.8, pad = 14) {
     height: Math.ceil(FLOW_BOUNDS.height * zoom + pad * 2),
   };
 }
+
+// ---- A card's journey on the drawing (collector#146): the path one card took, lit node by node in time order.
+
+/** One card's journey, as the drawing replays it: the statuses it entered in time order (`journeyWalk`) and how many
+ * times it visited each. */
+export interface JourneyTrail {
+  walk: string[];
+  visits: Record<string, number>;
+}
+
+/** The whole walk draws in this long, whatever the number of steps (the card's own 1.5 s), and a replay draws it
+ * again. */
+export const JOURNEY_DRAW_SECONDS = 1.5;
+
+/** How long one step of a walk is drawn for: the whole walk in `JOURNEY_DRAW_SECONDS`. */
+export const journeyStepMs = (steps: number) => (steps > 0 ? (JOURNEY_DRAW_SECONDS * 1000) / steps : 0);
+
+/**
+ * What a journey lights once `drawn` of its steps are drawn: the statuses the card has entered so far, and every
+ * arrow of the drawing one of those moves took. The walk starts at the start dot, where a card lands on the board.
+ *
+ * A move the drawing has no arrow for (dividend-solo#146 went `blocked -> ready-for-agent`) lights its status and
+ * no path: the drawing is the agent stack's own flow, so its arrows stay exactly as they are.
+ */
+export function trailLit(walk: string[], drawn: number): { nodes: string[]; edges: string[] } {
+  const seen = walk.slice(0, Math.max(0, drawn));
+  const steps = [FLOW_START.id, ...seen];
+  const taken = FLOW_EDGES.filter((e) => steps.some((s, i) => i > 0 && steps[i - 1] === e.from && e.to === s));
+  return { nodes: [...new Set(seen)], edges: [...new Set(taken.map((e) => e.id))] };
+}

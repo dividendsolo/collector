@@ -8,6 +8,7 @@ import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
 import { useBriefs } from "./briefs";
+import { CardRef } from "./card-link";
 import { useApi, useLive } from "./data";
 import { JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
@@ -568,16 +569,7 @@ export function Waiting() {
                       )}
                     </td>
                     <td>
-                      <a
-                        className="plain mono card-tip"
-                        href={t.url}
-                        target="_blank"
-                        rel="noopener"
-                        data-repo={t.repo}
-                        data-card={t.number}
-                      >
-                        {t.repo}#{t.number}
-                      </a>
+                      <CardRef repo={t.repo} number={t.number} label={`${t.repo}#${t.number}`} />
                     </td>
                     <td className="wide">
                       {t.reason ? (

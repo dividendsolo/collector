@@ -104,6 +104,14 @@ The Dashboard answers these questions at a glance:
 The **Work** page shows your GitHub contribution heat map, then lists every open card on the board (the `tickets` key's `all` lanes): repo, card, title, lane,
 priority, labels, and how many days ago it was opened: P0 first, then P1, P2, and no priority; inside one priority, in lane order, then oldest first.
 
+The **Card flow** page draws every status a card can have and the statuses it can move to, and lists the statuses
+Collector reads here. Every card number on the page opens that card's **journey** (`#/card/<repo>/<n>`): the whole
+history of one card, drawn on the same flow — the path the card took, node by node in time order, with the number of
+visits on a status it passed more than once — and one row per step beside it: when, the status, who moved it, how
+long it stayed, and the comment that says why, linked. The line at the top answers the question the view is for: "In
+needs-info since 14:39, because …". The journey page carries the link to the card on GitHub. It reads the issue's own
+timeline and never moves a card.
+
 The **Agents** page shows Running now, then every Hermes profile on every machine, A to Z: a short note, the type,
 the model, the machine, and how many cron jobs the profile runs. Each agent opens its own page with its model,
 provider, last session, rules summary, and the cron jobs it runs.

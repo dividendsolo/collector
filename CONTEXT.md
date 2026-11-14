@@ -285,6 +285,55 @@ finger scrolls the page and the drawing natively, and the page itself never scro
 
 `/api/tickets` carries `each` (the waiting set, under the name this view has always used), `working` and `done`.
 
+## One card's journey: its whole history on the flow (collector#146)
+
+Collector showed where a card is, never how it got there. The journey view is one card's whole history: every status
+it passed through, in order, with who moved it, when, how long it stayed and the comment that says why.
+dividend-solo#146 was out of James's queue in the morning and back in it by the afternoon, and the journey says why
+in one read: `blocked` 11:09, released by hand 14:10, claimed by a builder on ezio 14:21, back to `needs-info` with
+the builder's Ask 14:39.
+
+The card number opens it, on every page (`#/card/<repo>/<n>`, one component: `components/card-link.tsx`'s `CardRef`),
+and the journey page carries the link to the card on GitHub. That was chosen with James (2026-11-13) over a second
+link inside the card tooltip: `#card-tip` is `pointer-events: none` and hides on `mouseout`, so a link in it cannot be
+clicked.
+
+`lib/server/journey.ts` is the reader. It reads the issue's own GraphQL timeline (`timelineItems`, 100 nodes a page,
+each page 1 GraphQL point), follows `hasNextPage`/`endCursor` to the end — a long card has more than one page —
+and folds the events into moves:
+
+- a status label event is one move, so `ready-for-agent -> agent-in-progress` is one step and not two raw events; the
+  unlabel half of the pair is that same move, and the `waiting-check` and `P2` labels fold away;
+- it never asks for `PROJECT_V2_ITEM_STATUS_CHANGED_EVENT`: this board emits none (0 nodes for dividend-solo#146);
+- a label naming a machine (`ezio`) is not a status: it folds into the move it sits beside as that move's *who*;
+- the comment nearest a move — within `CAUSE_WINDOW_S`, and never two moves — is its *why*: a claim
+  (`<!-- foreman:claim role=build host=ezio run=... -->`), an Ask (`**Ask (decision):** ...`) or "Released by hand"
+  first, then the housekeeping line that names the status it moved to, then whatever else is nearest. The three
+  failed verify gates of dividend-solo#146 are each why the card went back to `ready-for-agent`;
+- *who* is that cause's own name (`Housekeeping`, `The scheduler`, `The waiting crew`, `James, by hand`), else the
+  machine that held the card (a claim's `host=`, a machine label beside the move, or the last one before it), else the
+  account that made the event.
+
+`lib/journey.ts` is the shared model the page and its test read: `journeyWalk` (the statuses in time order), the visit
+counts, `stayText`, `moveTime` (the viewer's own zone — the page's rule for every time it shows — with the day in
+front when it was not today) and `nowLine` ("In needs-info since 14:39 EST, because …"). `GET /api/journey?repo=&n=`
+answers `{card, moves}`, cached 5 minutes; `card` is null when no chosen project holds that number, so the page can
+tell that answer from one it is still waiting for.
+
+The page (`components/journey.tsx`) draws that line, the flow with the card's own path on it (`components/flow.tsx`,
+whose `Drawing` takes an optional journey — the Card flow page passes none), and one row per step beside it (When,
+Status, Who, Stayed, Why, linked to the comment). `trailLit` in `lib/flow.ts` says what the walk has lit: the statuses
+it reached so far and every arrow of the drawing one of its moves took. The boxes count a status the card passed more
+than once (`4×`), and a move the drawing has no arrow for (`blocked -> ready-for-agent`) lights its status and no
+path: the drawing is the agent stack's own flow, so its arrows stay as they are. The whole walk draws in 1.5 s
+whatever its length, the Replay button draws it again, hovering a timeline row lights that step on the flow and
+hovering a node lights its rows, and `prefers-reduced-motion` shows the whole path at once, with no draw and no Replay
+button.
+
+`tests/journey.test.ts` folds dividend-solo#146's recorded timeline (`tests/fixtures/dividend-solo-146.json`) and
+holds the fold: a label pair one step, the `ezio` and `waiting-check` flaps folded away, the claim and the Ask on the
+steps they caused, the five moves of 2026-11-13 with their actors and reasons, the visit counts, and the paging loop.
+
 ## Priority tasks: groups, in James's order (2026-11-11)
 
 Every Priority tasks row has a group (`lib/priority.ts`), and the panel lists the groups in this order. Inside a
@@ -763,6 +812,7 @@ is that folder, worked the way an email inbox works.
 |---|---|
 | `/api/state` | The page's main read: machines and their jobs, the GitHub limit, Jog's runner minutes this month, X usage, subscriptions, agent notes, and the Priority tasks warnings worked out from the newest result of each reader. |
 | `/api/tickets` | The board's lanes and the tickets in them, each waiting ticket with the reason it waits (the Work page and the Waiting on you panel), and the three status sets the page reads (`each`, `working`, `done`). |
+| `/api/journey` | One card's whole history, folded off the issue's own GitHub timeline: every status it passed through with who moved it, when, how long it stayed and the comment that says why (`GET ?repo=&n=`, collector#146). |
 | `/api/board` | How the board poll is doing: reads, GraphQL points spent in all and in the last hour, the last read's time, open clients and the current interval. |
 | `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; and every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's), the knocks from its local network among them — the read an agent asks to answer "is anything open that should not be?" |
 | `/api/proposals` | The client proposals, newest first, and the open pipeline per currency worked out from them (`GET`); the page's one write route adds (`POST`), edits (`PUT`) and removes (`DELETE ?id=`) one, every field parsed on the server, and answers the list and the pipeline as they stand after the change. |

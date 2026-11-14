@@ -36,6 +36,33 @@ export interface Reason {
 /** The Ask `lane set` posts before it moves a card into a James lane (agent-stack#139): "**Ask (kind):** text". */
 const ASK = /\*\*Ask \(([a-z]+)\):\*\*\s*([^\n]+)/;
 
+/** That Ask as one line, `kind: text`, or null for a comment that is not one. The waiting list's reason and a
+ * journey step's reason are the same line (collector#146). */
+export function askOf(body: string): string | null {
+  const [, kind, text] = body.match(ASK) ?? [];
+  if (!kind) return null;
+  const line = `${kind}: ${text.trim()}`;
+  return line.slice(0, 220) + (line.length > 220 ? "…" : "");
+}
+
+/** The claim the foreman posts when a lane takes a card: `<!-- foreman:claim role=build host=ezio run=... -->`, in
+ * the card's own comment. Its role and host say what took the card and which machine it was (collector#146). */
+const CLAIM = /foreman:claim[^>]*?\brole=([\w-]+)[^>]*?\bhost=([\w.-]+)/;
+
+export function claimOf(body: string): { role: string; host: string } | null {
+  const [, role, host] = body.match(CLAIM) ?? [];
+  return role && host ? { role, host } : null;
+}
+
+/** A comment's own first line of prose, whole: what a journey step shows for the move it explains ("Released by
+ * hand (James, 2026-11-13): both blockers are live."). Null for a comment with no prose at all (a bare claim
+ * marker). A long sentence stays long: it is the comment's own, and the card's row is one line of it either way. */
+export function headline(body: string): string | null {
+  const line = sentences(body)[0];
+  if (!line) return null;
+  return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
 export function pickReason(comments: Comment[], labeledAt: string[]): Reason | null {
   const moved = labeledAt[labeledAt.length - 1];
   const asks = comments.filter((c) => ASK.test(c.body));
@@ -47,9 +74,8 @@ export function pickReason(comments: Comment[], labeledAt: string[]): Reason | n
   const beforeMove = moved ? asks.filter((c) => c.createdAt <= moved) : [];
   const ask = inStay[inStay.length - 1] ?? beforeMove[beforeMove.length - 1];
   if (ask) {
-    const [, kind, text] = ask.body.match(ASK) ?? [];
-    const line = `${kind}: ${text.trim()}`;
-    return { text: line.slice(0, 220) + (line.length > 220 ? "…" : ""), url: ask.url, at: ask.createdAt };
+    const line = askOf(ask.body) as string;
+    return { text: line, url: ask.url, at: ask.createdAt };
   }
   let pick: Comment | undefined;
   if (labeledAt.length) {

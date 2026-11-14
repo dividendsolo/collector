@@ -12,6 +12,8 @@ import {
   FLOW_START,
   FLOW_STATUSES,
   isMainEdge,
+  JOURNEY_DRAW_SECONDS,
+  journeyStepMs,
   MAIN_EDGES,
   MAIN_PATH,
   narrowViewport,
@@ -20,6 +22,7 @@ import {
   pulseBegins,
   tipAbove,
   tipAlign,
+  trailLit,
 } from "@/lib/flow";
 
 /** The drawing this page replaces: every status its Graphviz source carried, with the colour it gave the box
@@ -266,5 +269,46 @@ describe("the drawing on a phone (425 wide)", () => {
     expect(tipAlign(Math.min(...xs))).toBe("start");
     expect(tipAlign(Math.max(...xs))).toBe("end");
     expect(tipAlign(0)).toBe("center");
+  });
+});
+
+/** A card's own journey, drawn on the flow (collector#146): the statuses it reached light in time order, and every
+ * arrow on the drawing one of its moves took. */
+describe("a journey on the drawing", () => {
+  // dividend-solo#146's 2026-11-13: needs-info -> blocked -> ready-for-agent -> agent-in-progress -> needs-info.
+  const walk = ["needs-triage", "blocked", "ready-for-agent", "agent-in-progress", "needs-info"];
+
+  it("lights one more status per step, in the walk's own order", () => {
+    expect(trailLit(walk, 0)).toEqual({ nodes: [], edges: [] });
+    expect(trailLit(walk, 1)).toEqual({
+      nodes: ["needs-triage"],
+      edges: [`${FLOW_START.id}->needs-triage`],
+    });
+    expect(trailLit(walk, 2).nodes).toEqual(["needs-triage", "blocked"]);
+    expect(trailLit(walk, 4).nodes).toEqual(["needs-triage", "blocked", "ready-for-agent", "agent-in-progress"]);
+    expect(trailLit(walk, 99).nodes).toEqual([...new Set(walk)]);
+  });
+
+  it("lights the arrows the card took, and leaves the moves the drawing has no arrow for to their status", () => {
+    // The drawing has no `blocked -> ready-for-agent` arrow: the status lights and no path does.
+    expect(trailLit(walk, 3).edges).toEqual(["start->needs-triage", "needs-triage->blocked"]);
+    expect(trailLit(walk, 4).edges).toContain("ready-for-agent->agent-in-progress");
+    expect(trailLit(walk, 5).edges).toContain("agent-in-progress->needs-info");
+    // A status visited twice is one node, and a path taken twice is one edge.
+    const twice = trailLit(["needs-triage", "blocked", "needs-triage"], 3);
+    expect(twice.nodes).toEqual(["needs-triage", "blocked"]);
+    expect(twice.edges).toEqual(["start->needs-triage", "needs-triage->blocked"]);
+    for (const e of trailLit(walk, walk.length).edges)
+      expect(
+        FLOW_EDGES.some((x) => x.id === e),
+        e,
+      ).toBe(true);
+  });
+
+  it("draws the whole walk in 1.5 s, whatever the number of steps (the card's own 1.5 s)", () => {
+    expect(JOURNEY_DRAW_SECONDS).toBe(1.5);
+    expect(journeyStepMs(5) * 5).toBeCloseTo(1500, 6);
+    expect(journeyStepMs(23) * 23).toBeCloseTo(1500, 6);
+    expect(journeyStepMs(0)).toBe(0);
   });
 });
