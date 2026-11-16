@@ -23,6 +23,7 @@ const recorded = JSON.parse(fs.readFileSync(FIXTURE, "utf8")) as {
 const HOSTS = ["ezio", "altair"];
 
 const moves = journeyMoves(recorded.pages, HOSTS);
+const recordedAt = Date.parse(recorded.recorded);
 const at = (iso: string) => moves.find((m) => m.at === iso);
 
 describe("the fold over dividend-solo#146's recorded timeline", () => {
@@ -152,11 +153,11 @@ describe("the fold over dividend-solo#146's recorded timeline", () => {
     // On 2026-11-13 the card was in needs-info from 14:39 ET, with the builder's Ask as its reason: that is the
     // step the brief asks the top line to show, and the card moved on only after.
     const asked = moves.findIndex((m) => m.at === "2026-11-13T19:39:16Z");
-    expect(nowLine(moves.slice(0, asked + 1), { zone: "America/New_York" })).toBe(
+    expect(nowLine(moves.slice(0, asked + 1), { now: recordedAt, zone: "America/New_York" })).toBe(
       "In needs-info since 14:39 EST, because decision: Cut the rest of #146 into agent cards and move the card back to ready-for-agent; the builder comment is one cut of it",
     );
     // On the recorded answer the card has moved on since: it is blocked by the 13 cards it was cut into.
-    expect(nowLine(moves, { zone: "America/New_York" })).toBe(
+    expect(nowLine(moves, { now: recordedAt, zone: "America/New_York" })).toBe(
       "In blocked since 16:02 EST, because Blocked by dividend-solo#276, agent-stack#420, analytics#39, analytics#38, analytics#37, analytics#36, rep-sheet#287, abide#34, zero-phase#553, situation#984, dividend-solo#275, analytics#35, analytics#34: moved to blocked.",
     );
   });
