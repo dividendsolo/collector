@@ -240,7 +240,7 @@ export function CurrentWork() {
       <PanelHead icon="play" title="Current work">
         <span className="count">{rows?.filter((r) => r.state !== "closed").length ?? 0}</span>
       </PanelHead>
-      <div className="wrap">
+      <div className="wrap scroll">
         <table>
           <thead>
             <tr>

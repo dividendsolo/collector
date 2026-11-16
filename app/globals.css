@@ -1319,6 +1319,19 @@
   .wrap {
     overflow-x: auto;
   }
+  /* Current work and Waiting on you hold about 15 rows and scroll the rest inside the panel, with the column heads
+     kept in view (James, 2026-11-16: "otherwise we have to scroll through every single card"). */
+  .wrap.scroll {
+    --row-h: 38px;
+    max-height: calc(var(--row-h) * 15 + 40px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .wrap.scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
   #current-work tr.done td {
     opacity: 0.6;
   }
