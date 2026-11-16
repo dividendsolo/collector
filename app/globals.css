@@ -2384,6 +2384,37 @@
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
   }
+  /* The body's shape while a brief loads: the same padding and line height as .brief-body, so the text lands
+     where the lines were. */
+  .brief-skel {
+    padding: 14px 16px 20px;
+    max-width: 940px;
+  }
+  .brief-skel .skel {
+    height: 10px;
+    margin: 0 0 11px;
+  }
+  .brief-skel .skel + .skel {
+    margin-top: 0;
+  }
+  .brief-skel .skel.h {
+    width: 42%;
+    height: 16px;
+    margin-bottom: 18px;
+  }
+  .brief-skel .skel.l {
+    width: 96%;
+  }
+  .brief-skel .skel.m {
+    width: 78%;
+  }
+  .brief-skel .skel.s {
+    width: 46%;
+  }
+  .brief-skel .gap {
+    display: block;
+    height: 10px;
+  }
   .brief-body {
     padding: 6px 16px 20px;
     max-width: 940px;

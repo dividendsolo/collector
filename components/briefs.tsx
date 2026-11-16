@@ -163,12 +163,26 @@ export function BriefsPage() {
   );
 }
 
+/** The body's shape while it loads: a heading and paragraphs of text lines, so the page never opens empty and the
+ * text lands where the lines were (James, 2026-11-16: "it's blank and then it just sort of pops in"). */
+const SKEL_LINES = ["h", "l", "l", "m", "", "l", "l", "s", "", "m", "l", "l", "m"];
+const BriefSkel = () => (
+  <div className="brief-skel" role="status" aria-busy="true" aria-label="Loading the brief">
+    {SKEL_LINES.map((w, i) => (w ? <span className={`skel ${w}`} key={i} /> : <span className="gap" key={i} />))}
+  </div>
+);
+
 /** One brief, read whole: opening it is what makes it Read, and the Archive button sits at its top (the Acknowledge
  * toggle's own button on Needs attention). There is no unarchive in this pass. */
 export function BriefPage({ machine, file }: { machine: string; file: string }) {
   const query = `/api/brief?machine=${encodeURIComponent(machine)}&file=${encodeURIComponent(file)}`;
   const { data } = useApi<BriefData>(query);
+  const list = useBriefs().data;
+  const listed = [...(list?.inbox || []), ...(list?.archived || [])].find(
+    (b) => b.machine === machine && b.file === file,
+  );
   const brief = data?.brief;
+  const head = brief || listed;
   const [archived, setArchived] = useState(false);
   // Opening a brief makes it Read (GLOSSARY.md). Once: the read state lands on this machine, and the next read of the
   // brief carries it.
@@ -194,8 +208,8 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
   return (
     <div className="page">
       <section className="panel briefs-panel brief-panel">
-        <PanelHead icon="inbox" title={brief?.brief || "Brief"}>
-          <span className="sub">{brief ? `${brief.machine} · ${day(brief.sent_at)}` : ""}</span>
+        <PanelHead icon="inbox" title={head?.brief || "Brief"}>
+          <span className="sub">{head ? `${head.machine} · ${day(head.sent_at)}` : ""}</span>
           <div className="tools">
             <a className="btn ghost back" href="#/briefs" title="Back to the inbox (Esc)">
               <Icon name="back" />
@@ -211,7 +225,7 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
             {data.why}
           </p>
         ) : null}
-        {brief?.body ? <Markdown text={brief.body} /> : null}
+        {brief?.body ? <Markdown text={brief.body} /> : data ? null : <BriefSkel />}
       </section>
     </div>
   );
