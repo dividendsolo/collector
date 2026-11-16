@@ -19,7 +19,7 @@ export interface Toast {
   key: string;
   /** What is wrong with it now: a new state is a new problem. */
   state: string;
-  level: "error" | "warn";
+  level: "error" | "warn" | "good";
   title: string;
   text: string;
   /** Where the details are: the Services page, or the Network page. */
@@ -31,6 +31,7 @@ export interface Toast {
   /** An amber Security check the user may dismiss (James, 2026-11-06: "if they're okay with it, that's fine"). A
    * red one, a Down service and an open port stay until fixed. */
   dismissible?: boolean;
+  acknowledges?: boolean;
 }
 
 interface ServiceIn {
@@ -188,10 +189,9 @@ export function internetPortCount(machines: MachineIn[] | null | undefined): num
   return n;
 }
 
-/** A machine's job notices (collector#82): one amber toast per line a job wrote into `~/.hermes/notices/*.jsonl` —
- * a new directory listing, say — its title the line's own text, linking to the listing. It is good news, so it is
- * never an error and draws no red, and a line whose key is acknowledged makes no toast: the row on the
- * Dashboard carries the Acknowledge, and both read the same acks, so one click clears the pair. */
+/** A machine's job notices (collector#82): one blue toast per line a job wrote into `~/.hermes/notices/*.jsonl` —
+ * a new directory listing, say — its title the line's own text, linking to the listing. A line whose key is
+ * acknowledged makes no toast: Dismiss and the Dashboard row's Acknowledge both set that ack. */
 export function noticeToasts(machines: MachineIn[] | null | undefined, acks: string[] = []): Toast[] {
   const out: Toast[] = [];
   for (const m of machines || []) {
@@ -202,23 +202,26 @@ export function noticeToasts(machines: MachineIn[] | null | undefined, acks: str
       if (acks.includes(key)) continue;
       // The line's href is outside data, and the title above it is the link: only a web address is one (collector#84).
       const href = webUrl(n.href);
-      out.push({
+      const shared = {
         key,
         state: text,
-        level: n.level === "error" ? "error" : "warn",
         title: text,
-        // The title is the link, so the body is the address it goes to; a notice with no link says nothing more.
         text: href || "",
         href: href || jumpHref("dashboard", "attention"),
-      });
+      };
+      out.push(
+        n.level === "error"
+          ? { ...shared, level: "error" }
+          : { ...shared, level: "good", noDot: true, dismissible: true, acknowledges: true },
+      );
     }
   }
   return out;
 }
 
-/** The toasts to show, errors first, then warnings. */
+/** The toasts to show, errors first, then warnings, then good news. */
 export function sortToasts(all: Toast[]): Toast[] {
-  const rank = { error: 0, warn: 1 };
+  const rank = { error: 0, warn: 1, good: 2 };
   return [...all].sort((a, b) => rank[a.level] - rank[b.level]);
 }
 

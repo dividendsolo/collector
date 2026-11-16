@@ -629,7 +629,13 @@ no next run reads `Acknowledged.` — the Dashboard only says "Waiting for the n
 `lib/toasts.ts`'s `noticeToasts(machines, acks)` is the toast: the line's text is the title and the link (a notice
 with no `href` leads to the Priority tasks panel instead), the address is the body, and a `key` already in the
 browser's acknowledgements (`components/acks.ts`) is left out. One Acknowledge on the row clears both, since they
-read the same list; there is no Dismiss, because the news is not a problem that has to wait for a run to clear.
+read the same list.
+
+The toast looks like good news, not a warning (collector#180): level `good`, a blue border (`.toast.good`, the
+theme's `--blue` in dark and light), no dot, and sorted after errors and warnings. Its Dismiss acknowledges the
+notice's key (`acknowledges` on the toast, `setAck` in `components/toasts.tsx`'s `ToastCard`), so Dismiss and the
+row's Acknowledge are the same click: the toast and the row both go and do not come back. A notice whose line says
+`level: error` stays a red toast with its dot and no Dismiss. `tests/good-news-toast.test.ts` holds it.
 `tests/notices.test.ts` and `tests/notices.driver.py` drive the real `collect.py` on a fixture home.
 
 ## Only a web address is an href (collector#84, #86)

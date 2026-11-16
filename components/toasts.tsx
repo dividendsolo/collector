@@ -10,9 +10,10 @@ import {
   noticeToasts,
   serviceToasts,
   sortToasts,
+  type Toast,
   visibleToasts,
 } from "@/lib/toasts";
-import { useAcks } from "./acks";
+import { setAck, useAcks } from "./acks";
 import { useAi } from "./ai";
 import { useLive } from "./data";
 import { useServices } from "./services";
@@ -91,30 +92,36 @@ export function Toasts() {
   return (
     <section className="toasts" aria-live="polite" aria-label="Alerts">
       {shown.map((t) => (
-        <div
-          key={t.key}
-          className={`toast ${t.level}${t.noDot ? " no-dot" : ""}`}
-          role={t.level === "error" ? "alert" : "status"}
-        >
-          {t.noDot ? null : <span className="toast-dot" />}
-          <div className="toast-body">
-            <a className="toast-title plain" href={t.href}>
-              {t.title}
-            </a>
-            {t.text ? <div className="toast-text">{t.text}</div> : null}
-          </div>
-          {t.action ? (
-            <a className="btn danger" href={t.action.url} target="_blank" rel="noopener">
-              {t.action.label}
-            </a>
-          ) : null}
-          {t.dismissible ? (
-            <button className="btn ghost" type="button" onClick={() => dismiss(t.key, t.state)}>
-              Dismiss
-            </button>
-          ) : null}
-        </div>
+        <ToastCard key={t.key} t={t} />
       ))}
     </section>
+  );
+}
+
+export function ToastCard({ t }: { t: Toast }) {
+  return (
+    <div className={`toast ${t.level}${t.noDot ? " no-dot" : ""}`} role={t.level === "error" ? "alert" : "status"}>
+      {t.noDot ? null : <span className="toast-dot" />}
+      <div className="toast-body">
+        <a className="toast-title plain" href={t.href}>
+          {t.title}
+        </a>
+        {t.text ? <div className="toast-text">{t.text}</div> : null}
+      </div>
+      {t.action ? (
+        <a className="btn danger" href={t.action.url} target="_blank" rel="noopener">
+          {t.action.label}
+        </a>
+      ) : null}
+      {t.dismissible ? (
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => (t.acknowledges ? setAck(t.key, true) : dismiss(t.key, t.state))}
+        >
+          Dismiss
+        </button>
+      ) : null}
+    </div>
   );
 }
