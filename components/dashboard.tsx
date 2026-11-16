@@ -540,7 +540,7 @@ export function Waiting() {
           </div>
         </div>
       </PanelHead>
-      <div className="wrap">
+      <div className="wrap scroll">
         <table>
           <thead>
             <tr>
