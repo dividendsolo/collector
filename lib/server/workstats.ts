@@ -6,16 +6,12 @@ import { isoLocal, isoUtc, localMidnight, ymdLocal } from "./dates";
 import { snapshot } from "./machines";
 import { run } from "./run";
 
-/** A deploy the machines made themselves: pull-deploy's Kamal deploys (collect.py `pull_deploys`). */
 export interface MachineDeploy {
   app: string;
   sha: string;
   at: string;
 }
 
-/** Deploys today per repo, most first: GitHub's (the commit of each) plus the machines' own Kamal deploys since `since`,
- * a commit once per repo, so zero-phase's Vercel and Kamal deploy of one commit is one (James, 2026-11-11). A Kamal
- * app is matched to its repo by its name. */
 export function countDeploys(
   repos: string[],
   github: Record<string, string[]>,
@@ -36,9 +32,6 @@ export function countDeploys(
     .sort((a, b) => b.n - a.n);
 }
 
-/** The commit of each production deploy of one repo since `since` (local midnight, UTC): GitHub deployments to a
- * production environment (Vercel makes these), else successful CI jobs named "deploy" on pushes to main (Kamal from
- * Actions). */
 async function deploysToday(repo: string, since: string): Promise<string[]> {
   const [deps] = await run(["gh", "api", `repos/${repo}/deployments?per_page=50`], { timeout: 15 });
   if (deps?.length)
@@ -59,8 +52,6 @@ async function deploysToday(repo: string, since: string): Promise<string[]> {
   return out;
 }
 
-/** The GitHub search behind a Work panel number: cards closed as done, or PRs merged (James, 2026-11-11), since `day`
- * (a date or a local timestamp), across every owner. */
 export function searchQuery(kind: "closed" | "merged", day: string, owners: string[]): string {
   const what =
     kind === "merged" ? `is:pr is:merged merged:>=${day}` : `is:issue is:closed reason:completed closed:>=${day}`;
@@ -70,8 +61,6 @@ export function searchQuery(kind: "closed" | "merged", day: string, owners: stri
 const CAL =
   "query={viewer{contributionsCollection{contributionCalendar{totalContributions weeks{contributionDays{date contributionCount contributionLevel}}}}}}";
 
-/** Cards closed as done (today, 30 days), deploys today per repo, and the signed-in user's contribution calendar.
- * The repos are the chosen projects plus every repo with a card on the board. Read every five minutes. */
 const cache = swr("work-stats", 300_000, async () => {
   await ready();
   const midnight = localMidnight();
@@ -107,7 +96,6 @@ const cache = swr("work-stats", 300_000, async () => {
   return {
     at: Date.now() / 1000,
     closed_today: (todays?.total_count as number | undefined) ?? null,
-    // The cards behind that number, for the Closed today page (James, 2026-11-10). Search answers 100 at most.
     closed_today_cards: closedRows(todays?.items || []),
     closed_30d: thirty,
     merged_today: mergedToday,
@@ -129,7 +117,6 @@ const cache = swr("work-stats", 300_000, async () => {
   };
 });
 
-/** The open-card count comes from the live board, not from the five-minute stats. */
 export async function workStats() {
   const s = await cache.get();
   return { ...s, open: workView().cards.length };

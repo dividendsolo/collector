@@ -2,12 +2,6 @@ import { describe, expect, it } from "vitest";
 import { mainChecksPrompt } from "@/lib/server/debug-fix";
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * James, 2026-11-11, on "omarchy4mac: the checks fail on main at altair (Jog CI ci.yml, at 6994081): failed to get run
- * log: log not found": "what is that? Is that a verify ... what is causing the checks to fail on main? ... Why is it
- * getting triggered? And then why is it failing? ... There's no way to fix it. There's no info on it." And: "if there's
- * nothing I can do except wait ... then they shouldn't be in there."
- */
 const base = {
   github: {},
   services: [],
@@ -51,11 +45,6 @@ describe("the row for a main that fails its checks", () => {
   });
 });
 
-/**
- * agent-stack#398: a red main a builder can fix goes to a builder. The foreman files a P0 `ready-for-agent` card in
- * the repo and writes its number at the end of the marker line (` card #<n>`, agent-stack PR #401). The card is on the
- * board like any other P0, so the fixMain row would be a second place to fix the same thing.
- */
 describe("a red main the foreman filed a card for", () => {
   const carded = {
     repo: "omarchy4mac",

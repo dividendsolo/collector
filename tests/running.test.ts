@@ -5,12 +5,6 @@ import { AgentsPage } from "@/components/agents";
 import { LiveProvider } from "@/components/data";
 import { CurrentWork } from "@/components/running";
 
-/**
- * collector#59: a column that names a card's own status says Status, the one word (James, 2026-11-02: "we'll call
- * them status"). The header IS the deliverable, so it is read off the rendered table and not out of the source: the
- * header row is drawn with no data at all (the page's first paint is the skeleton), which is what every reader sees.
- * `react-dom` is already a dependency, so server-rendering the table in the tests' node environment adds none.
- */
 const tableHeaders = (page: ReactElement) =>
   [...renderToStaticMarkup(createElement(LiveProvider, null, page)).matchAll(/<th(?:\s[^>]*)?>([\s\S]*?)<\/th>/g)].map(
     (m) => m[1],

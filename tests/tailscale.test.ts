@@ -3,11 +3,6 @@ import { describe, expect, it } from "vitest";
 import { restartSshJobs, tailscaleBin } from "@/lib/server/tailscale";
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * signal-tunnel on altair, 2026-11-02: Tailscale was stopped, so the tunnel's ssh could not resolve ezio, and
- * Needs attention said only "last run exit 255". The row now names the cause, and on the machine Collector runs
- * on it carries a Start Tailscale button.
- */
 const DRIVER = `import json, os, sys
 sys.path.insert(0, os.getcwd())
 import collect
@@ -108,7 +103,6 @@ describe("restartSshJobs", () => {
       { scheduler: "launchd", id: "com.example.local", ssh_host: "", last_status: "exit 1" },
       { scheduler: "cron", id: "x", ssh_host: "h", last_status: "exit 255" },
     ];
-    // uid -1 names no launchd domain, so the kickstart fails harmlessly: only the choice is under test.
     expect(await restartSshJobs(jobs, -1)).toEqual(["com.example.tunnel"]);
   });
 });

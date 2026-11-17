@@ -16,14 +16,10 @@ import {
   writeStamp,
 } from "@/lib/rebuild";
 
-/** The live Collector's own rebuild (card #29): the "is the build behind main" check on its own, then the real
- * script in a throwaway checkout with a real `origin` on disk, so the pull, the build and the stamp a run here takes
- * are the ones the live job takes. Nothing here goes near the machine's own Collector. */
 const ROOT = process.cwd();
 const JOB = path.join(ROOT, "scripts", "rebuild-if-stale.ts");
 const STAMP_SCRIPT = path.join(ROOT, "scripts", "build-stamp.ts");
 
-/** A git command in a folder, isolated from whatever global git config this machine carries. */
 const gitEnv = () => ({ ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" });
 const git = (dir: string, ...args: string[]) =>
   execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: gitEnv() });
@@ -31,25 +27,17 @@ const write = (p: string, body: string) => {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, body);
 };
-/** A commit on main of a checkout. */
 const commit = (dir: string, body: string) => {
   write(path.join(dir, "notes.md"), `${body}\n`);
   git(dir, "add", "notes.md");
   git(dir, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-m", body);
 };
 
-/** A stand-in for `next build` that does to its folder what `next build` does: empties the distDir it was given
- * (`COLLECTOR_DIST_DIR`, as `next.config.ts` reads it, else `.next`) before anything else, then writes a BUILD_ID and
- * a chunk — or, when `fail` is set, exits 3 after the wipe, as a type error on main does. */
 const fakeNextBuild = (id: string, fail = false, midway = "") =>
   `d=\${COLLECTOR_DIST_DIR:-.next}; rm -rf "$d"; ${midway} mkdir -p "$d/static"; ${
     fail ? "exit 3" : `echo ${id} > "$d/BUILD_ID"; echo chunk > "$d/static/app.js"`
   }`;
 
-/** The world the job runs in: a bare `origin` with two commits on main, `live` (the checkout the job is pointed at)
- * and `work` (where a newer commit on main is made). `live` holds a package.json shaped like the live Collector's:
- * `bun run build` (a stand-in for `next build`, which wipes its folder first), whose postbuild records the commit
- * the build was made from. `live` starts out serving an old build: a BUILD_ID and a chunk in `.next`. */
 function world() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "collector-rebuild-"));
   const origin = path.join(root, "origin.git");
@@ -70,17 +58,12 @@ function world() {
   write(path.join(live, ".next", "BUILD_ID"), "old\n");
   write(path.join(live, ".next", "static", "app.js"), "old chunk\n");
 
-  /** The commit one of the world's checkouts is at. */
   const head = (dir: string) => git(dir, "rev-parse", "HEAD").trim();
-  /** A newer commit on main, made where the checkout the job reads has not seen it: another clone, pushed, which is
-   * what a merge to main does to a checkout nobody has pulled. */
   const merge = (body: string) => {
     commit(work, body);
     git(work, "push", "origin", "main");
     return git(work, "rev-parse", "HEAD").trim();
   };
-  /** The job, as the launchd job runs it: `bun scripts/rebuild-if-stale.ts --dir <checkout>`, with an echo into
-   * `restarts.txt` for the restart: the real one kickstarts the launchd job, which only the live page runs. */
   const run = (...flags: string[]) => {
     const restart = ["--restart", "echo restarted >> restarts.txt"];
     const r = spawnSync("bun", [JOB, "--dir", live, ...restart, ...flags], {
@@ -91,16 +74,13 @@ function world() {
     return { code: r.status, out: `${r.stdout}${r.stderr}` };
   };
   const file = (name: string) => path.join(live, name);
-  /** The BUILD_ID a build folder holds, null when it holds no build. */
   const buildId = (folder: string) =>
     fs.existsSync(file(`${folder}/BUILD_ID`)) ? fs.readFileSync(file(`${folder}/BUILD_ID`), "utf8").trim() : null;
-  /** The BUILD_ID the page serves, and the one the job staged beside it. */
   const served = () => buildId(SERVED);
   const staged = () => buildId(STAGING);
   const built = () => staged() === "new";
   const stamp = () => readStamp(live)?.commit ?? null;
   const stagedStamp = () => readStamp(live, STAGING)?.commit ?? null;
-  /** How many times the job restarted the page. */
   const restarts = () =>
     fs.existsSync(file("restarts.txt")) ? fs.readFileSync(file("restarts.txt"), "utf8").trim().split("\n").length : 0;
 
@@ -172,8 +152,6 @@ describe("next.config.ts", () => {
 
 describe("tsconfig.json", () => {
   it("already names the staging folder's types, so a build there leaves the live checkout's tsconfig as committed", () => {
-    // `next build` adds `<distDir>/types/**/*.ts` to tsconfig's include when it is missing, which would leave the
-    // live checkout with a changed file every run and in the way of the next pull.
     const include = JSON.parse(fs.readFileSync(path.join(ROOT, "tsconfig.json"), "utf8")).include as string[];
     expect(include).toEqual(expect.arrayContaining([`${STAGING}/types/**/*.ts`, `${STAGING}/dev/types/**/*.ts`]));
   });
@@ -220,13 +198,12 @@ describe("the rebuild job", () => {
     const old = w.head(w.live);
     writeStamp(w.live, old);
     const newer = w.merge("second");
-    expect(w.head(w.live)).not.toBe(newer); // the checkout is behind main: the job's pull is what moves it
+    expect(w.head(w.live)).not.toBe(newer);
 
     const r = w.run();
     expect(r.out).toContain("[rebuild]");
     expect(r.code).toBe(0);
     expect(w.head(w.live)).toBe(newer);
-    // The new build serves, the old one and the staging folder are gone, and the page restarted once onto it.
     expect(w.served()).toBe("new");
     expect(fs.readFileSync(w.file(`${SERVED}/static/app.js`), "utf8").trim()).toBe("chunk");
     expect(w.stamp()).toBe(newer);
@@ -235,7 +212,6 @@ describe("the rebuild job", () => {
     expect(w.restarts()).toBe(1);
     expect(r.out).toContain("[update] restarted on");
 
-    // At most one restart per commit: the next run, with main where it was, does nothing at all.
     const again = w.run();
     expect(again.code).toBe(0);
     expect(again.out).toBe("");
@@ -246,7 +222,6 @@ describe("the rebuild job", () => {
     const w = world();
     const old = w.head(w.live);
     writeStamp(w.live, old);
-    // The same pull as a healthy run, then a build that empties its distDir and fails — as a broken main does.
     write(
       w.file("package.json"),
       `${JSON.stringify({ name: "live", scripts: { build: fakeNextBuild("new", true) } }, null, 2)}\n`,
@@ -256,7 +231,6 @@ describe("the rebuild job", () => {
     const r = w.run();
     expect(r.code).toBe(1);
     expect(r.out).toContain("build failed");
-    // The served build is exactly as it was: its BUILD_ID, its chunk and its stamp.
     expect(w.served()).toBe("old");
     expect(fs.readFileSync(w.file(".next/static/app.js"), "utf8").trim()).toBe("old chunk");
     expect(w.stamp()).toBe(old);
@@ -268,7 +242,6 @@ describe("the rebuild job", () => {
   it("never builds in the served folder, so the page keeps its build for the whole length of a build", () => {
     const w = world();
     writeStamp(w.live, w.head(w.live));
-    // A build that reads back what the page is serving midway, after it has emptied its own folder.
     const seen = w.file("seen-during-build.txt");
     const build = fakeNextBuild("new", false, `cat .next/BUILD_ID > ${seen} 2>/dev/null;`);
     write(
@@ -300,7 +273,6 @@ describe("the rebuild job", () => {
     expect(w.run().code).toBe(0);
     expect(w.restarts()).toBe(1);
 
-    // main moves again a minute later: the job builds it and stages it, and restarts nothing.
     const third = w.merge("third");
     const soon = w.run();
     expect(soon.code).toBe(0);
@@ -309,13 +281,11 @@ describe("the rebuild job", () => {
     expect(w.stagedStamp()).toBe(third);
     expect(w.restarts()).toBe(1);
 
-    // Still within the five minutes: no build again, no restart, and --check says what waits.
     const quiet = w.run();
     expect(quiet.out).not.toContain("rebuilding");
     expect(w.restarts()).toBe(1);
     expect(w.run("--check").out).toContain("would swap it in and restart the page once five minutes have passed");
 
-    // Five minutes after the last restart, the next run puts the staged build in service: once.
     markRestart(w.live, new Date(Date.now() - RESTART_GAP_MS - 1000));
     const later = w.run();
     expect(later.code).toBe(0);
@@ -332,7 +302,6 @@ describe("the rebuild job", () => {
     writeStamp(w.live, w.head(w.live));
     const newer = w.merge("second");
     git(w.live, "pull", "--quiet", "origin", "main");
-    // What the live checkout holds the day this card lands: a build of main, staged, waiting for a click.
     write(w.file(`${STAGING}/BUILD_ID`), "new\n");
     writeStamp(w.live, newer, new Date(), STAGING);
 
@@ -347,8 +316,6 @@ describe("the rebuild job", () => {
     const w = world();
     const first = w.head(w.live);
     const newer = w.merge("second");
-    // The page restarted by hand onto main, and a build of the commit before it is still staged: the button must not
-    // offer that one.
     writeStamp(w.live, newer);
     write(w.file(`${STAGING}/BUILD_ID`), "older\n");
     writeStamp(w.live, first, new Date(), STAGING);
@@ -368,9 +335,6 @@ describe("the rebuild job", () => {
     writeStamp(w.live, old);
     w.merge("second");
 
-    // --check never fetches — it is the read-only form — so it answers from the last fetch, which the every-five-
-    // minute job always just made. With nothing fetched since, the checkout cannot know main moved: it says so
-    // rather than guessing, and still writes nothing.
     expect(w.run("--check").out).toContain("nothing to do");
     expect(w.head(w.live)).toBe(old);
 

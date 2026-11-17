@@ -9,7 +9,6 @@ import { PanelHead, SkelRows } from "./ui";
 export const jobHref = (j: { machine: string; id: string }) =>
   `#/cron/${encodeURIComponent(j.machine)}/${encodeURIComponent(j.id)}`;
 
-/** Each machine's time zone; a machine in another zone than the first gets its zone after each time. */
 export function useZones() {
   const { state } = useLive();
   const zones: Record<string, string> = Object.fromEntries((state?.machines || []).map((m: any) => [m.name, m.tz]));
@@ -137,7 +136,6 @@ function When({ iso }: { iso?: string | null }) {
   );
 }
 
-/** One cron job's own page: #/cron/<machine>/<job id>. */
 export function JobPage({ machine, id }: { machine: string; id: string }) {
   const { state } = useLive();
   const acks = useAcks();
@@ -145,7 +143,6 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
   const m = state?.machines.find((x: any) => x.name === machine);
   const j = (m?.jobs || []).find((x: any) => x.id === id);
   const setup = useRef<HTMLDListElement>(null);
-  // The size numbers get the width of the widest one, so their last digits line up.
   useLayoutEffect(() => {
     const boxes = [...(setup.current?.querySelectorAll<HTMLElement>(".digits") || [])];
     for (const b of boxes) b.style.minWidth = "";
@@ -165,8 +162,6 @@ export function JobPage({ machine, id }: { machine: string; id: string }) {
   const n = (x: unknown) => (x ?? "—") as React.ReactNode;
   const s = j ? status(j, acks) : "";
   const chars = j ? (j.agent ? j.prompt_chars : j.script_chars) : 0;
-  // Hermes sends a job's output to "local" (a file on the machine) when the job names no target. Many jobs send their
-  // own email (email-brief.py, Resend); the prompt or the script says so.
   const target = j?.deliver || "local";
   const emails = j ? /email-brief|resend/i.test(`${j.prompt || ""}\n${j.script_body || ""}`) : false;
   const sendsTo = emails && target === "local" ? "email" : emails ? `${target} and email` : target;

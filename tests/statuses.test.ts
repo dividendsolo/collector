@@ -9,7 +9,6 @@ import {
   waitingRank,
 } from "@/lib/statuses";
 
-/** A ticket in the shape the board read hands the page. */
 const ticket = (id: string, lane: string, extra: Record<string, unknown> = {}) => ({
   id,
   lane,
@@ -39,9 +38,7 @@ describe("statusSets", () => {
   });
 
   it("keeps tickets.each as the waiting set, so a config that already set it changes not at all", () => {
-    // The older name for the same list (README's `tickets`): the page watched these lanes before the setting.
     expect(statusSets({ tickets: { each: ["needs-info"] } }).waiting).toEqual(["needs-info"]);
-    // The setting wins over it, and an empty list is a set of none rather than "unset".
     expect(statusSets({ tickets: { each: ["needs-info"] }, statuses: { waiting: ["blocked-on-me"] } }).waiting).toEqual(
       ["blocked-on-me"],
     );
@@ -49,7 +46,6 @@ describe("statusSets", () => {
   });
 
   it("sorts tickets.each by the agent stack's order, so the list matches main card for card", () => {
-    // On main `tickets.each` only chose the lanes; the fixed agent-stack order sorted them (James, 2026-10-22).
     const each = ["needs-triage", "my-own-lane", "needs-info", "needs-manual-qa", "ready-for-human"];
     const s = statusSets({ tickets: { each } });
     expect(s.waiting).toEqual(["ready-for-human", "needs-manual-qa", "needs-info", "needs-triage", "my-own-lane"]);
@@ -60,9 +56,7 @@ describe("statusSets", () => {
       ticket("#1", "ready-for-human", { priority: "P1" }),
       ticket("#5", "my-own-lane", { priority: "P1" }),
     ];
-    // needs-triage goes first whatever the order (James, 2026-11-11); the rest keep the agent stack's order.
     expect(waitingList(tickets, s.waiting).map((t) => t.id)).toEqual(["#4", "#1", "#2", "#3", "#5"]);
-    // An explicit statuses.waiting keeps its own order.
     expect(statusSets({ tickets: { each }, statuses: { waiting: ["needs-triage", "needs-info"] } }).waiting).toEqual([
       "needs-triage",
       "needs-info",
@@ -79,7 +73,6 @@ describe("statusSets", () => {
 
 describe("waitingList", () => {
   it("shows only the set's lanes, in the set's order", () => {
-    // The card's own example: a user's set of two statuses, in the order the user wrote them.
     const tickets = [
       ticket("a", "needs-triage", { priority: "P0" }),
       ticket("b", "review-me"),
@@ -88,7 +81,6 @@ describe("waitingList", () => {
       ticket("e", "blocked-on-me", { priority: "P1" }),
     ];
     expect(waitingList(tickets, ["blocked-on-me", "review-me"]).map((t) => t.id)).toEqual(["e", "d", "b"]);
-    // A P0 in a lane the set does not name never jumps the set: needs-triage is not on this list at all.
     expect(waitingList(tickets, ["blocked-on-me", "review-me"]).map((t) => t.lane)).not.toContain("needs-triage");
   });
 
@@ -102,8 +94,6 @@ describe("waitingList", () => {
       ticket("p1-human-old", "ready-for-human", { priority: "P1", created: "2026-10-02" }),
       ticket("p0-triage", "needs-triage", { priority: "P0", created: "2026-10-21" }),
     ];
-    // James, 2026-11-11: needs-triage first, whatever the priority: a card triaged can go straight to an agent,
-    // so triage takes it off his plate at once. Inside each part: priority, then the set's order, then oldest.
     expect(waitingList(rows, AGENT_STACK_STATUSES.waiting).map((r) => r.id)).toEqual([
       "p0-triage",
       "p1-triage",

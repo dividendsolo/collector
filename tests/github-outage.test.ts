@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * James, 2026-11-11, on two rows "omarchy4mac: the checks fail on main at altair / ezio (Jog CI ci.yml, at 6994081):
- * failed to get run log: log not found" during GitHub's Actions outage: "those two items should show that it's because
- * of GitHub ... maybe we shouldn't even have them there at all". A run with no log at all, while GitHub has an open
- * incident naming Actions, is GitHub's, not ours: the rows fold into the GitHub incident row, which names the builds
- * that wait on it, and one Acknowledge covers both. When the incident ends, a main that still fails shows again.
- * The foreman rechecks main on its own, so nobody has to do anything when GitHub recovers.
- */
 const broken = {
   repo: "omarchy4mac",
   line: "Jog CI ci.yml: base 699408145ffa",

@@ -1,13 +1,6 @@
 import { homedir } from "node:os";
 import { runText } from "./run";
 
-/**
- * A failed cron row's "Debug and fix" button (James, 2026-11-11): a new pi session in a new tmux pane, split beside the
- * one James is looking at, so it never touches a session already at work. Its first message asks for the TDD flow (a failing test first), a ship, a rerun
- * of the job, and the proof (the test, and the job's next run ok). The row then leaves Priority tasks on its own:
- * a run that ends ok is no failed run.
- */
-
 export interface DebugJob {
   id: string;
   name: string;
@@ -20,22 +13,16 @@ export interface DebugJob {
 
 export interface DebugMachine {
   machine: string;
-  /** The ssh target for a machine Collector reads over ssh; null for this one. */
   ssh: string | null;
   local: boolean;
 }
 
-/** The Debug and fix id of the work script's loop row ("Foreman on ezio started 5 times in 60 s"): one per machine. */
 export const WORK_LOOP = "work-loop";
 
-/** The refusal when the loop row is gone by the time James clicks (2026-11-11). */
 export const LOOP_GONE = "Foreman isn't looping any more (it ran once a minute since). Nothing to fix.";
 
-/** The pane key of a Triage session: one at a time. */
 export const TRIAGE_KEY = "triage";
 
-/** The first message for the work script's loop (James, 2026-11-11): the same flow as a failed job, with no job to
- * rerun; the proof is the test and the script starting once per its schedule again. */
 export function workLoopPrompt(
   m: DebugMachine,
   work: { label?: string; name?: string; log?: string },
@@ -69,13 +56,6 @@ export function workLoopPrompt(
     .join("\n");
 }
 
-/** The first message of a Triage session (James, 2026-11-11): one card in needs-triage, triaged with James the way
- * he triages in a session. It opens with the triage skill's own command (James, 2026-11-13), so pi loads that skill
- * — its frontmatter sets `disable-model-invocation`, so pi never picks it by itself — and the rest of the message is
- * the request the skill runs on: what the skill does not hold (this repo's stage, the agent stack's priority and
- * status, `status`, the sweep). pi reads the command's name up to the first space of the **whole** message, so the
- * request has to start on the command's own line: a first line of bare `/skill:triage` expands to nothing.
- * The repo and number go into a shell command in the prompt, so only a card's own shape is accepted. */
 export function triagePrompt(card: { repo: string; number: number }): string {
   if (!/^[\w.-]+\/[\w.-]+$/.test(card.repo) || !Number.isInteger(card.number) || card.number < 1)
     throw new Error(`not a card: ${card.repo}#${card.number}`);
@@ -92,12 +72,8 @@ export function triagePrompt(card: { repo: string; number: number }): string {
   ].join("\n");
 }
 
-/** The pane key of a failing main's Debug and fix session: one per repo and machine. */
 export const mainKey = (fix: { machine: string; repo: string }) => `main/${fix.machine}/${fix.repo}`;
 
-/** The first message of a failing main's Debug and fix session (James, 2026-11-11: "There's no way to fix it. There's
- * no info on it."): the foreman tests a repo's main on a machine before it builds a card there, and main failed. The
- * repo goes into shell commands in the prompt, so only a repo name's own shape is accepted. */
 export function mainChecksPrompt(
   m: DebugMachine,
   b: { repo: string; step: string; sha: string; error?: string },
@@ -135,12 +111,8 @@ export function mainChecksPrompt(
     .join("\n");
 }
 
-/** The pane key of an Unblock session: one per card. */
 export const unblockKey = (card: { repo: string; number: number }) => `unblock/${card.repo}#${card.number}`;
 
-/** The first message of an Unblock session (James, 2026-11-11): a P0 card waiting on James. The session checks why it
- * waits, does every part an agent can, and brings James only what needs him. The repo, number and status go into
- * the prompt's commands, so only a card's own shape is accepted. */
 export function unblockPrompt(card: { repo: string; number: number; lane: string }): string {
   if (
     !/^[\w.-]+\/[\w.-]+$/.test(card.repo) ||
@@ -161,15 +133,10 @@ export function unblockPrompt(card: { repo: string; number: number; lane: string
   ].join("\n");
 }
 
-/** The tmux pane options of a Debug and fix pane: the job it fixes (machine/id), and the step it is on, which the
- * session writes itself (James, 2026-11-11: the button "should show ... what it's currently doing"). */
 export const JOB_OPTION = "@collector_fix";
 export const STEP_OPTION = "@collector_step";
-/** The field separator of the pane read. Not a tab: under launchd (no locale) tmux prints a tab in -F as "_". */
 const SEP = "|";
 
-/** The steps the button can say, in order: a fixed list (James, 2026-11-11: "just make it a static list"). The session
- * sets each one with its exact command; a word not on the list reads as "working". */
 export const FIX_STEPS = [
   "finding the cause",
   "writing the failing test",
@@ -180,9 +147,6 @@ export const FIX_STEPS = [
   "stuck",
 ] as const;
 
-/** What a step means for the row's button (James, 2026-11-12: "I need that row to be resolved. Like, it's stuck
- * right now. ... the button needs to come back and say, I don't know, something else"). A session that reached its
- * last step is not working any more: `done` finished, `stuck` needs James, and only `working` spins. */
 export type StepKind = "working" | "done" | "stuck";
 
 export function stepState(step: string): { kind: StepKind; label: string } {
@@ -191,7 +155,6 @@ export function stepState(step: string): { kind: StepKind; label: string } {
   return { kind: "working", label: step };
 }
 
-/** The first message of the new session. */
 export function debugPrompt(m: DebugMachine, j: DebugJob): string {
   const step = (name: (typeof FIX_STEPS)[number]) => `\`tmux set -p -t "$TMUX_PANE" ${STEP_OPTION} "${name}"\``;
   const on = (cmd: string) => (m.local || !m.ssh ? `\`${cmd}\`` : `\`ssh ${m.ssh} ${cmd}\``);
@@ -223,38 +186,19 @@ export function debugPrompt(m: DebugMachine, j: DebugJob): string {
     .join("\n");
 }
 
-/** `tmux split-window` beside the pane James is looking at (James, 2026-11-11: "I would actually prefer if it split
- * my current terminal"): with no target, tmux splits the active pane of the client used last. -h splits it left and
- * right; the new pane takes the focus, so the fix is in view at once. -P -F prints the new pane's id. */
-/** Every Debug and fix session runs on Claude Opus 5.5 (James, 2026-11-11: "just statically assign it to Claude
- * every time because we want to use Opus 5.5 on these"). No fallback to another plan. */
 export const FIX_MODEL = { provider: "claude-code", model: "claude-opus-5-5" } as const;
 
-/** `tmux split-window` beside the pane James is looking at (James, 2026-11-11: "I would actually prefer if it split
- * my current terminal"): with no target, tmux splits the active pane of the client used last. -h splits it left and
- * right; the new pane takes the focus, so the fix is in view at once. -P -F prints the new pane's id.
- *
- * The command is a login shell, so pi gets James's own PATH: Collector's is /usr/bin:/bin, where pi cannot reach
- * Claude Code and picks the first model with a key (MiniMax, out of plan, 2026-11-11). It names the model, so pi
- * never picks one by itself. The prompt goes in as $0, never into the shell's text. */
 export function tmuxArgs(cwd: string, prompt: string): string[] {
-  // Collector runs under launchd with a bare PATH, and a login zsh does not read ~/.zshrc, where ~/.local/bin is
-  // added: pi was "command not found" and the pane closed at once (James, 2026-11-11: "my debug and fix button isn't
-  // doing anything"). ~/.local/bin is where pi's installer links pi.
   const pi = `PATH="$HOME/.local/bin:$PATH"; exec pi --provider ${FIX_MODEL.provider} --model ${FIX_MODEL.model} "$0"`;
   return ["split-window", "-h", "-c", cwd, "-P", "-F", "#{pane_id}", "/bin/zsh", "-lc", pi, prompt];
 }
 
-/** Open the session for a failed job. Fails, with the reason, when no tmux session is open on this machine. */
 export const openDebugSession = (m: DebugMachine, j: DebugJob, run = runText) =>
   openFixPane(fixKey(m.machine, j.id), debugPrompt(m, j), `${j.name} · ${m.machine}`, run);
 
-/** The fix pane's top border: its name and the step its session wrote (James, 2026-11-12: "name the window ... so
- * it's very easy to see which one it's actually working on"). A pane option, so James's own panes keep theirs. */
 export const NAME_OPTION = "@collector_name";
 export const BORDER_FORMAT = ` #{${NAME_OPTION}}: #{${STEP_OPTION}} `;
 
-/** Split James's pane, start pi on the prompt, and tag the pane with its key, its name and first step. */
 export async function openFixPane(
   key: string,
   prompt: string,
@@ -272,8 +216,6 @@ export async function openFixPane(
     await run(["tmux", "set", "-p", "-t", pane, STEP_OPTION, "starting"], { timeout: 5 });
     await run(["tmux", "set", "-p", "-t", pane, NAME_OPTION, name], { timeout: 5 });
     await run(["tmux", "set", "-p", "-t", pane, "pane-border-format", BORDER_FORMAT], { timeout: 5 });
-    // The border line is a window setting. The window's format is blank, so James's own panes there show an empty
-    // line, and only a fix pane, with its own format, shows a name.
     await run(["tmux", "set", "-w", "-t", pane, "pane-border-format", ""], { timeout: 5 });
     await run(["tmux", "set", "-w", "-t", pane, "pane-border-status", "top"], { timeout: 5 });
   }
@@ -282,9 +224,6 @@ export async function openFixPane(
 
 export const fixKey = (machine: string, id: string) => `${machine}/${id}`;
 
-/** Close a fix pane by its key (the row's Close button): a session that finished or is stuck is read, then shut, and
- * the row's button comes back to Debug and fix. Only a pane Collector itself tagged is closed, found by its key in
- * the pane list, so nothing the page sends can name one of James's own panes. */
 export async function closeFixPane(key: string, run = runText): Promise<{ ok: true } | { ok: false; why: string }> {
   const open = await openFixes(run);
   const fix = open[key];
@@ -293,18 +232,13 @@ export async function closeFixPane(key: string, run = runText): Promise<{ ok: tr
   return r.error ? { ok: false, why: r.error } : { ok: true };
 }
 
-/** One open Debug and fix pane: its step, and, for the one triage pane, the card it is on. */
 export interface OpenFix {
   pane: string;
   step: string;
   state: StepKind;
-  /** The triage pane only: the card that session is on, from the pane's own name. */
   card?: { repo: string; number: number };
 }
 
-/** The Debug and fix panes open now, by job (machine/id): each one's step, and, for the one triage pane, the card
- * it is on (the pane's name says which, 2026-11-13). A pane closed is gone from tmux, so the button comes back by
- * itself. No tmux running reads as none open. */
 export async function openFixes(run = runText): Promise<Record<string, OpenFix>> {
   const r = await run(
     [
@@ -319,7 +253,6 @@ export async function openFixes(run = runText): Promise<Record<string, OpenFix>>
   return parseFixes(r.error ? "" : r.stdout);
 }
 
-/** The card a triage pane is on, from the name openFixPane gave it (`triage owner/repo#12`). */
 function triageCard(name: string | undefined): { repo: string; number: number } | null {
   const m = (name ?? "").match(/^triage ([\w.-]+\/[\w.-]+)#(\d+)$/);
   return m ? { repo: m[1], number: Number(m[2]) } : null;
@@ -331,8 +264,6 @@ export function parseFixes(out: string): Record<string, OpenFix> {
   for (const line of out.split("\n")) {
     const [pane, key, step, name] = line.split(SEP);
     if (!pane || !key) continue;
-    // A Triage session writes no steps: it is a talk with James, so its button says so. Which card it is on comes
-    // from its pane name, so the page can show that card as triaging and hold the other buttons.
     if (key === TRIAGE_KEY) {
       const card = triageCard(name);
       fixes[key] = { pane, ...at("triaging"), ...(card ? { card } : {}) };

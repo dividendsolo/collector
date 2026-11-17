@@ -37,13 +37,12 @@ describe("sizeWeight", () => {
 });
 
 describe("monthUsage", () => {
-  const now = Date.UTC(2026, 10, 15, 12) / 1000; // 2026-11-15T12:00Z
+  const now = Date.UTC(2026, 10, 15, 12) / 1000;
   const run = (at: string, size: string, seconds: number, cost = 0) => ({ at, size, seconds, cost });
 
   it("sums each run's seconds at its size's weight, newest first over pages", () => {
     const pageOne = [run("2026-11-14T10:00:00Z", "jog", 600), run("2026-11-13T10:00:00Z", "jog-4vcpu", 300)];
     const pageTwo = [run("2026-11-02T10:00:00Z", "jog-8vcpu", 120)];
-    // 10 minutes at 1x + 5 at 2x + 2 at 4x = 28 free minutes.
     expect(monthUsage([pageOne, pageTwo], now)).toEqual({ used: 28, runs: 3 });
   });
   it("burns a Jog Max run's minutes at twice its size's weight", () => {
@@ -56,7 +55,7 @@ describe("monthUsage", () => {
       run("2026-11-01T00:00:00Z", "jog", 60),
       run("2026-11-10T00:00:00Z", "jog-4vcpu", 60),
     ];
-    expect(monthUsage([runs], now)).toEqual({ used: 3, runs: 2 }); // 1 minute at 1x + 1 at 2x
+    expect(monthUsage([runs], now)).toEqual({ used: 3, runs: 2 });
   });
   it("is zero for no runs at all", () => {
     expect(monthUsage([], now)).toEqual({ used: 0, runs: 0 });
@@ -82,7 +81,6 @@ describe("missingToken", () => {
   it("names the missing line and where a token comes from, for the page's 'Could not read' line", () => {
     expect(missingToken("")).toContain("JOG_TOKEN");
     expect(missingToken("")).toContain("usejog.com/account/-/tokens");
-    // The account is found through the API since 2026-10-29: .env names no account, so nothing asks for one.
     expect(missingToken("")).not.toContain("JOG_ACCOUNT");
   });
 });
@@ -148,7 +146,6 @@ describe("jogError", () => {
   it("gives Jog's own reason for a token that ended, one off its account, and an account it cannot see", () => {
     expect(jogError(401)).toContain("usejog.com/account/-/tokens");
     expect(jogError(403)).toContain("owners");
-    // The account is found through the API, so a 404 is about the login, never about a missing .env line.
     expect(jogError(404)).toContain("login");
     expect(jogError(404)).not.toContain("JOG_ACCOUNT");
   });

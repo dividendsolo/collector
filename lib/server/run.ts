@@ -8,7 +8,6 @@ export interface RunResult {
 }
 
 export interface RunOptions extends RetryOptions {
-  /** The process is killed with SIGKILL after this many seconds. Default 20. */
   timeout?: number;
   input?: string;
   env?: NodeJS.ProcessEnv;
@@ -59,12 +58,6 @@ function once(cmd: string[], opts: RunOptions): Promise<RunResult> {
   });
 }
 
-/**
- * Run a command with no shell. stdin is optional; the process is killed after `timeout` seconds (20 unless given),
- * so no command — a hung `gh`, a machine that stopped answering ssh — can hold a read open (repo standard S2).
- * `attempts` is how many tries this call may take: 1 (the default here) means one, no retry. Give it more only for
- * a read that can be asked twice without a consequence; a call that starts something must be left at one try.
- */
 export async function runText(cmd: string[], opts: RunOptions = {}): Promise<RunResult> {
   const attempts = attemptsFor(opts.attempts, 1);
   let last: RunResult = { ok: false, stdout: "", error: "no attempt made" };
@@ -76,11 +69,6 @@ export async function runText(cmd: string[], opts: RunOptions = {}): Promise<Run
   return last;
 }
 
-/**
- * Run a command that prints JSON: [data, null] on success, [null, error] otherwise. Every call through here is a
- * read — `gh api`, a machine read over ssh, the Nous portal script — so it gets one retry by default, with the same
- * capped, jittered backoff as an HTTP call. Pass `attempts: 1` where a second try would be wrong.
- */
 export async function run<T = any>(cmd: string[], opts: RunOptions = {}): Promise<[T | null, string | null]> {
   const r = await runText(cmd, { attempts: 2, ...opts });
   if (!r.ok) return [null, r.error];

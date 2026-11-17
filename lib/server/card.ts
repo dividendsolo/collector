@@ -8,8 +8,6 @@ const cards = once(
   () => new Map<string, { at: number; card: { title: string; text: string; url: string } }>(),
 );
 
-/** What a running card is for, for the Card column's tooltip. The repo's owner comes from the chosen projects (or
- * any owner they use). Cached ten minutes; a failed read is tried again on the next hover. */
 export async function card(repo: string, number: number) {
   const key = `${repo}#${number}`;
   const hit = cards.get(key);

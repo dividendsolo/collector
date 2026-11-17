@@ -6,12 +6,6 @@ import { API_CRITICALITIES, badConfigValues, PROJECT_STAGES, projectRepos, proje
 import { renewalDays, warnings } from "@/lib/server/warnings";
 import { vendorOrder } from "@/lib/vendors";
 
-/** The three hand-kept fields Mission Control had and Collector did not (collector#78): a project's stage, a
- * vendor's criticality, and a subscription's renewal date. Each is a setting in config.json, so each is one
- * value read off the file, refused by the config check when it is not one Collector knows, and shown where it
- * belongs. */
-
-/** The file a new user copies or pastes, read as text. */
 const file = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 
 describe("a project's stage (collector#78)", () => {
@@ -75,7 +69,6 @@ describe("a vendor's criticality (collector#78)", () => {
   });
 });
 
-/** A date `days` from today, written the way config.json writes one. */
 const inDays = (days: number) => {
   const d = new Date(Date.now() + days * 864e5);
   const pad = (n: number) => String(n).padStart(2, "0");

@@ -6,7 +6,6 @@ const TIP = ".card-tip, [data-tip]";
 type Fact = [label: string, value: string];
 type Card = { title: string; text: string; url: string; facts?: Fact[]; tone?: string } | null;
 
-/** The labelled facts an element carries in data-tip-facts (JSON, [label, value] pairs), or none. */
 function factsOf(el: HTMLElement): Fact[] | undefined {
   if (!el.dataset.tipFacts) return undefined;
   try {
@@ -18,10 +17,6 @@ function factsOf(el: HTMLElement): Fact[] | undefined {
 }
 const cache = new Map<string, Promise<Card>>();
 
-/** Card tooltip: hover or focus a card number to see what the card is for (title + its Summary or What).
- * Any element with data-tip (a Projects row) shows that text instead, with data-tip-title above it; one that also
- * carries data-tip-facts shows those labelled facts under it, one per line (the Network page's process), and one
- * with data-tip-tone (red, amber, green, blue, grey) wears that colour's tint and edge, like the Card flow page's. */
 export function CardTip() {
   const tip = useRef<HTMLDivElement>(null);
   const [body, setBody] = useState<{ key: string; card?: Card; loading: boolean } | null>(null);
@@ -75,7 +70,7 @@ export function CardTip() {
       requestAnimationFrame(place);
       const c = await cache.get(key);
       if (forKey.current !== key) return;
-      if (!c) cache.delete(key); // try again on the next hover
+      if (!c) cache.delete(key);
       setBody({ key, card: c, loading: false });
       requestAnimationFrame(place);
     };

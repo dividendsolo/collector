@@ -25,7 +25,6 @@ describe("pickReason", () => {
   });
 
   it("shows the newest Ask, so an Ask from an earlier stay in the lane does not come back", () => {
-    // agent-stack#392: the Ask of its stay on 2026-11-12, and the Ask that moved it back into the lane on 2026-11-13.
     const r = pickReason(
       [c("2026-11-12T22:54:05Z", ASK), c("2026-11-13T17:41:59Z", NEW_ASK)],
       ["2026-11-12T18:34:11Z", "2026-11-12T22:54:05Z", "2026-11-13T17:42:55Z"],

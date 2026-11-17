@@ -8,7 +8,7 @@
     "postbuild": "bun scripts/build-stamp.ts",
     "start": "next start -H 127.0.0.1 -p ${COLLECTOR_PORT:-4000}",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
+    "lint": "biome check . && bin/no-comments",
     "format": "biome check --write .",
     "test": "vitest run",
     "check:config": "bun scripts/check-config.ts"

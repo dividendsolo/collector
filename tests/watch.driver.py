@@ -16,7 +16,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import collect  # noqa: E402  (the app's own reader, imported once the repo root is on the path)
+import collect
 
 
 def write_files(case, home, now):
@@ -51,7 +51,6 @@ def main():
     case = json.load(sys.stdin)
     home = tempfile.mkdtemp()
     now = datetime.datetime.fromisoformat(case["now"])
-    # `~` in an entry is this case's own home, the way it is the user's on a machine.
     os.environ["HOME"] = home
     write_files(case, home, now)
     if case.get("ok_exits") is not None:

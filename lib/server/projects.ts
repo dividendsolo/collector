@@ -8,7 +8,6 @@ import { ENV_PATH } from "./paths";
 import { run } from "./run";
 import { gemsOf, near, type StackGroup, stackChips } from "./stack";
 
-/** Files at a repo's root that name its host. */
 const HOST_FILES: [string, string][] = [
   [".kamal", "Self-hosted (Kamal)"],
   ["fly.toml", "Fly.io"],
@@ -41,7 +40,6 @@ async function techStack(repo: string, paths: string[], hosting: string | null):
   return stackChips(paths, deps, gems, hosting);
 }
 
-/** Hosting: the bot that made the newest deployment (vercel[bot]), else a host's file anywhere in the repo. */
 export function hostingOf(bot: string, paths: string[]): string | null {
   if (bot.endsWith("[bot]") && bot !== "github-actions[bot]") {
     const name = bot.slice(0, -5);
@@ -72,9 +70,6 @@ async function project(repo: string): Promise<any> {
     name: info.name,
     url: info.html_url,
     description: info.description || "",
-    // Only a web address is a link (collector#86): a repo's homepage belongs to whoever controls the repo, and the
-    // page puts it in an href on Collector's own origin, whose routes restart the server, start the tailnet or the
-    // gateway and write config.json. A homepage that is not one reads like a project with no homepage at all.
     homepage: webUrl(info.homepage) ?? "",
     private: info.private,
     pushed_at: info.pushed_at,
@@ -87,7 +82,6 @@ async function project(repo: string): Promise<any> {
   };
 }
 
-/** Project details use about seven REST calls per repo; five minutes keeps that small. */
 const cache = swr<{ at: number; list: any[] }>("projects", 300_000, async () => {
   const list = await Promise.all(projectRepos(config()).map(project));
   return { at: Math.floor(Date.now() / 1000), list };
@@ -103,9 +97,6 @@ export async function projects(force = false) {
     datafast.get(),
     billing(),
   ]);
-  // A project's live site: the service with the repo's name (zero-phase = ZeroPhase), else its GitHub homepage. Only
-  // a web address is a link (collector#86) — the homepage was read through webUrl above, and a service url that is
-  // not one is no more a link than a homepage that is not.
   const sites = new Map((cfg.services || []).map((x) => [flat(x.name), x]));
   const subs = cfg.subscriptions || [];
   const out = list.map((p) => {
@@ -117,14 +108,12 @@ export async function projects(force = false) {
       ...p,
       live,
       title: site?.name || p.name.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-      // The stage this project is kept at, from config.json (collector#78): a page with no stage shows none.
       stage: projectStage(cfg, p.repo),
       traffic: df.sites[host] || { error: df.error || "not on DataFast" },
       subscriptions: subs.filter((x) => x.project === p.name || x.project === p.repo),
       billing: mrr[p.repo] ?? null,
     };
   });
-  // The keys the payment providers need, and whether .env has each one. Never the key itself.
   const keys = envFile();
   const titles = new Map(out.map((p) => [p.repo, p.title || p.repo]));
   const needed = Object.entries(cfg.billing || {}).flatMap(([repo, accounts]) =>
@@ -144,8 +133,6 @@ export async function projects(force = false) {
   return { at, projects: out, keys: needed, env_path: ENV_PATH };
 }
 
-/** The repo picker's one write: the chosen repos go into config.json under "projects", each keeping the stage it
- * already had there (collector#78), so choosing repos never drops one. */
 export function saveProjects(repos: unknown[]) {
   const cfg = config();
   const before = cfg.projects;
@@ -163,7 +150,6 @@ export function saveProjects(repos: unknown[]) {
   return Object.keys(next.projects);
 }
 
-/** Every repo the gh login can see (own and orgs), for the repo picker. Cached ten minutes. */
 export const allRepos = swr<any[]>("repos", 600_000, async () => {
   const [orgs] = await run(["gh", "api", "user/orgs"], { timeout: 15 });
   const owners: (string | null)[] = [null, ...(orgs || []).map((o: any) => o.login)];

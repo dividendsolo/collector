@@ -10,8 +10,6 @@ import { CardRef } from "./card-link";
 import { useApi, useLive } from "./data";
 import { BlurToggle, Count, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
 
-// ---- Domains: registrar and expiry from the public registry, soonest first. Amber at 30 days, red at 7.
-
 function DaysCell({ days, warnAt, failAt }: { days: number | null; warnAt: number; failAt: number }) {
   if (days == null) return <span className="sub">—</span>;
   const cls = days <= failAt ? "failed" : days <= warnAt ? "warning" : "";
@@ -155,8 +153,6 @@ export function DomainsPage() {
   );
 }
 
-// ---- APIs: vendor status, the GitHub limit, X usage.
-
 const VENDOR_PILL: Record<string, [string, string]> = {
   critical: ["failed", "Critical outage"],
   major: ["failed", "Major outage"],
@@ -166,13 +162,9 @@ const VENDOR_PILL: Record<string, [string, string]> = {
 
 export const useVendors = () => {
   const { data } = useApi("/api/vendors");
-  // A vendor we depend heavily on that is showing an incident first, then the worst state, then by name
-  // (collector#78). `vendorOrder` and `vendorHit` live in lib/vendors so the order can be tested.
   return data ? (vendorOrder(data.vendors) as any[]) : null;
 };
 
-/** An incident's age and where it is, from the vendor's own feed: "opened Sep 3, 2026 · last update Sep 3, 2026 ·
- * no update in 59 days · me-central-1 · me-south-1". Only what the feed gave: no date, no claim (card #46). */
 function incidentWhen(i: any): string {
   const day = (iso?: string) =>
     iso && !Number.isNaN(Date.parse(iso))
@@ -258,7 +250,6 @@ export function GraphqlLimit({ g }: { g?: any }) {
   );
 }
 
-/** GitHub Actions minutes this month against the plan's included minutes; past them, GitHub bills each minute. */
 function ActionsMinutes({ a }: { a?: any }) {
   if (!a) return null;
   if (a.error)
@@ -286,9 +277,6 @@ function ActionsMinutes({ a }: { a?: any }) {
   );
 }
 
-/** Jog runner minutes this month (usejog.com) against the free minutes the accounts include. A failed read says why,
- * like the Actions stat. No dollar figure: a token cannot read the account's credit balance, and the runs' own cost
- * is Jog's list price for them, which the free minutes cover. */
 export function JogMinutes({ j }: { j?: any }) {
   if (!j) return null;
   if (j.error)
@@ -316,7 +304,6 @@ export function JogMinutes({ j }: { j?: any }) {
   );
 }
 
-/** X API: posts read this month against the project cap; the cap resets on the same day each month. */
 function XUsage({ x }: { x: any }) {
   if (x.error)
     return (
@@ -388,8 +375,6 @@ export function ApisPage() {
                   <div>
                     <div className="name">
                       {v.name}
-                      {/* How much we depend on it, from config.json (collector#78): the page puts a high or critical
-                          one with an incident first, and the pill is the reason why. */}
                       {v.criticality ? (
                         <>
                           {" "}
@@ -403,8 +388,6 @@ export function ApisPage() {
                       </a>
                     </div>
                     {v.incidents.map((i: any, k: number) => {
-                      // An incident with no update in a week is stale: still listed, with its age and where it is,
-                      // but it is not what the vendor is doing today (card #46, the Atlas me-central-1 notice).
                       const when = incidentWhen(i);
                       return (
                         <div key={k}>
@@ -462,8 +445,6 @@ export function ApisPage() {
   );
 }
 
-// ---- Subscriptions: the AI panels, then what you pay for, largest first.
-
 const M = ({ n, cur }: { n: number; cur?: string }) => <Money>{money(n, cur || "USD")}</Money>;
 
 export function SubscriptionsPage() {
@@ -504,8 +485,6 @@ export function SubscriptionsPage() {
                   <tr key={`${x.name}-${i}`}>
                     <td>{x.name}</td>
                     <td>{x.billing === "annual" ? "Annual" : "Monthly"}</td>
-                    {/* The day it renews, as config.json writes it (`subscriptions[].renews`, collector#78).
-                        Collector warns in Needs attention inside the last week before it. */}
                     <td className="mono">{x.renews || <span className="sub">—</span>}</td>
                     <td className="num mono">
                       <M n={x.amount} cur={x.currency} />
@@ -552,8 +531,6 @@ export function SubscriptionsPage() {
   );
 }
 
-// ---- Work: the heat map, then every open card on the board (pushed live), in lane order, then priority, then oldest.
-
 const LEVEL: Record<string, number> = {
   NONE: 0,
   FIRST_QUARTILE: 1,
@@ -562,7 +539,6 @@ const LEVEL: Record<string, number> = {
   FOURTH_QUARTILE: 4,
 };
 
-/** The GitHub heat map: one square per day for the last year, a column per week, darker for more contributions. */
 function HeatMap() {
   const { data: d } = useApi("/api/work-stats");
   const c = d?.contributions;
@@ -616,7 +592,6 @@ const WeekCells = ({ w, pad }: { w: any[]; pad: number }) => (
 export function WorkPage() {
   const { board } = useLive();
   const d = board?.work;
-  // Priority first (P0, P1, P2, none), then lane order, then oldest.
   const rank = (t: any) => prio(t.priority) * 100 + d.lanes.indexOf(t.lane);
   const cards: any[] = d?.loaded
     ? [...d.cards].sort((a, b) => rank(a) - rank(b) || (a.created || "").localeCompare(b.created || ""))
@@ -684,9 +659,6 @@ export function WorkPage() {
   );
 }
 
-// ---- Proposals: what is out with clients, and the open pipeline (collector#77). The rows live in proposals.json
-// beside config.json, and the route parses every field, so this page only has to render text.
-
 const STATUS_PILL: Record<ProposalStatus, [string, string]> = {
   draft: ["", "Draft"],
   pending: ["warning", "Pending"],
@@ -695,7 +667,6 @@ const STATUS_PILL: Record<ProposalStatus, [string, string]> = {
   signed: ["signed", "Signed"],
 };
 
-/** The form's own state: a date is the input's empty string until it has a day. */
 interface Draft {
   id?: string;
   client: string;
@@ -731,14 +702,11 @@ const asDraft = (p: Proposal): Draft => ({
   notes: p.notes,
 });
 
-/** Add a proposal, or change the one being edited: the same form, and the route refuses what it will not store. */
 function ProposalForm({ draft, onSaved, onCancel }: { draft: Draft; onSaved: (d: any) => void; onCancel: () => void }) {
   const [f, setF] = useState<Draft>(draft);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const box = useRef<HTMLElement>(null);
-  // A block body on purpose: `scrollIntoView` returns an object in Chrome, and an arrow that returns it hands React a
-  // cleanup it then calls as a function (the form is unmounted on save, so that is the crash a reader would see).
   useEffect(() => {
     box.current?.scrollIntoView({ block: "start" });
   }, []);
@@ -962,7 +930,6 @@ export function ProposalsPage() {
           </table>
         </div>
       </section>
-      {/* A key per draft: the form copies its draft once, so Edit on another row (or Add) must mount a fresh one. */}
       {form ? (
         <ProposalForm key={form.id ?? "new"} draft={form} onSaved={saved} onCancel={() => setForm(null)} />
       ) : null}
@@ -970,8 +937,6 @@ export function ProposalsPage() {
   );
 }
 
-/** Closed today: every card closed as done since midnight, newest first (James, 2026-11-10). Reached from the
- * Dashboard's Closed today number; the same five-minute read as that number. */
 export function ClosedPage() {
   const { data: d } = useApi<{ closed_today?: number | null; closed_today_cards?: ClosedRow[] }>("/api/work-stats");
   const cards = d?.closed_today_cards || [];

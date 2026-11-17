@@ -43,7 +43,6 @@ const run = (repo: string, n: number, seconds: number): WorkRun => ({
   repo,
   seconds,
 });
-/** A card's `Waiting on:` line: parseHold's refs, `#9` in the card's own repo and `web#7` in another. */
 const hold = (refs: string[]): WorkCard["hold"] => ({
   after: refs.map((ref) => {
     const [repo, number] = ref.startsWith("#") ? ["app", ref.slice(1)] : (ref.split("#") as [string, string]);
@@ -91,7 +90,6 @@ describe("currentWork", () => {
     ]);
   });
   it("a session card reads session, a claim with no run reads its lane", () => {
-    // agent-stack#187: agent-in-progress for 4 days with no run behind it (James, 2026-10-29).
     const cards = [
       card("app", 1, "agent-in-progress", { labels: ["local"] }),
       card("app", 2, "agent-in-progress"),
@@ -107,8 +105,6 @@ describe("currentWork", () => {
     ]);
   });
   it("shows stale run data instead of the lane: a page snapshot past its interval, or a machine whose read failed", () => {
-    // Card #41: dividend-solo#140 and situation#814 read `no run` while both builds ran on ezio, because the page
-    // still held a snapshot from before the server stopped answering.
     const now = 10_000;
     const cards = [
       card("app", 1, "agent-in-progress", { labels: ["ezio"] }),
@@ -145,7 +141,6 @@ describe("currentWork", () => {
     expect(cardState(rows[0], never)).toBe("ezio unread");
   });
   it("reads the state of a custom set's statuses too: the working set is a setting now (collector#53)", () => {
-    // A user's own statuses: a card in one of them, with no run and stale data, reads how old the data is.
     const rows = currentWork(
       [card("app", 1, "review-me"), card("app", 2, "agent-in-progress")],
       [],
@@ -155,7 +150,6 @@ describe("currentWork", () => {
     );
     const page = staleness({ at: 10_000 - 180, machines: [] }, 10_000);
     expect(rows.map((r) => cardState(r, page, ["review-me"]))).toEqual(["stale 3 min", "agent-in-progress"]);
-    // With the agent stack's set, the same rows read the other way round.
     expect(rows.map((r) => cardState(r, page, ["agent-in-progress"]))).toEqual(["review-me", "stale 3 min"]);
   });
   it("calls the page stale only past its interval", () => {
@@ -297,8 +291,6 @@ describe("labRun", () => {
     expect(runName({ name: "builder", repo: "collector", kind: "build" })).toBe("builder");
     expect(runName({ name: null, repo: "collector", kind: "build" })).toBe("unknown");
   });
-  /** James, 2026-10-25 (card #32): a `bun start` left in a card's worktree showed as the foreman working that card.
-   * Its row is the process itself — the program and the port it listens on — never the work script's name. */
   it("names a leftover process after its program and its port, never the work script", () => {
     const leftover: WorkRun = {
       type: "leftover",
@@ -317,8 +309,6 @@ describe("labRun", () => {
 });
 
 describe("a session row", () => {
-  /** James, 2026-10-25 (card #29): "I said local for those, not the machine name ... I don't need a running for
-   * either on those ... you could just say continuous or interactive ... that's really misleading." */
   const session: WorkRun = {
     type: "agent",
     name: "Claude Code",
@@ -342,8 +332,6 @@ describe("a session row", () => {
     expect(runTime({ kind: "build", seconds: 60 })).toBe("1 min");
   });
   it("reads tmux for a session that runs inside tmux (card #37)", () => {
-    // James, 2026-10-29: the peer-session list showed two rows reading `interactive`, one of them his tmux `Work`
-    // window — "if it's a Tmux session, can we put Tmux instead of interactive in the collector page?"
     expect(SESSION_TMUX).toBe("tmux");
     expect(runTime({ ...session, tmux: true })).toBe("tmux");
     expect(runTime({ ...session, tmux: false })).toBe("interactive");
@@ -384,7 +372,7 @@ describe("parseHold", () => {
       why: "the earliest date the proof log can show two weeks green, counted from 2026-11-02",
       to: "ready-for-human",
     });
-    expect(holdText(h)).toBe("from 2026-11-16"); // what the date shows does not change
+    expect(holdText(h)).toBe("from 2026-11-16");
   });
   it("reads no reason as none: an older line, and one that only says the status", () => {
     expect(parseHold("Not before: 2026-11-03 -> ready-for-agent", url)?.why).toBeNull();

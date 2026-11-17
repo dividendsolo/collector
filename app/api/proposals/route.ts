@@ -14,19 +14,11 @@ import { json } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic";
 
-/**
- * The Proposals page's read and its one write route (collector#77). Every field is parsed by the schema in
- * `lib/server/proposals.ts`, so nothing the page did not mean to send is ever stored, and every handler answers the
- * list and the open pipeline as they stand after the change, which is what the page renders.
- */
-
-/** The first thing the schema did not like, said plainly enough for the form to show it. */
 const issue = (e: z.ZodError) => {
   const [first] = e.issues;
   return first ? `${first.path.join(".") || "proposal"}: ${first.message}` : "bad request";
 };
 
-/** A body that is not JSON (a form post, an empty one) reads as nothing: the schema then refuses it. */
 async function body(req: Request): Promise<unknown> {
   try {
     return await req.json();
@@ -35,7 +27,6 @@ async function body(req: Request): Promise<unknown> {
   }
 }
 
-/** A file the route will not write over: the page shows why, and the file stays as it is (PR #79 review). */
 function refused<T>(work: () => T): T | Response {
   try {
     return work();
@@ -45,7 +36,6 @@ function refused<T>(work: () => T): T | Response {
   }
 }
 
-/** The read answers the rows it can show, and why the file will not take a write, so the page never looks falsely empty. */
 export const GET = async (req: Request) => guard(req) ?? json(proposalsRead());
 
 export async function POST(req: Request) {

@@ -3,7 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.example.collector</string>
-  <!-- Build first (bun run build); this serves the build. Set the folder to your Collector checkout. -->
   <key>WorkingDirectory</key><string>/path/to/collector</string>
   <key>ProgramArguments</key>
   <array><string>/path/to/.bun/bin/bun</string><string>start</string></array>

@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENV_PATH, HERMES_HOME } from "./paths";
 
-/** KEY=value lines; # comments and blank lines skipped; one pair of quotes stripped. */
 export function parseEnv(text: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of text.split(/\r?\n/)) {
@@ -25,12 +24,9 @@ function readEnv(file: string): Record<string, string> {
   }
 }
 
-/** Collector's own .env (gitignored): read on every call, so a pasted key shows at once. */
 export const envFile = () => readEnv(ENV_PATH);
 export const hermesEnv = () => readEnv(path.join(HERMES_HOME, ".env"));
 
-/** A key from .env (read now, so an edited key shows at once), else from the process environment. Next.js also loads
- * .env into process.env at start, so the file must win. */
 export const secret = (name: string) => envFile()[name] || process.env[name] || "";
 
 export function envStamp(): number {

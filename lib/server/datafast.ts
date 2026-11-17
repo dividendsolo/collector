@@ -14,7 +14,6 @@ export interface Traffic {
   error?: string;
 }
 
-/** The DataFast CLI's token (`datafast login` writes it), or DATAFAST_TOKEN. */
 function token(): string | null {
   if (process.env.DATAFAST_TOKEN) return process.env.DATAFAST_TOKEN;
   try {
@@ -27,7 +26,6 @@ function token(): string | null {
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-/** {hostname: {visitors, revenue, payments}} for every DataFast website over 30 days, read every ten minutes. */
 export const datafast = swr<{ sites: Record<string, Traffic>; error: string | null }>("datafast", 600_000, async () => {
   const t = token();
   if (!t) return { sites: {}, error: "no token" };

@@ -1,11 +1,5 @@
 name: CI
 
-# CI runs once per PR, right before the merge, and the merge waits for it
-# (James, 2026-11-09: "the CI should run before merge, not after"). It starts
-# by hand: agent-stack/vps/scripts/ci-merge.py starts it on the PR branch and
-# merges only when it passes, and refuses a repo with no such workflow.
-# A public repo runs on GitHub's free runners (Jog takes private repos only).
-# Pushes do not run it (James, 2026-10-04: Actions minutes).
 on:
   workflow_dispatch:
 
@@ -26,6 +20,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: 1.4.1
+      - name: The comment ban (tools/no-comments)
+        run: bin/no-comments
       - run: bun install --frozen-lockfile --ignore-scripts
       - run: bun run typecheck
       - run: bun run lint

@@ -14,7 +14,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import collect  # noqa: E402  (the app's own reader, imported once the repo root is on the path)
+import collect
 
 
 def main():
@@ -23,7 +23,6 @@ def main():
     outside = tempfile.mkdtemp()
     for name, spec in (case.get("files") or {}).items():
         if "link" in spec:
-            # A symlink in the folder to a file outside it that holds `link` (collector#125).
             target = os.path.join(outside, name)
             with open(target, "w") as f:
                 f.write(spec["link"])

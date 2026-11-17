@@ -3,12 +3,6 @@ import { describe, expect, it } from "vitest";
 import { kickstartArgs, parsePid, pidFromRun, startGateway } from "@/lib/server/hermes";
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * The waiting crew (agent-stack#261) runs as a Hermes cron on this machine's own Hermes gateway, so a stopped
- * gateway stops the crew silently (James, 2026-11-02). collect.py reads the launchd job `ai.hermes.gateway` and the
- * age of the cron ticker; Needs attention names it and, on the machine Collector runs on, offers to start it —
- * the same shape as the Start Tailscale row.
- */
 const DRIVER = `import datetime, json, os, sys, tempfile, time
 sys.path.insert(0, os.getcwd())
 import collect
@@ -27,9 +21,6 @@ if spec.get("plist"):
 now = datetime.datetime.now(datetime.timezone.utc)  # main() hands every reader the snapshot's own time
 print(json.dumps(collect.hermes_gateway(now, home=home, pid=lambda label: spec["pid"])))`;
 
-/** One gateway read on a throwaway home: the real Python, so the reading under test is the reading a machine does.
- * `pid` is what `launchctl list ai.hermes.gateway` answers: a PID, "" when the job is loaded but nothing runs, or
- * null when launchd does not know the label. */
 const read = (spec: { pid: string | null; plist?: boolean; ticker_age_s?: number; ticker_text?: string }) =>
   JSON.parse(
     execFileSync("python3", ["-c", DRIVER], { input: JSON.stringify(spec), encoding: "utf8" }),
@@ -69,8 +60,6 @@ describe("collect.py's gateway read", () => {
     expect(read({ pid: "1064", ticker_text: "" })?.ticker_age_s).toBeNull();
     expect(read({ pid: "1064", ticker_text: "tick" })?.ticker_age_s).toBeNull();
   });
-  // The reader's own unit tests pass a time the way main() does: a read that crashes the snapshot or reports the
-  // wrong shape must fail here, not on the page.
   it("is on this machine's snapshot, in the shape the page reads", () => {
     const out = JSON.parse(execFileSync("python3", ["collect.py"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));
     expect("hermes_gateway" in out).toBe(true);

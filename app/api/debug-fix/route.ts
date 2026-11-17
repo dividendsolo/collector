@@ -24,16 +24,10 @@ import { brokenStep, warnings } from "@/lib/server/warnings";
 
 export const dynamic = "force-dynamic";
 
-/** The Debug and fix button of a failed cron row or the work script's loop row (James, 2026-11-11): opens a new pi session in a new tmux pane on this
- * machine, its first message the job's failure and the TDD flow. The page names the job only by machine and id;
- * the job's details come from Collector's own read, so the page cannot hand the session anything else. Only a job
- * whose last run failed is accepted. */
 export async function POST(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;
   const body = await req.json().catch(() => null);
-  // The Triage button (James, 2026-11-11) and the needs-triage badge of any card (James, 2026-11-13): a card that
-  // is in needs-triage by Collector's own read, whatever else is waiting. One triage session at a time.
   if (body?.triage) {
     const t = ticketsView();
     const card = t.tickets.find(
@@ -57,7 +51,6 @@ export async function POST(req: Request) {
     const r = await openFixPane(TRIAGE_KEY, triagePrompt(ref), `triage ${ref.repo}#${ref.number}`);
     return json(r, r.ok ? 200 : 500);
   }
-  // The Unblock button (James, 2026-11-11): only for a P0 card waiting on James now, by Collector's own read.
   if (body?.unblock) {
     const t = ticketsView();
     const waiting = t.tickets.filter((x: any) => t.each.includes(x.lane));
@@ -73,7 +66,6 @@ export async function POST(req: Request) {
     );
     return json(r, r.ok ? 200 : 500);
   }
-  // A main that fails its checks on a machine (James, 2026-11-11): only while that machine's marker is up.
   if (body?.fixMain) {
     const snap = await snapshot.get();
     const m = snap.machines.find((x: any) => x.name === body.fixMain.machine);
@@ -92,7 +84,6 @@ export async function POST(req: Request) {
   const snap = await snapshot.get();
   const m = snap.machines.find((x: any) => x.name === machine);
   const ssh0 = (config().machines || []).find((x: any) => x.name === machine)?.ssh ?? null;
-  // The work script's loop: only while the loop row is up for that machine.
   if (m && id === WORK_LOOP) {
     const cfg = config();
     const row = warnings({
@@ -119,17 +110,12 @@ export async function POST(req: Request) {
   return json(r, r.ok ? 200 : 500);
 }
 
-/** The Debug and fix panes open now, by job (machine/id), each with the step its session wrote: the button shows it
- * (James, 2026-11-11). */
 export async function GET(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;
   return json({ fixes: await openFixes() });
 }
 
-/** The Close button of a session that finished or is stuck (James, 2026-11-12: "I need that row to be resolved"):
- * closes that fix pane, so the row's button comes back to Debug and fix. Only a pane Collector tagged with that key
- * is closed; the key is matched against the open fixes, never passed to tmux as a target. */
 export async function DELETE(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;

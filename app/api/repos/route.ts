@@ -4,7 +4,6 @@ import { allRepos } from "@/lib/server/projects";
 import { json } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic";
-// ?fresh=1 (the picker opening) reads GitHub again, so a renamed or deleted repo never shows its old name.
 export const GET = async (req: Request) =>
   guard(req) ??
   json({

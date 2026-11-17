@@ -6,14 +6,6 @@ import { useApi } from "./data";
 import { Drawing, useReducedMotion } from "./flow";
 import { Ext, PanelHead } from "./ui";
 
-/**
- * One card's journey (collector#146): every status the card passed through, in order, with who moved it, when, how
- * long it stayed and the comment that says why. The path draws itself on the Card flow's own drawing, node by node
- * in time order, and the timeline beside it says what happened at each step.
- *
- * The page is opened from any card number in Collector (`#/card/<repo>/<n>`) and carries the link to the card on
- * GitHub. It reads; it never moves a card.
- */
 export function JourneyPage({ repo, number }: { repo: string; number: number }) {
   const { data, error, isLoading } = useApi<Journey>(
     `/api/journey?repo=${encodeURIComponent(repo)}&n=${number}`,
@@ -23,7 +15,6 @@ export function JourneyPage({ repo, number }: { repo: string; number: number }) 
   const still = useReducedMotion();
   const [hoverNode, setHoverNode] = useState<string | null>(null);
   const [drawKey, setDrawKey] = useState(0);
-  // One trail per answer: the drawing starts a draw on this object, so the page builds it once per fetch.
   const trail = useMemo(
     () => (data ? { walk: journeyWalk(data.moves), visits: journeyVisits(data.moves) } : null),
     [data],
@@ -43,8 +34,6 @@ export function JourneyPage({ repo, number }: { repo: string; number: number }) 
                 GitHub
               </Ext>
             ) : null}
-            {/* Nothing moves under `prefers-reduced-motion`: the whole path is simply there, so there is nothing
-                to replay. */}
             {moves.length && !still ? (
               <button type="button" className="btn" onClick={() => setDrawKey((k) => k + 1)}>
                 Replay
@@ -63,7 +52,6 @@ export function JourneyPage({ repo, number }: { repo: string; number: number }) 
           </p>
         ) : (
           <>
-            {/* The line the view is opened for: the last step says where the card is and what put it there. */}
             <p className="journey-now">{nowLine(moves) || "This card's timeline holds no status change yet."}</p>
             <Drawing journey={trail} drawKey={drawKey} hoverNode={hoverNode} onHover={setHoverNode} />
           </>

@@ -10,9 +10,7 @@ import { BlurToggle, Icon, Money, PanelHead, SkelRows } from "./ui";
 
 export const useProjects = () => useApi("/api/projects");
 
-/** A project's live site comes from the server (p.live); its status pill comes from the last service check. */
 function liveSite(p: any, services: Svc[]) {
-  // Collector itself has no public site: it runs on this machine, at this page's own address.
   if (!p.live && !p.homepage && p.name === "collector")
     return { url: `http://localhost:${location.port}`, svc: undefined, local: true };
   const url: string = p.live || p.homepage || "";
@@ -31,8 +29,6 @@ const ciLabel = (c: any): [string, string] =>
           ? ["failed", "Failing"]
           : ["warning", c.conclusion || "—"];
 
-/** Production: the project has a live site on its own domain. Preview: the live site is only a *.vercel.app URL.
- * Development: no live site yet (Collector itself, on localhost, too). Archived: the repo is archived. Text only: the dot belongs to Health, which is live. */
 function ProjectStatus({ p, live }: { p: any; live: { url: string; local: boolean } }) {
   if (p.archived) return <>Archived</>;
   if (/\.vercel\.app\/?$/.test(live.url)) return <span className="pill warning">Preview</span>;
@@ -40,7 +36,6 @@ function ProjectStatus({ p, live }: { p: any; live: { url: string; local: boolea
   return <span className="pill warning">Development</span>;
 }
 
-/** Lets a long name break after each separator (owner/<wbr>repo) instead of widening the table. */
 const WrapAt = ({ text, sep }: { text: string; sep: string }) => (
   <>
     {text.split(sep).map((part, i, all) => (
@@ -80,7 +75,6 @@ function Picker({ onClose }: { onClose: () => void }) {
     fetch("/api/repos?fresh=1")
       .then((r) => r.json())
       .then((d) => {
-        // A to Z by repo name, so a repo is easy to find.
         setRepos(
           d.repos.sort((a: any, b: any) =>
             a.nameWithOwner
@@ -101,7 +95,6 @@ function Picker({ onClose }: { onClose: () => void }) {
   const save = async () => {
     setSaving(true);
     try {
-      // A to Z by repo name. Every chosen repo is saved, even one the list no longer shows.
       const list = reposToSave(chosen);
       const d = await (
         await fetch("/api/projects", {
@@ -267,8 +260,6 @@ export function ProjectsPage() {
                       <td>
                         <Health svc={live.svc} />
                       </td>
-                      {/* Where the project stands, hand-set in config.json (`projects.<owner/repo>.stage`,
-                          collector#78): a project with no stage shows nothing. */}
                       <td>{p.stage || null}</td>
                     </tr>
                   );
@@ -292,9 +283,8 @@ export function ProjectsPage() {
   );
 }
 
-/** The stack in two columns: short rows pair up, and rows with 3 or more chips go last across both columns. */
 function StackRows({ stack }: { stack: { category: string; items: string[] }[] }) {
-  const rows = stack.filter((g) => g.category !== "Hosting"); // the strip at the top already shows hosting
+  const rows = stack.filter((g) => g.category !== "Hosting");
   const short = rows.filter((g) => g.items.length < 3);
   const long = rows.filter((g) => g.items.length >= 3);
   const cell = (g: { category: string; items: string[] }, cls: string) => (
@@ -530,7 +520,6 @@ export function ProjectPage({ repo }: { repo: string }) {
   );
 }
 
-/** Stripe opens its restricted-key form with these fields filled in. */
 const STRIPE_NEW_KEY =
   "https://dashboard.stripe.com/apikeys/create?name=Collector&permissions%5B%5D=rak_charge_read&permissions%5B%5D=rak_subscription_read";
 
@@ -579,7 +568,6 @@ function keySteps(k: any): React.ReactNode[] {
   return [];
 }
 
-/** Payment keys: how to make each read-only key, and whether .env has it yet. Never the key itself. */
 export function KeysPage() {
   const { data } = useProjects();
   const [copied, setCopied] = useState(false);

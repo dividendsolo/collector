@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import collect  # noqa: E402  (the app's own reader, imported once the repo root is on the path)
+import collect
 
 
 def main():
