@@ -65,6 +65,10 @@ describe("the page letterboxes inside the safe area instead of painting edge to 
     expect(narrowRule(".topbar")).toMatch(right(16));
   });
 
+  it("scrolls a panel into view clear of the taller top bar", () => {
+    expect(css).toMatch(/\.panel \{\s*scroll-margin-top:\s*calc\(64px \+ env\(safe-area-inset-top, 0px\)\);/);
+  });
+
   it("lifts the toasts past the home indicator and the inset on the right", () => {
     const toasts = rule(".toasts");
     expect(toasts).toMatch(/bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\)/);

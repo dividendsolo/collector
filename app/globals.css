@@ -350,7 +350,7 @@
     font-weight: 500;
   }
   .panel {
-    scroll-margin-top: 64px;
+    scroll-margin-top: calc(64px + env(safe-area-inset-top, 0px));
   }
   /* Widgets side by side are always the same height: the shorter one stretches to match. */
   .pair {
