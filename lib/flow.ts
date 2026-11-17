@@ -245,6 +245,10 @@ export const tipAbove = (y: number) => y > FLOW_ROW * 6;
 export const tipAlign = (x: number): "start" | "center" | "end" =>
   x <= -FLOW_COL ? "start" : x >= FLOW_COL ? "end" : "center";
 
+export const FLOW_TIP_WARM_MS = 300;
+
+export const tipWarm = (enteredAt: number, leftAt: number) => enteredAt - leftAt < FLOW_TIP_WARM_MS;
+
 /** Every status box, as the page draws it; React Flow measures it, so it stays the size the drawing laid out. */
 export const FLOW_NODE_W = 168;
 export const FLOW_NODE_H = 54;
