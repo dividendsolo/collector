@@ -68,7 +68,9 @@
     --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --sidebar: 48px;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     color-scheme: dark;
     --topbar: oklch(0.19 0.0025 var(--hue) / 0.85);
   }
@@ -143,7 +145,7 @@
 
   .app {
     display: flex;
-    min-height: 100vh;
+    min-height: 100dvh;
   }
   /* Supabase-style rail: icons only; hovering the rail widens it over the page and shows the labels. */
   .sidebar {
@@ -151,7 +153,7 @@
     width: var(--sidebar);
     position: sticky;
     top: 0;
-    height: 100vh;
+    height: 100dvh;
     z-index: 5;
   }
   .rail {
@@ -165,9 +167,6 @@
     overflow: hidden;
     border-right: 1px solid var(--line);
     background: var(--bg);
-    transition:
-      width 0.18s ease,
-      box-shadow 0.18s ease;
   }
   .rail:hover,
   .rail:focus-within {
@@ -220,7 +219,6 @@
   .rail .label,
   .rail .tag {
     opacity: 0;
-    transition: opacity 0.12s ease;
   }
   .rail:hover .label,
   .rail:hover .tag,
@@ -263,7 +261,6 @@
     border-radius: 50%;
     background: var(--red);
     box-shadow: 0 0 6px var(--red);
-    transition: opacity 0.12s ease;
   }
   /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
   .rail a.item:has(.tag.inbox-dot)::after {
@@ -276,7 +273,6 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 6px var(--blue);
-    transition: opacity 0.12s ease;
   }
   .rail:hover a.item::after,
   .rail:focus-within a.item::after {
@@ -405,10 +401,26 @@
     border: 1px solid var(--line-2);
     background: var(--panel-2);
     color: var(--text);
+    transition: transform 160ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {
     .btn:hover:not(:disabled) {
       background: var(--hover);
+    }
+  }
+  .btn:active:not(:disabled),
+  .seg button:active,
+  .blur-toggle:active,
+  .release-btn:active:not(:disabled) {
+    transform: scale(0.97);
+    background: var(--hover);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn:active:not(:disabled),
+    .seg button:active,
+    .blur-toggle:active,
+    .release-btn:active:not(:disabled) {
+      transform: scale(0.99);
     }
   }
   /* A button that cannot be clicked does not look or feel clickable (James, 2026-11-12: "it's still clickable and
@@ -463,6 +475,11 @@
     outline: none;
     border-color: var(--blue-line);
     box-shadow: var(--glow);
+  }
+  @media (pointer: coarse) {
+    .search {
+      font-size: 16px;
+    }
   }
   .picks {
     list-style: none;
@@ -585,6 +602,7 @@
     background: transparent;
     color: var(--muted);
     cursor: pointer;
+    transition: transform 160ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {
     .blur-toggle:hover {
@@ -787,7 +805,13 @@
     text-align: left;
     box-shadow: 0 10px 24px oklch(0 0 0 / 0.45);
     pointer-events: none;
-    animation: flow-tip-in 0.12s ease;
+    animation: flow-tip-in 125ms var(--ease-out);
+  }
+  .flow-tip[data-side="top"] {
+    transform-origin: bottom center;
+  }
+  .flow-tip[data-side="bottom"] {
+    transform-origin: top center;
   }
   .flow-tip.tone-go {
     --tip-bg: var(--green-bg);
@@ -807,6 +831,20 @@
   @keyframes flow-tip-in {
     from {
       opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+  @keyframes flow-tip-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  .flow-canvas[data-warm] .flow-tip {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flow-tip {
+      animation-name: flow-tip-fade;
     }
   }
   /* The dot a card starts from. */
@@ -985,6 +1023,38 @@
       opacity: 0;
     }
   }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  #waiting-panel .wrap.scroll {
+    view-transition-name: waiting-rows;
+    view-transition-group: contain;
+  }
+  #waiting-panel thead {
+    view-transition-name: waiting-head;
+    position: relative;
+    z-index: 2;
+  }
+  ::view-transition-group(waiting-rows) {
+    overflow: clip;
+  }
+  ::view-transition-group(waiting-head) {
+    z-index: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation: none;
+    }
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation-duration: 200ms;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .spinner {
       animation-duration: 1.6s;
@@ -999,10 +1069,9 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 8px var(--blue);
-    animation: pulse 2s ease-in-out infinite;
   }
   .live.busy .pulse {
-    animation-duration: 0.6s;
+    animation: pulse 0.6s ease-in-out infinite;
   }
   .live.down .pulse {
     background: var(--red);
@@ -1058,7 +1127,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pulse {
+    .pulse,
+    .live.busy .pulse {
       animation: none;
     }
   }
@@ -1312,6 +1382,20 @@
     margin: 8px 0 0;
     border: 0;
     border-top: 1px solid var(--line);
+    view-transition-name: acked-rule;
+  }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-in-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation-name: none;
+    }
   }
   /* The open row just above the line drops its own border, so the line reads as one break, not a double rule. */
   .alert:has(+ .acked-rule) {
@@ -2163,6 +2247,7 @@
     color: inherit;
     opacity: 0.7;
     cursor: pointer;
+    transition: transform 160ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {
     .release-btn:hover {
@@ -2230,6 +2315,7 @@
     cursor: pointer;
     background: transparent;
     color: var(--muted);
+    transition: transform 160ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {
     .seg button:hover {
