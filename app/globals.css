@@ -159,7 +159,7 @@
   /* Supabase-style rail: icons only; hovering the rail widens it over the page and shows the labels. */
   .sidebar {
     flex: none;
-    width: var(--sidebar);
+    width: calc(var(--sidebar) + env(safe-area-inset-left, 0px));
     position: sticky;
     top: 0;
     height: 100dvh;
@@ -168,27 +168,33 @@
   .rail {
     position: absolute;
     inset: 0 auto 0 0;
-    width: var(--sidebar);
+    width: calc(var(--sidebar) + env(safe-area-inset-left, 0px));
     display: flex;
     flex-direction: column;
     gap: 2px;
     padding: 0 8px 16px;
+    padding-left: calc(8px + env(safe-area-inset-left, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     overflow: hidden;
     border-right: 1px solid var(--line);
     background: var(--bg);
   }
   .rail:hover,
   .rail:focus-within {
-    width: 200px;
+    width: calc(200px + env(safe-area-inset-left, 0px));
     box-shadow: 8px 0 24px oklch(0 0 0 / 0.45);
   }
   .rail .home {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 48px;
+    height: calc(48px + env(safe-area-inset-top, 0px));
     padding: 0 12px;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
     margin: 0 -8px 8px;
+    margin-left: calc(-8px - env(safe-area-inset-left, 0px));
     border-bottom: 1px solid var(--line);
     color: var(--text);
     text-decoration: none;
@@ -345,7 +351,7 @@
     font-weight: 500;
   }
   .panel {
-    scroll-margin-top: 64px;
+    scroll-margin-top: calc(64px + env(safe-area-inset-top, 0px));
   }
   /* Widgets side by side are always the same height: the shorter one stretches to match. */
   .pair {
@@ -965,8 +971,10 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    height: 48px;
+    height: calc(48px + env(safe-area-inset-top, 0px));
     padding: 0 24px;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: calc(24px + env(safe-area-inset-right, 0px));
     border-bottom: 1px solid var(--line);
     background: var(--topbar);
     backdrop-filter: blur(8px);
@@ -1155,6 +1163,7 @@
     max-width: 1440px;
     margin: 0 auto;
     padding: 32px 24px 64px;
+    padding-right: calc(24px + env(safe-area-inset-right, 0px));
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
@@ -1169,10 +1178,11 @@
   @media (max-width: 600px) {
     .content {
       padding: 24px 16px 48px;
+      padding-right: calc(16px + env(safe-area-inset-right, 0px));
     }
     .topbar {
       padding-left: 16px;
-      padding-right: 16px;
+      padding-right: calc(16px + env(safe-area-inset-right, 0px));
     }
   }
   .page-head h1 {
@@ -2118,8 +2128,8 @@
      On a phone they span the width. */
   .toasts {
     position: fixed;
-    right: 16px;
-    bottom: 16px;
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     z-index: 30;
     display: grid;
     gap: 8px;
@@ -2487,7 +2497,7 @@
   }
   .brief-panel > .panel-head {
     position: sticky;
-    top: 48px;
+    top: calc(48px + env(safe-area-inset-top, 0px));
     z-index: 1;
     background: var(--panel);
     border-radius: var(--radius) var(--radius) 0 0;
