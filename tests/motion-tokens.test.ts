@@ -23,7 +23,9 @@ describe("motion tokens", () => {
   it("gives every entrance the strong ease-out curve, not a built-in one", () => {
     expect(rule("body.fade-out")).toContain("opacity 0.15s var(--ease-out)");
     expect(rule("body.fade-in")).toContain("page-in 0.25s var(--ease-out)");
-    expect(rule(".toast")).toContain("toast-in var(--duration-enter) var(--ease-out)");
+    const toast = rule(".toast");
+    expect(toast).toContain("opacity var(--duration-enter) var(--ease-out)");
+    expect(toast).toContain("transform var(--duration-enter) var(--ease-out)");
   });
 
   it("keeps ease on hover and colour changes, with the shared hover duration", () => {

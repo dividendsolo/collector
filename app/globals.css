@@ -311,7 +311,6 @@
     color: inherit;
     text-decoration: none;
   }
-  .tile:hover,
   .tile:active {
     border-color: var(--line-2);
     background: var(--panel-2);
@@ -400,7 +399,6 @@
       margin-left: auto;
     }
   }
-  .panel-head .more:hover,
   .panel-head .more:active {
     color: var(--text);
   }
@@ -522,7 +520,6 @@
     border-radius: var(--radius);
     cursor: pointer;
   }
-  .picks label:hover,
   .picks label:active {
     background: var(--hover);
   }
@@ -596,7 +593,6 @@
     color: inherit;
     text-decoration: none;
   }
-  a.plain:hover,
   a.plain:active {
     color: var(--blue-2);
   }
@@ -684,7 +680,6 @@
     color: inherit;
     text-decoration: none;
   }
-  .health .sub a:hover,
   .health .sub a:active {
     color: var(--text);
   }
@@ -812,9 +807,6 @@
   /* Hovering a status brightens it and fades the rest of the drawing back. */
   .flow-box.dim {
     opacity: 0.3;
-  }
-  .flow-box:hover {
-    border-color: var(--flow-tone);
   }
   /* The tooltip: the note the old drawing put in a box beside the status. It sits in React Flow's node toolbar,
      outside the zoomed viewport, so it is this size on screen at any zoom: 16px, the reading size. It wears its
@@ -1260,11 +1252,9 @@
     position: relative;
     z-index: 1;
   }
-  .alert:has(.row-link):hover,
   .alert:has(.row-link):active {
     background: var(--panel-2);
   }
-  .alert:has(.row-link):hover .row-link,
   .alert:has(.row-link):active .row-link {
     color: var(--blue-2);
   }
@@ -1402,7 +1392,6 @@
     margin-left: auto;
     color: var(--blue-2);
   }
-  .empty .empty-next:hover,
   .empty .empty-next:active {
     text-decoration: underline;
   }
@@ -1619,7 +1608,6 @@
   tr.row {
     cursor: pointer;
   }
-  tr.row:hover td,
   tr.row:active td {
     background: var(--hover);
   }
@@ -1642,7 +1630,6 @@
   table.fit tr.row {
     cursor: pointer;
   }
-  table.fit tr.row:hover td,
   table.fit tr.row:active td {
     background: var(--hover);
   }
@@ -1655,7 +1642,6 @@
     opacity: 0;
     transition: opacity var(--duration-hover) ease;
   }
-  table.fit tr.row:hover .chev,
   table.fit tr.row:active .chev {
     opacity: 1;
   }
@@ -1729,7 +1715,6 @@
     color: inherit;
     text-decoration: none;
   }
-  .crumbs a:hover,
   .crumbs a:active {
     color: var(--text);
   }
@@ -1850,9 +1835,6 @@
   }
   tbody tr:last-child td {
     border-bottom: 0;
-  }
-  tbody tr:hover td {
-    background: var(--hover);
   }
   tr.off td {
     color: var(--faint);
@@ -2044,7 +2026,6 @@
     border-radius: var(--radius);
     cursor: help;
   }
-  .net-checks li:hover,
   .net-checks li:active,
   .net-checks li:focus-visible {
     background: var(--hover);
@@ -2154,7 +2135,19 @@
     border: 1px solid var(--line-2);
     border-radius: var(--radius);
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
-    animation: toast-in var(--duration-enter) var(--ease-out);
+    transition:
+      opacity var(--duration-enter) var(--ease-out),
+      transform var(--duration-enter) var(--ease-out);
+    @starting-style {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  .toast.leaving {
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition-duration: 150ms;
   }
   .toast.error {
     border-color: var(--red-line);
@@ -2195,15 +2188,14 @@
     font-size: 13px;
     overflow-wrap: anywhere;
   }
-  @keyframes toast-in {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
     .toast {
-      animation: none;
+      @starting-style {
+        transform: none;
+      }
+    }
+    .toast.leaving {
+      transform: none;
     }
   }
   #work-stats .stat {
@@ -2383,7 +2375,6 @@
     color: inherit;
     text-decoration: none;
   }
-  a.stat:hover,
   a.stat:active {
     background: var(--hover);
   }
@@ -2508,7 +2499,6 @@
     gap: 6px;
     text-decoration: none;
   }
-  .briefs-panel a.back:hover,
   .briefs-panel a.back:active {
     color: var(--text);
   }
@@ -2625,6 +2615,61 @@
   /* At 16px a short head (Impr., Clicks, Pos.) broke inside its word; a head keeps one line, its cells wrap. */
   .brief-body th {
     white-space: nowrap;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    tbody tr:hover td {
+      background: var(--hover);
+    }
+    tr.row:hover td {
+      background: var(--hover);
+    }
+    table.fit tr.row:hover td {
+      background: var(--hover);
+    }
+    table.fit tr.row:hover .chev {
+      opacity: 1;
+    }
+    .alert:has(.row-link):hover {
+      background: var(--panel-2);
+    }
+    .alert:has(.row-link):hover .row-link {
+      color: var(--blue-2);
+    }
+    .tile:hover {
+      border-color: var(--line-2);
+      background: var(--panel-2);
+    }
+    .picks label:hover {
+      background: var(--hover);
+    }
+    .net-checks li:hover {
+      background: var(--hover);
+      outline: none;
+    }
+    .flow-box:hover {
+      border-color: var(--flow-tone);
+    }
+    a.stat:hover {
+      background: var(--hover);
+    }
+    a.plain:hover {
+      color: var(--blue-2);
+    }
+    .panel-head .more:hover {
+      color: var(--text);
+    }
+    .health .sub a:hover {
+      color: var(--text);
+    }
+    .empty .empty-next:hover {
+      text-decoration: underline;
+    }
+    .crumbs a:hover {
+      color: var(--text);
+    }
+    .briefs-panel a.back:hover {
+      color: var(--text);
+    }
   }
 }
 
