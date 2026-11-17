@@ -304,10 +304,6 @@
     color: inherit;
     text-decoration: none;
   }
-  .tile:hover {
-    border-color: var(--line-2);
-    background: var(--panel-2);
-  }
   .tile .label {
     color: var(--muted);
     font-size: 12px;
@@ -392,9 +388,6 @@
       margin-left: auto;
     }
   }
-  .panel-head .more:hover {
-    color: var(--text);
-  }
   .btn {
     font: 500 12px var(--sans);
     height: 28px;
@@ -478,9 +471,6 @@
     border-radius: var(--radius);
     cursor: pointer;
   }
-  .picks label:hover {
-    background: var(--hover);
-  }
   .picks input {
     accent-color: var(--blue);
     margin-top: 3px;
@@ -550,9 +540,6 @@
   a.plain {
     color: inherit;
     text-decoration: none;
-  }
-  a.plain:hover {
-    color: var(--blue-2);
   }
   tr.total td {
     font-weight: 600;
@@ -634,9 +621,6 @@
   .health .sub a {
     color: inherit;
     text-decoration: none;
-  }
-  .health .sub a:hover {
-    color: var(--text);
   }
   .health .right {
     display: flex;
@@ -762,9 +746,6 @@
   /* Hovering a status brightens it and fades the rest of the drawing back. */
   .flow-box.dim {
     opacity: 0.3;
-  }
-  .flow-box:hover {
-    border-color: var(--flow-tone);
   }
   /* The tooltip: the note the old drawing put in a box beside the status. It sits in React Flow's node toolbar,
      outside the zoomed viewport, so it is this size on screen at any zoom: 16px, the reading size. It wears its
@@ -1158,12 +1139,6 @@
     position: relative;
     z-index: 1;
   }
-  .alert:has(.row-link):hover {
-    background: var(--panel-2);
-  }
-  .alert:has(.row-link):hover .row-link {
-    color: var(--blue-2);
-  }
   /* The copy column has a fixed reading width (James, 2026-11-11: "it's too long"): long text wraps sooner, and the
      buttons and age keep their columns at the right edge. */
   .alert > span:not(.n):not(.aside):not(.act):not(.since),
@@ -1297,9 +1272,6 @@
   .empty .empty-next {
     margin-left: auto;
     color: var(--blue-2);
-  }
-  .empty .empty-next:hover {
-    text-decoration: underline;
   }
   /* The line above the acknowledged rows in Priority tasks. */
   .acked-rule {
@@ -1500,9 +1472,6 @@
   tr.row {
     cursor: pointer;
   }
-  tr.row:hover td {
-    background: var(--hover);
-  }
   .code {
     margin: 0;
     padding: 14px 16px;
@@ -1521,9 +1490,6 @@
   table.fit tr.row {
     cursor: pointer;
   }
-  table.fit tr.row:hover td {
-    background: var(--hover);
-  }
   table.fit .chev {
     width: 12px;
     height: 12px;
@@ -1532,9 +1498,6 @@
     vertical-align: -1px;
     opacity: 0;
     transition: opacity 0.12s ease;
-  }
-  table.fit tr.row:hover .chev {
-    opacity: 1;
   }
   .stack-list {
     margin: 0;
@@ -1605,9 +1568,6 @@
   .crumbs a {
     color: inherit;
     text-decoration: none;
-  }
-  .crumbs a:hover {
-    color: var(--text);
   }
   .facts {
     display: flex;
@@ -1726,9 +1686,6 @@
   }
   tbody tr:last-child td {
     border-bottom: 0;
-  }
-  tbody tr:hover td {
-    background: var(--hover);
   }
   tr.off td {
     color: var(--faint);
@@ -1920,7 +1877,6 @@
     border-radius: var(--radius);
     cursor: help;
   }
-  .net-checks li:hover,
   .net-checks li:focus-visible {
     background: var(--hover);
     outline: none;
@@ -2255,9 +2211,6 @@
     color: inherit;
     text-decoration: none;
   }
-  a.stat:hover {
-    background: var(--hover);
-  }
   .stat .value small {
     font-size: 12px;
     color: var(--faint);
@@ -2379,9 +2332,6 @@
     gap: 6px;
     text-decoration: none;
   }
-  .briefs-panel a.back:hover {
-    color: var(--text);
-  }
   /* Unread is the brief's name in bold; a read one stays where it is, dimmed. */
   .briefs tr.unread td.name a {
     font-weight: 600;
@@ -2495,6 +2445,61 @@
   /* At 16px a short head (Impr., Clicks, Pos.) broke inside its word; a head keeps one line, its cells wrap. */
   .brief-body th {
     white-space: nowrap;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    tbody tr:hover td {
+      background: var(--hover);
+    }
+    tr.row:hover td {
+      background: var(--hover);
+    }
+    table.fit tr.row:hover td {
+      background: var(--hover);
+    }
+    table.fit tr.row:hover .chev {
+      opacity: 1;
+    }
+    .alert:has(.row-link):hover {
+      background: var(--panel-2);
+    }
+    .alert:has(.row-link):hover .row-link {
+      color: var(--blue-2);
+    }
+    .tile:hover {
+      border-color: var(--line-2);
+      background: var(--panel-2);
+    }
+    .picks label:hover {
+      background: var(--hover);
+    }
+    .net-checks li:hover {
+      background: var(--hover);
+      outline: none;
+    }
+    .flow-box:hover {
+      border-color: var(--flow-tone);
+    }
+    a.stat:hover {
+      background: var(--hover);
+    }
+    a.plain:hover {
+      color: var(--blue-2);
+    }
+    .panel-head .more:hover {
+      color: var(--text);
+    }
+    .health .sub a:hover {
+      color: var(--text);
+    }
+    .empty .empty-next:hover {
+      text-decoration: underline;
+    }
+    .crumbs a:hover {
+      color: var(--text);
+    }
+    .briefs-panel a.back:hover {
+      color: var(--text);
+    }
   }
 }
 
