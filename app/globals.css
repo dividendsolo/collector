@@ -177,10 +177,36 @@
     border-right: 1px solid var(--line);
     background: var(--bg);
   }
-  .rail:hover,
-  .rail:focus-within {
+  .rail:has(:focus-visible) {
     width: calc(200px + env(safe-area-inset-left, 0px));
     box-shadow: 8px 0 24px oklch(0 0 0 / 0.45);
+  }
+  .rail:has(:focus-visible) .label,
+  .rail:has(:focus-visible) .tag {
+    opacity: 1;
+  }
+  .rail:has(:focus-visible) a.item::after {
+    opacity: 0;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .rail:hover {
+      width: calc(200px + env(safe-area-inset-left, 0px));
+      box-shadow: 8px 0 24px oklch(0 0 0 / 0.45);
+    }
+    .rail:hover .label,
+    .rail:hover .tag {
+      opacity: 1;
+    }
+    .rail:hover a.item::after {
+      opacity: 0;
+    }
+    .rail a.item:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
+    .rail a.item:hover svg.i {
+      color: var(--text);
+    }
   }
   .rail .home {
     flex: none;
@@ -233,18 +259,10 @@
   .rail .tag {
     opacity: 0;
   }
-  .rail:hover .label,
-  .rail:hover .tag,
-  .rail:focus-within .label,
-  .rail:focus-within .tag {
-    opacity: 1;
-  }
-  .rail a.item:hover,
   .rail a.item:active {
     color: var(--text);
     background: var(--hover);
   }
-  .rail a.item:hover svg.i,
   .rail a.item:active svg.i {
     color: var(--text);
   }
@@ -288,10 +306,6 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 6px var(--blue);
-  }
-  .rail:hover a.item::after,
-  .rail:focus-within a.item::after {
-    opacity: 0;
   }
   .page {
     display: grid;

@@ -39,7 +39,7 @@ describe("the page letterboxes inside the safe area instead of painting edge to 
     const wide = /width:\s*calc\(var\(--sidebar\) \+ env\(safe-area-inset-left, 0px\)\)/;
     expect(rule(".sidebar")).toMatch(wide);
     expect(rule(".rail")).toMatch(wide);
-    expect(rule(".rail:focus-within")).toMatch(/width:\s*calc\(200px \+ env\(safe-area-inset-left, 0px\)\)/);
+    expect(rule(".rail:has(:focus-visible)")).toMatch(/width:\s*calc\(200px \+ env\(safe-area-inset-left, 0px\)\)/);
   });
 
   it("grows the rail's head by the top inset, so the logo clears the status bar and its line meets the top bar's", () => {
