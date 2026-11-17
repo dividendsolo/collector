@@ -130,6 +130,14 @@ describe("the view transition a row leaves through", () => {
     expect(css).toMatch(/::view-transition-group\(waiting-head\) \{\s*z-index: 1;/);
   });
 
+  it("keeps the column heads above the scrolled rows at rest, though every row and the head is its own stacking context", () => {
+    const head = css.slice(css.indexOf("#waiting-panel thead {"));
+    const r = head.slice(0, head.indexOf("}"));
+    expect(r).toMatch(/position: relative;/);
+    const z = Number((r.match(/z-index: (\d+);/) || [])[1] ?? 0);
+    expect(z).toBeGreaterThan(0);
+  });
+
   it("runs at 200ms on the page's own ease-out curve", () => {
     const r = css.slice(css.indexOf("::view-transition-group(*)"));
     expect(r).toMatch(/animation-duration: 200ms/);

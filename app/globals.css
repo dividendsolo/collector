@@ -1031,6 +1031,8 @@
   }
   #waiting-panel thead {
     view-transition-name: waiting-head;
+    position: relative;
+    z-index: 2;
   }
   ::view-transition-group(waiting-rows) {
     overflow: clip;
