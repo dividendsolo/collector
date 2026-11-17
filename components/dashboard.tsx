@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { ago, fetchedText } from "@/lib/format";
 import { jumpHref } from "@/lib/jump";
-import { briefsRow, fullRepo, p0Rows, priorityOrder, TRIAGE_LANE, triageRow } from "@/lib/priority";
+import { briefsRow, fullRepo, p0Rows, priorityOrder, TRIAGE_LANE, transitionNames, triageRow } from "@/lib/priority";
 import { waitingList } from "@/lib/statuses";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
@@ -14,6 +14,7 @@ import { JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
 import { ServiceHealthPanel, useServices } from "./services";
 import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelPlans, SkelRows, SkelStat } from "./ui";
+import { withViewTransition } from "./view-transition";
 
 /** A row's one-click fix (Start Tailscale). A failure shows its reason beside the button; a fix that took calls
  * `done`, which hides the rows it fixed at once. */
@@ -224,6 +225,7 @@ function PriorityTasks() {
   // An acknowledged row leaves the count and moves under the open ones, dimmed, until its job runs again.
   const w = all.filter((x) => !acked(x, acks));
   const done = all.filter((x) => acked(x, acks));
+  const names = new Map(transitionNames(all).map((n, i) => [all[i], n]));
   const hot = w.some((x) => x.level === "error"); // red only for errors
   return (
     <section className="panel" id="attention">
@@ -237,7 +239,7 @@ function PriorityTasks() {
           </div>
         ) : w.length ? (
           w.map((x, i) => (
-            <div className={`alert ${x.level}`} key={i}>
+            <div className={`alert ${x.level}`} key={i} style={{ viewTransitionName: names.get(x) }}>
               <span className="n">{i + 1}</span>
               <Icon name="alert" />
               <PriorityRowText x={x} />
@@ -270,7 +272,11 @@ function PriorityTasks() {
                 </span>
               ) : x.ack ? (
                 <span className="act">
-                  <button className="btn" type="button" onClick={() => setAck(x.ack.key, true)}>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => withViewTransition(() => setAck(x.ack.key, true))}
+                  >
                     Acknowledge
                   </button>
                 </span>
@@ -292,7 +298,7 @@ function PriorityTasks() {
         {state && done.length ? <hr className="acked-rule" /> : null}
         {state
           ? done.map((x) => (
-              <div className="alert acked" key={x.ack.key}>
+              <div className="alert acked" key={x.ack.key} style={{ viewTransitionName: names.get(x) }}>
                 <span className="n" />
                 <Icon name="check" />
                 <span>
@@ -302,7 +308,11 @@ function PriorityTasks() {
                   </span>
                 </span>
                 <span className="act">
-                  <button className="btn" type="button" onClick={() => setAck(x.ack.key, false)}>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => withViewTransition(() => setAck(x.ack.key, false))}
+                  >
                     Undo
                   </button>
                 </span>
