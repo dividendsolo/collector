@@ -51,6 +51,20 @@ describe("the page letterboxes inside the safe area instead of painting edge to 
     expect(home).toMatch(/padding-left:\s*calc\(12px \+ env\(safe-area-inset-left, 0px\)\)/);
   });
 
+  it("pads the top bar and the content past the inset on the right, so text and panels clear the cutout", () => {
+    const right = (px: number) =>
+      new RegExp(`padding-right:\\s*calc\\(${px}px \\+ env\\(safe-area-inset-right, 0px\\)\\)`);
+    expect(rule(".topbar")).toMatch(right(24));
+    expect(rule(".content")).toMatch(right(24));
+    const narrow = css.slice(css.indexOf("@media (max-width: 600px) {\n    .content {"));
+    const narrowRule = (selector: string) => {
+      const at = narrow.indexOf(`${selector} {`);
+      return narrow.slice(at, narrow.indexOf("}", at));
+    };
+    expect(narrowRule(".content")).toMatch(right(16));
+    expect(narrowRule(".topbar")).toMatch(right(16));
+  });
+
   it("lifts the toasts past the home indicator and the inset on the right", () => {
     const toasts = rule(".toasts");
     expect(toasts).toMatch(/bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\)/);
