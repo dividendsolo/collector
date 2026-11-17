@@ -55,6 +55,9 @@ export function runWait(r: Pick<WorkRun, "wait">, timeZone?: string): string {
   return `waiting on ${r.wait.on}${r.wait.why ? ` (${r.wait.why})` : ""}, retry at ${at}`;
 }
 
+export const dropPastWaits = <R extends Pick<WorkRun, "wait">>(runs: R[], now: number): R[] =>
+  runs.map((r) => (r.wait && r.wait.until <= now ? { ...r, wait: undefined } : r));
+
 export const runningTip = (runs: WorkRun[], timeZone?: string): [string, string][] =>
   runs.map((r) => [
     r.card == null ? (r.repo ?? "no repo") : `${labRun(r) ? LAB.repo : r.repo}#${r.card}`,

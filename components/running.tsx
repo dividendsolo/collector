@@ -6,6 +6,7 @@ import {
   BLOCKED,
   cardState,
   currentWork,
+  dropPastWaits,
   holdLacksReason,
   holdText,
   holdTip,
@@ -30,9 +31,12 @@ export type Run = WorkRun;
 export function useRunning(): Run[] | null {
   const { state } = useLive();
   if (!state) return null;
-  return state.machines
-    .flatMap((m: any) => (m.running || []).map((r: any) => ({ ...r, machine: m.name })))
-    .sort((a: Run, b: Run) => b.seconds - a.seconds);
+  return dropPastWaits(
+    state.machines
+      .flatMap((m: any) => (m.running || []).map((r: any) => ({ ...r, machine: m.name })))
+      .sort((a: Run, b: Run) => b.seconds - a.seconds),
+    Date.now() / 1000,
+  );
 }
 
 export const runningTipProps = (runs: Run[] | null): Record<string, string> =>

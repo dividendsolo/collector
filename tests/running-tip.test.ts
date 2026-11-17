@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { tagClass } from "@/components/app";
 import { pillClass, runningTipProps } from "@/components/running";
-import { runningTip, runWait, type WorkRun } from "@/lib/work";
+import { dropPastWaits, runningTip, runWait, type WorkRun } from "@/lib/work";
 
 const NOW = 1794933000;
 const run = (extra: Partial<WorkRun> = {}): WorkRun => ({
@@ -42,6 +42,14 @@ describe("the running count's hover (collector#220)", () => {
     expect(runningTip([run({ kind: "session", card: null, repo: null, name: "claude", seconds: NOW })], "UTC")).toEqual(
       [["no repo", "claude on local, interactive, session"]],
     );
+  });
+});
+
+describe("a wait whose retry time has passed (collector#220)", () => {
+  it("is dropped, so a stale snapshot does not say a run still waits", () => {
+    const until = backoff.until;
+    expect(dropPastWaits([run({ wait: backoff })], until + 1)[0].wait).toBeUndefined();
+    expect(dropPastWaits([run({ wait: backoff })], until - 1)[0].wait).toEqual(backoff);
   });
 });
 
