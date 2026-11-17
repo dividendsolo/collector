@@ -1975,12 +1975,6 @@
       background: var(--amber-bg);
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .jump-flash,
-    tr.jump-flash td {
-      animation: none;
-    }
-  }
   /* A port the firewall opens on purpose (collector#65): reachable from the internet, but by a rule, so blue, not red. */
   .pill.net-firewalled {
     color: var(--blue-2);
