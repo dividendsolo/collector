@@ -2,12 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/**
- * James, 2026-11-16 (Friday UI Day): navigation is by hash, so a tap never reloads the page. The tap's faked :hover
- * — and, on Android, the focus it leaves on the link — held the rail open at 200px with its shadow over the content
- * until the user tapped somewhere else. Touch has no hover, so the rail opens on a mouse's hover, or on the
- * keyboard's own focus, which a tap never matches.
- */
 const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
 
 const GATE = "@media (hover: hover) and (pointer: fine) {";
