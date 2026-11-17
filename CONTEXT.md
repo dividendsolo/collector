@@ -578,6 +578,12 @@ links to the page with the details.
 away by itself when the problem is resolved (James, 2026-11-06). Each toast has a `key` (`service:<url>`,
 `network:<machine>`) and a `state` (the status and error, or the sorted list of open ports).
 
+A toast leaves by the bottom edge it came in by (card #160): it rises 8px and fades in over 180ms (`@starting-style`),
+and on Dismiss or when the poll drops it, it sinks 8px and fades out over 150ms before the stack closes up. Both are
+CSS transitions on `.toast`, not keyframes, so a toast that comes back mid-exit turns around from where it is.
+`withLeaving` in `lib/toasts.ts` keeps a dropped toast in its place, marked `leaving`, until its opacity transition
+ends; Dismiss writes the dismissal on that same `transitionend`. Reduced motion keeps the fades and drops the 8px.
+
 A toast makes no sound (James, 2026-11-11: "remove the alert sound on the dashboard, don't need it"). The two-tone
 Web Audio alarm a new red toast played is gone, and `tests/toasts.test.ts` fails if page code makes a sound again.
 
