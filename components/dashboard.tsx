@@ -5,12 +5,13 @@ import { ago, fetchedText } from "@/lib/format";
 import { jumpHref } from "@/lib/jump";
 import { briefsRow, fullRepo, p0Rows, priorityOrder, TRIAGE_LANE, transitionNames, triageRow } from "@/lib/priority";
 import { waitingList } from "@/lib/statuses";
+import { transitionName, transitionOut } from "@/lib/view-transition";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
 import { useBriefs } from "./briefs";
 import { CardRef } from "./card-link";
 import { useApi, useLive } from "./data";
-import { JogMinutes } from "./pages";
+import { GraphqlLimit, JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
 import { ServiceHealthPanel, useServices } from "./services";
 import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelPlans, SkelRows, SkelStat } from "./ui";
@@ -568,14 +569,14 @@ export function Waiting() {
             ) : shown.length || (current === "all" && counts.length) ? (
               <>
                 {shown.map((t: any) => (
-                  <tr key={t.url}>
+                  <tr key={t.url} style={{ viewTransitionName: transitionName("wait", fullRepo(t), t.number) }}>
                     <td>
                       {/* A needs-triage card's badge starts its own triage session; the other lanes keep the
                           check that hands the card to the agents (James, 2026-11-13). */}
                       {t.lane === TRIAGE_LANE ? (
                         <TriagePill t={t} />
                       ) : (
-                        <ReleasePill t={t} done={() => setGone((g) => new Set(g).add(t.url))} />
+                        <ReleasePill t={t} done={() => transitionOut(() => setGone((g) => new Set(g).add(t.url)))} />
                       )}
                     </td>
                     <td>
@@ -661,19 +662,25 @@ function AiUsage() {
   );
 }
 
-/** Jog runner minutes this month on the Dashboard, the same stat as on the APIs page, so the minutes that carry most
- * of our CI are in view before they run out. */
-function JogPanel() {
+export function LimitsPanel() {
   const { state } = useLive();
+  const g = state?.github;
   return (
     <section className="panel">
-      <PanelHead icon="activity" title="Jog minutes">
+      <PanelHead icon="activity" title="Jog and GitHub limits">
         <a className="more" href="#/apis">
           All APIs &rarr;
         </a>
       </PanelHead>
       <div className="stats">
         {state ? <JogMinutes j={state.jog} /> : <div className="note sub">Reading Jog&hellip;</div>}
+        <GraphqlLimit g={g} />
+        {g?.error && !g.refused ? (
+          <div className="stat">
+            <span className="label">GraphQL (board reads)</span>
+            <span className="sub">Could not read: {g.error}</span>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -690,7 +697,7 @@ export function Dashboard() {
       <CurrentWork />
       <WorkPanel />
       <Waiting />
-      <JogPanel />
+      <LimitsPanel />
       <div className="pair">
         <AiUsage />
         <ServiceHealth />
