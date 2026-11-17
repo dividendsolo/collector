@@ -144,7 +144,7 @@
 
   .app {
     display: flex;
-    min-height: 100vh;
+    min-height: 100dvh;
   }
   /* Supabase-style rail: icons only; hovering the rail widens it over the page and shows the labels. */
   .sidebar {
@@ -152,7 +152,7 @@
     width: var(--sidebar);
     position: sticky;
     top: 0;
-    height: 100vh;
+    height: 100dvh;
     z-index: 5;
   }
   .rail {
