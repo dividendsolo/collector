@@ -711,6 +711,19 @@ reason, that date carries the page's own hover card (`components/card-tip.tsx`, 
 date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
 `holdTip` is the reason hovering it shows.
 
+## The Jog and GitHub limits panel (collector#186)
+
+The Dashboard's "Jog and GitHub limits" panel shows the two limits the droids run on: Jog's runner minutes this month
+and GitHub's GraphQL limit (used, of the limit, and the reset, red at 90% used), the same stats as on the APIs page.
+
+On 2026-11-16 a triage run used up the GraphQL limit while the gauge read about 1,400 of 5,000: GitHub's secondary
+limit (too many calls in a short time) is not in `gh api rate_limit`. So `githubLimit` in `lib/server/machines.ts` also
+sends one small GraphQL call, `{ viewer { login } }`, at most once a minute (`graphqlProbe`, one try, 1 point). When
+GitHub refuses it with a rate-limit error (`isRateLimited`: "rate limit" or `RATE_LIMITED` in gh's error), the read
+carries `refused`, the epoch second of that refusal, also when `rate_limit` itself could not be read. The panel and the
+APIs page then say "GitHub is refusing calls" with that time, in red, whatever the count says. The next call that
+GitHub answers clears it. `tests/limits-panel.test.ts` holds the gauge, the 90% bar and the refusing state.
+
 ## The AI usage rows
 
 - The Dashboard's AI usage panel lists Anthropic, then Nous, then Grok (`AI_ORDER` in `components/ai.tsx`).
