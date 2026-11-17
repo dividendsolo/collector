@@ -2082,9 +2082,14 @@
       transform: translateY(8px);
     }
   }
+  @keyframes toast-fade {
+    from {
+      opacity: 0;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .toast {
-      animation: none;
+      animation-name: toast-fade;
     }
   }
   #work-stats .stat {
