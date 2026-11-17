@@ -69,6 +69,7 @@
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
     --sidebar: 48px;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     color-scheme: dark;
     --topbar: oklch(0.19 0.0025 var(--hue) / 0.85);
   }
@@ -977,6 +978,23 @@
   @keyframes page-in {
     from {
       opacity: 0;
+    }
+  }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation: none;
+    }
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation-duration: 200ms;
     }
   }
   @media (prefers-reduced-motion: reduce) {
