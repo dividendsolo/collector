@@ -20,6 +20,8 @@ python3 collect.py | python3 -m json.tool   # one machine snapshot
 
 ## Dangers
 
+- No comments in any tracked file: the global rule "No comments in code". `bin/no-comments` checks it, in `bun run lint` and in `ci.yml` (CONTEXT.md, No comments in code).
+
 - The repo is public. `config.json` (real host names, job names, board ids) and `.env` (keys) are gitignored: keep it
   that way. Examples use `example.com`-style placeholders. Never log or print a key or the keychain token.
 - `collect.py` runs on remote machines through `ssh host python3 -`: standard library only, read only.
@@ -28,12 +30,6 @@ python3 collect.py | python3 -m json.tool   # one machine snapshot
 - A write endpoint (`POST /api/projects`) writes the real `config.json`. Probe or test it only against a temp copy:
   `COLLECTOR_CONFIG=/tmp/collector-test.json`. A curl test on 2026-10-21 replaced the real projects with `["x/y"]`.
 
-<!-- BEGIN:nextjs-agent-rules -->
-
 ## This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices. `next.config.ts` sets `agentRules: false`, so `next dev` does not write its own block into this file.
