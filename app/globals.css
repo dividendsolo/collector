@@ -472,6 +472,11 @@
     border-color: var(--blue-line);
     box-shadow: var(--glow);
   }
+  @media (pointer: coarse) {
+    .search {
+      font-size: 16px;
+    }
+  }
   .picks {
     list-style: none;
     margin: 0;
