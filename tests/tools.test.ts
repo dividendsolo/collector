@@ -566,3 +566,45 @@ describe("profile_fallbacks", () => {
     expect(drive<string[]>({ fn: "profile_fallbacks", path: file })).toEqual([]);
   });
 });
+
+type StepRow = Record<string, unknown>;
+
+describe("a foreman run waiting on GitHub (collector#220)", () => {
+  const NOW = 1794933000;
+  const wait = { on: "GitHub", why: "rate limit", until: NOW + 480 };
+  const step = (extra: object = {}) => ({
+    repo: "collector",
+    card: 220,
+    step: "opening the PR",
+    since: NOW - 600,
+    pid: 1,
+    ...extra,
+  });
+  it("puts the step file's wait on the script's own row", () => {
+    expect(drive<StepRow[]>({ fn: "steps", steps: [step({ wait })], now: NOW })).toEqual([
+      { repo: "collector", kind: "opening the PR", card: 220, type: "script", name: "work script", seconds: 600, wait },
+    ]);
+  });
+  it("puts it on the agent's row when an agent works the card", () => {
+    const agent = {
+      repo: "collector",
+      kind: "build",
+      card: 220,
+      type: "agent",
+      name: "collector-builder",
+      seconds: 90,
+    };
+    expect(
+      drive<StepRow[]>({
+        fn: "steps",
+        found: [{ key: ["collector", "build", 220], row: agent }],
+        steps: [step({ wait })],
+        now: NOW,
+      }),
+    ).toEqual([{ ...agent, wait }]);
+  });
+  it("drops a wait whose retry time has passed, or one that names nothing", () => {
+    for (const w of [{ ...wait, until: NOW - 1 }, { until: NOW + 60 }, "GitHub"])
+      expect(drive<StepRow[]>({ fn: "steps", steps: [step({ wait: w })], now: NOW })[0]).not.toHaveProperty("wait");
+  });
+});

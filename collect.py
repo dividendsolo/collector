@@ -1794,15 +1794,7 @@ def running_agents():
     for row in worktree_rows(out, steps=steps, verifying={heads[c] for c, _, _ in verifies if c in heads},
                              ports=listen_ports(), children=child_pids(links)):
         found[(row["repo"], row["kind"], row["card"])] = row
-    for st in steps:
-        rows = [k for k in found if (k[0], k[2]) == (st["repo"], st["card"])]
-        if any(found[k]["type"] == "agent" for k in rows):
-            continue
-        for k in rows:
-            del found[k]
-        found[(st["repo"], st["step"], st["card"])] = {
-            "repo": st["repo"], "kind": st["step"], "card": st["card"], "type": "script", "name": WORK_SCRIPT,
-            "seconds": max(0, int(time.time()) - st["since"])}
+    found = step_rows(found, steps, int(time.time()))
     for commit, feature, secs in sorted(verifies, key=lambda v: v[2]):
         key = heads.get(commit)
         if not key:
@@ -1811,6 +1803,32 @@ def running_agents():
         row.update(kind="verify", feature=feature, seconds=secs)
     return ([found[k] for k in sorted(found)] + tool_sessions(out, skip={pid for pid, _ in droid_pids},
                                                              parents=parent_pids(links)) + droid)
+
+
+def step_rows(found, steps, now):
+    for st in steps:
+        rows = [k for k in found if (k[0], k[2]) == (st["repo"], st["card"])]
+        agents = [k for k in rows if found[k]["type"] == "agent"]
+        if not agents:
+            for k in rows:
+                del found[k]
+            agents = [(st["repo"], st["step"], st["card"])]
+            found[agents[0]] = {
+                "repo": st["repo"], "kind": st["step"], "card": st["card"], "type": "script", "name": WORK_SCRIPT,
+                "seconds": max(0, now - st["since"])}
+        wait = step_wait(st.get("wait"), now)
+        for k in agents if wait else ():
+            found[k]["wait"] = wait
+    return found
+
+
+def step_wait(wait, now):
+    if not isinstance(wait, dict) or not isinstance(wait.get("on"), str):
+        return None
+    until = wait.get("until")
+    if not isinstance(until, (int, float)) or until <= now:
+        return None
+    return {"on": wait["on"], "why": wait.get("why") if isinstance(wait.get("why"), str) else None, "until": int(until)}
 
 
 def verify_heads():

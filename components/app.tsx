@@ -18,7 +18,7 @@ import { useJump } from "./jump";
 import { NetworkPage } from "./network";
 import { ApisPage, ClosedPage, DomainsPage, ProposalsPage, SubscriptionsPage, useVendors, WorkPage } from "./pages";
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
-import { useRunning } from "./running";
+import { runningTipProps, useRunning } from "./running";
 import { ServicesPage, ServicesWatcher } from "./services";
 import { Toasts } from "./toasts";
 import { Icon, type IconName, Sprite } from "./ui";
@@ -114,7 +114,7 @@ export function route(hash: string) {
   };
 }
 
-type Tag = { text: string; hot: boolean; dot?: boolean };
+type Tag = { text: string; hot: boolean; dot?: boolean; wait?: boolean; tip?: Record<string, string> };
 
 export const briefsTag = (n: number): Tag => ({ text: n ? String(n) : "", hot: false, dot: n > 0 });
 
@@ -129,7 +129,7 @@ export function attentionTag(
   return { text: open.length ? String(open.length) : "", hot: open.some((x) => x.level === "error") };
 }
 
-export const tagClass = (t?: Tag) => `tag${t?.hot ? " hot" : ""}${t?.dot ? " inbox-dot" : ""}`;
+export const tagClass = (t?: Tag) => `tag${t?.hot ? " hot" : ""}${t?.dot ? " inbox-dot" : ""}${t?.wait ? " wait" : ""}`;
 
 function useTags(): Record<string, Tag> {
   const { state } = useLive();
@@ -149,7 +149,12 @@ function useTags(): Record<string, Tag> {
   return {
     attention: attentionTag(state?.warnings || [], waiting?.list || [], acks, briefs?.inbox || []),
     briefs: briefsTag(briefs?.inbox?.length ?? 0),
-    running: { text: running?.length ? String(running.length) : "", hot: false },
+    running: {
+      text: running?.length ? String(running.length) : "",
+      hot: false,
+      wait: Boolean(running?.some((r) => r.wait)),
+      tip: runningTipProps(running),
+    },
     work: { text: waiting?.p0 ? String(waiting.p0) : "", hot: Boolean(waiting?.p0) },
     cron: { text: failing ? String(failing) : "", hot: failing > 0 },
     network: { text: open ? String(open) : "", hot: open > 0 },
@@ -175,7 +180,11 @@ function Sidebar({ lit }: { lit: string }) {
             <a className="item" href={n.href} aria-current={lit === n.page ? "page" : undefined}>
               <Icon name={n.icon} />
               <span className="label">{n.label}</span>
-              {n.tag ? <span className={tagClass(tags[n.tag])}>{tags[n.tag]?.text}</span> : null}
+              {n.tag ? (
+                <span className={tagClass(tags[n.tag])} {...tags[n.tag]?.tip}>
+                  {tags[n.tag]?.text}
+                </span>
+              ) : null}
             </a>
           </span>
         ))}

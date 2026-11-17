@@ -723,6 +723,29 @@ reason, that date carries the page's own hover card (`components/card-tip.tsx`, 
 date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
 `holdTip` is the reason hovering it shows.
 
+## The running count says what each run does, and when it waits on GitHub (collector#220)
+
+On 2026-11-17 five foreman runs showed as running for over 20 minutes; they were asleep in `GitHub rate limit;
+waiting 480 s` back-offs, and the page could not say so. The foreman's step file
+(`~/.hermes/foreman/steps/<repo>-<n>.json`, `work_script.steps` in `config.json`) is where a run says what it does,
+and it may also carry the back-off it sleeps in:
+
+```json
+{"repo": "collector", "card": 220, "step": "opening the PR", "since": 1794933644, "pid": 567136,
+ "wait": {"on": "GitHub", "why": "rate limit", "until": 1794934124}}
+```
+
+- `collect.py`'s `step_rows` puts a `wait` on the row the page shows for that card, the agent's own row included. A
+  wait whose `until` has passed, or one with no `on`, is dropped (`step_wait`), so a run that crashed mid-sleep never
+  reads as waiting for ever. The foreman writes the field in agent-stack (its `sh()` back-off).
+- `lib/work.ts`: `runWait` is the words ("waiting on GitHub (rate limit), retry at 14:38", in the viewer's own time),
+  `runningTip` one line per run (card, who runs it, machine, how long, and what it does or waits on).
+- Hovering the sidebar's running count (Agents), or hovering or tapping the Running now panel's count, opens that list
+  in the shared hover card (`data-tip-facts`). A waiting run's pill is amber (`.pill.waiting`) and its Task cell says
+  the wait; the sidebar's count is amber, with an amber dot on the closed rail, while any run waits.
+- On a screen under 496px the hover card is as wide as the screen less 8px each side, and it is placed after it
+  renders (`useLayoutEffect`), so a tip opened from the middle of a phone screen is not squeezed against its edge.
+
 ## The Jog and GitHub limits panel (collector#186)
 
 The Dashboard's "Jog and GitHub limits" panel shows the two limits the droids run on: Jog's runner minutes this month

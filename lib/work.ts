@@ -1,4 +1,4 @@
-import { duration, prio } from "./format";
+import { duration, prio, runDoing } from "./format";
 import { AGENT_STACK_STATUSES } from "./statuses";
 
 export interface WorkRun {
@@ -14,6 +14,7 @@ export interface WorkRun {
   seconds: number;
   tmux?: boolean | null;
   port?: number | null;
+  wait?: { on: string; why?: string | null; until: number } | null;
 }
 
 export const LAB = {
@@ -43,6 +44,25 @@ export const SESSION_TMUX = "tmux";
 
 export const runMachine = (r: { kind?: string | null; machine?: string | null }) =>
   isSession(r) ? SESSION_MACHINE : r.machine || "";
+
+export function runWait(r: Pick<WorkRun, "wait">, timeZone?: string): string {
+  if (!r.wait) return "";
+  const at = new Date(r.wait.until * 1000).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone,
+  });
+  return `waiting on ${r.wait.on}${r.wait.why ? ` (${r.wait.why})` : ""}, retry at ${at}`;
+}
+
+export const dropPastWaits = <R extends Pick<WorkRun, "wait">>(runs: R[], now: number): R[] =>
+  runs.map((r) => (r.wait && r.wait.until <= now ? { ...r, wait: undefined } : r));
+
+export const runningTip = (runs: WorkRun[], timeZone?: string): [string, string][] =>
+  runs.map((r) => [
+    r.card == null ? (r.repo ?? "no repo") : `${labRun(r) ? LAB.repo : r.repo}#${r.card}`,
+    `${runName(r)} on ${runMachine(r)}, ${runTime(r)}, ${runWait(r, timeZone) || runDoing(r)}`,
+  ]);
 
 export const runTime = (r: { kind?: string | null; seconds: number; tmux?: boolean | null }) =>
   isSession(r) ? (r.tmux ? SESSION_TMUX : SESSION_TIME) : duration(r.seconds);
