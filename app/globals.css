@@ -119,6 +119,7 @@
   }
   html {
     scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
   @media (prefers-reduced-motion: reduce) {
     html {
@@ -226,11 +227,13 @@
   .rail:focus-within .tag {
     opacity: 1;
   }
-  .rail a.item:hover {
+  .rail a.item:hover,
+  .rail a.item:active {
     color: var(--text);
     background: var(--hover);
   }
-  .rail a.item:hover svg.i {
+  .rail a.item:hover svg.i,
+  .rail a.item:active svg.i {
     color: var(--text);
   }
   .rail a.item[aria-current="page"] {
@@ -300,7 +303,8 @@
     color: inherit;
     text-decoration: none;
   }
-  .tile:hover {
+  .tile:hover,
+  .tile:active {
     border-color: var(--line-2);
     background: var(--panel-2);
   }
@@ -388,7 +392,8 @@
       margin-left: auto;
     }
   }
-  .panel-head .more:hover {
+  .panel-head .more:hover,
+  .panel-head .more:active {
     color: var(--text);
   }
   .btn {
@@ -499,7 +504,8 @@
     border-radius: var(--radius);
     cursor: pointer;
   }
-  .picks label:hover {
+  .picks label:hover,
+  .picks label:active {
     background: var(--hover);
   }
   .picks input {
@@ -572,7 +578,8 @@
     color: inherit;
     text-decoration: none;
   }
-  a.plain:hover {
+  a.plain:hover,
+  a.plain:active {
     color: var(--blue-2);
   }
   tr.total td {
@@ -659,7 +666,8 @@
     color: inherit;
     text-decoration: none;
   }
-  .health .sub a:hover {
+  .health .sub a:hover,
+  .health .sub a:active {
     color: var(--text);
   }
   .health .right {
@@ -1234,10 +1242,12 @@
     position: relative;
     z-index: 1;
   }
-  .alert:has(.row-link):hover {
+  .alert:has(.row-link):hover,
+  .alert:has(.row-link):active {
     background: var(--panel-2);
   }
-  .alert:has(.row-link):hover .row-link {
+  .alert:has(.row-link):hover .row-link,
+  .alert:has(.row-link):active .row-link {
     color: var(--blue-2);
   }
   /* The copy column has a fixed reading width (James, 2026-11-11: "it's too long"): long text wraps sooner, and the
@@ -1374,7 +1384,8 @@
     margin-left: auto;
     color: var(--blue-2);
   }
-  .empty .empty-next:hover {
+  .empty .empty-next:hover,
+  .empty .empty-next:active {
     text-decoration: underline;
   }
   /* The line above the acknowledged rows in Priority tasks. */
@@ -1590,7 +1601,8 @@
   tr.row {
     cursor: pointer;
   }
-  tr.row:hover td {
+  tr.row:hover td,
+  tr.row:active td {
     background: var(--hover);
   }
   .code {
@@ -1611,7 +1623,8 @@
   table.fit tr.row {
     cursor: pointer;
   }
-  table.fit tr.row:hover td {
+  table.fit tr.row:hover td,
+  table.fit tr.row:active td {
     background: var(--hover);
   }
   table.fit .chev {
@@ -1623,7 +1636,8 @@
     opacity: 0;
     transition: opacity 0.12s ease;
   }
-  table.fit tr.row:hover .chev {
+  table.fit tr.row:hover .chev,
+  table.fit tr.row:active .chev {
     opacity: 1;
   }
   .stack-list {
@@ -1696,7 +1710,8 @@
     color: inherit;
     text-decoration: none;
   }
-  .crumbs a:hover {
+  .crumbs a:hover,
+  .crumbs a:active {
     color: var(--text);
   }
   .facts {
@@ -2011,6 +2026,7 @@
     cursor: help;
   }
   .net-checks li:hover,
+  .net-checks li:active,
   .net-checks li:focus-visible {
     background: var(--hover);
     outline: none;
@@ -2354,7 +2370,8 @@
     color: inherit;
     text-decoration: none;
   }
-  a.stat:hover {
+  a.stat:hover,
+  a.stat:active {
     background: var(--hover);
   }
   .stat .value small {
@@ -2478,7 +2495,8 @@
     gap: 6px;
     text-decoration: none;
   }
-  .briefs-panel a.back:hover {
+  .briefs-panel a.back:hover,
+  .briefs-panel a.back:active {
     color: var(--text);
   }
   /* Unread is the brief's name in bold; a read one stays where it is, dimmed. */
