@@ -1,5 +1,3 @@
-/* Tailwind v4 without its preflight: the page keeps the exact look of the old index.html, whose rules below rely
-   on browser defaults (list numbers, link underlines, inline SVG). shadcn/ui reads the same tokens through @theme. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
@@ -29,9 +27,6 @@
 }
 
 @layer base {
-  /* Tokens follow Supabase Studio's dark theme (packages/ui: --surface 0.19, elevation step 0.025,
-     foreground 0.95, muted level 0.8, tertiary 0.65, primary oklch(0.76 0.15 h), 30% brand borders),
-     with the brand hue moved from Supabase green to blue. Dark is the default, as before. */
   :root {
     --hue: 255;
     --bg: oklch(0.19 0.0025 var(--hue));
@@ -61,7 +56,6 @@
     --green: oklch(0.78 0.15 150);
     --green-bg: oklch(0.78 0.15 150 / 0.1);
     --green-line: oklch(0.78 0.15 150 / 0.3);
-    /* The lab droid's own colour: the one colour in the palette no other row uses. */
     --violet: oklch(0.78 0.16 305);
     --violet-bg: oklch(0.78 0.16 305 / 0.1);
     --violet-line: oklch(0.78 0.16 305 / 0.3);
@@ -71,11 +65,12 @@
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --sidebar: 48px;
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --duration-hover: 0.15s;
+    --duration-enter: 0.18s;
     color-scheme: dark;
     --topbar: oklch(0.19 0.0025 var(--hue) / 0.85);
   }
 
-  /* Light: the same hue and roles, lightness flipped. Used only with <html class="light">; Collector is dark today. */
   :root.light {
     --bg: oklch(0.985 0.002 var(--hue));
     --panel: oklch(1 0 0);
@@ -104,7 +99,6 @@
     --green: oklch(0.55 0.15 150);
     --green-bg: oklch(0.55 0.15 150 / 0.08);
     --green-line: oklch(0.55 0.15 150 / 0.3);
-    /* The droid's colour, dark enough to read as text on the light panels. */
     --violet: oklch(0.48 0.19 305);
     --violet-bg: oklch(0.48 0.19 305 / 0.08);
     --violet-line: oklch(0.48 0.19 305 / 0.3);
@@ -154,7 +148,6 @@
     display: flex;
     min-height: 100dvh;
   }
-  /* Supabase-style rail: icons only; hovering the rail widens it over the page and shows the labels. */
   .sidebar {
     flex: none;
     width: calc(var(--sidebar) + env(safe-area-inset-left, 0px));
@@ -283,7 +276,6 @@
   .rail .tag.hot {
     color: var(--red);
   }
-  /* Collapsed: a red dot on the icon stands in for a red count. */
   .rail a.item:has(.tag.hot)::after {
     content: "";
     position: absolute;
@@ -295,7 +287,6 @@
     background: var(--red);
     box-shadow: 0 0 6px var(--red);
   }
-  /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
   .rail a.item:has(.tag.inbox-dot)::after {
     content: "";
     position: absolute;
@@ -379,7 +370,6 @@
   .panel {
     scroll-margin-top: calc(64px + env(safe-area-inset-top, 0px));
   }
-  /* Widgets side by side are always the same height: the shorter one stretches to match. */
   .pair {
     display: grid;
     gap: 20px;
@@ -405,7 +395,6 @@
     color: var(--muted);
     text-decoration: none;
   }
-  /* The time a panel's numbers were read (AI usage): on the right, before the panel's link. */
   .panel-head .fetched {
     margin-left: auto;
     white-space: nowrap;
@@ -416,7 +405,6 @@
   .panel-head .fetched + .blur-toggle {
     margin-left: 0;
   }
-  /* On a phone the head has no room for the read time beside the title: it takes its own line under it. */
   @media (max-width: 480px) {
     .panel-head:has(.fetched) {
       flex-wrap: wrap;
@@ -475,13 +463,10 @@
       transform: scale(0.99);
     }
   }
-  /* A button that cannot be clicked does not look or feel clickable (James, 2026-11-12: "it's still clickable and
-     it shouldn't be while it's doing a loading thing"). */
   .btn:disabled {
     cursor: not-allowed;
     opacity: 0.7;
   }
-  /* A link drawn as a button: centered like one, never underlined. */
   a.btn {
     display: inline-flex;
     align-items: center;
@@ -567,7 +552,6 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  /* The proposal form (collector#77): a field grid over the table, in the page's own controls and tokens. */
   .fields {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -619,7 +603,6 @@
     justify-content: flex-end;
     gap: 8px;
   }
-  /* A proposal's notes: two lines in the cell, the whole note on hover, so one long note cannot make the row. */
   td.notes .clamp {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -645,13 +628,12 @@
   .spend-total:empty {
     display: none;
   }
-  /* Blur toggle: amounts show by default; blurred, the page can be shared on screen. */
   body.blur-money .money {
     filter: blur(7px);
     user-select: none;
   }
   .money {
-    transition: filter 0.15s ease;
+    transition: filter var(--duration-hover) ease;
   }
   .blur-toggle {
     display: inline-grid;
@@ -734,7 +716,6 @@
     font: 12px var(--mono);
     color: var(--faint);
   }
-  /* Card flow's Statuses panel: the pills wrap, and drop under the text when the row is narrow (425 wide). */
   .health.statuses li {
     flex-wrap: wrap;
   }
@@ -747,11 +728,7 @@
     gap: 6px;
   }
 
-  /* The Card flow page's drawing (collector#51), on React Flow: the Supabase-like dark ground with thin lines and
-     rounded status boxes, and light pulses travelling every path in the direction a card moves. The statuses' own
-     colours are the page's tokens: green for ready, amber for waiting, blue for working, grey for parked. */
   .flow-canvas {
-    /* React Flow's own theming: the page's tokens, so nothing of the library's light default shows through. */
     --xy-background-color-default: transparent;
     --xy-background-pattern-dots-color-default: var(--line-2);
     --xy-node-color-default: var(--text);
@@ -762,21 +739,13 @@
     --xy-handle-background-color-default: transparent;
     --xy-handle-border-color-default: transparent;
     --xy-attribution-background-color-default: transparent;
-    /* One pulse travels a path in this long. Only the dots move; the status boxes stay still (James, 2026-11-04). */
     --flow-pulse: 3.6s;
-    /* Tall enough to draw the whole flow at its own size (the drawing is about 1000x1010), so the statuses read
-       at the size they are written and the page scrolls, exactly as the Graphviz drawing did. On a short window
-       the drawing is fitted down and can still be panned and zoomed; a phone gets its own size (below). */
     height: clamp(540px, 130vh, 1240px);
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--bg);
     overflow: hidden;
   }
-  /* A phone (collector#51 review): the canvas is as big as the drawing at a zoom where the labels read (its size
-     is set on the element, from `narrowViewport` in `lib/flow.ts`), and it scrolls sideways inside the panel, so
-     the page itself never scrolls sideways. A finger scrolls it like anything else: React Flow's own drag is off
-     there, and so is its `touch-action: none`. */
   .flow-scroll.narrow {
     overflow-x: auto;
     overscroll-behavior-x: contain;
@@ -791,7 +760,6 @@
   .flow-scroll.narrow .react-flow__pane {
     cursor: default;
   }
-  /* The handles are where a path lands on its box, not something to grab: the drawing is read only. */
   .flow-canvas .react-flow__handle {
     opacity: 0;
     width: 2px;
@@ -817,8 +785,8 @@
     text-align: center;
     box-shadow: 0 1px 2px oklch(0 0 0 / 0.3);
     transition:
-      opacity 0.18s ease,
-      border-color 0.18s ease;
+      opacity var(--duration-hover) ease,
+      border-color var(--duration-hover) ease;
   }
   .flow-box .flow-label {
     display: flex;
@@ -845,13 +813,9 @@
     border-color: var(--line-2);
     background: var(--panel-2);
   }
-  /* Hovering a status brightens it and fades the rest of the drawing back. */
   .flow-box.dim {
     opacity: 0.3;
   }
-  /* The tooltip: the note the old drawing put in a box beside the status. It sits in React Flow's node toolbar,
-     outside the zoomed viewport, so it is this size on screen at any zoom: 16px, the reading size. It wears its
-     status's colour, the same tint and edge as the box it opens from, over a solid panel. */
   .flow-tip {
     --tip-bg: transparent;
     width: 320px;
@@ -906,7 +870,6 @@
       animation-name: flow-tip-fade;
     }
   }
-  /* The dot a card starts from. */
   .flow-box.flow-start {
     width: 16px;
     height: 16px;
@@ -926,7 +889,7 @@
     stroke: var(--flow-tone);
     stroke-width: 1.2;
     opacity: 0.45;
-    transition: opacity 0.18s ease;
+    transition: opacity var(--duration-hover) ease;
   }
   .flow-edge.main .flow-line {
     stroke-width: 1.6;
@@ -942,13 +905,9 @@
     opacity: 1;
     filter: drop-shadow(0 0 5px var(--flow-tone));
   }
-  /* A dimmed path keeps its line and loses its light, so the eye follows the hovered status only. */
   .flow-edge.dim .flow-pulse {
     opacity: 0;
   }
-  /* A card's journey on the drawing (collector#146): the statuses the card reached stay bright — with the number of
-     visits on the ones it passed more than once — the ones it never reached fade, and every arrow it took is drawn
-     brightest. The status the draw has just reached keeps a glow, which is also where the path ends. */
   .flow-box .flow-visits {
     position: absolute;
     top: 3px;
@@ -970,17 +929,12 @@
     opacity: 1;
     filter: drop-shadow(0 0 5px var(--flow-tone));
   }
-  /* One card's journey (collector#146): the one line the view is opened for, the flow with the card's own path on
-     it, and every step below it, full width. The five timeline columns and a drawing whose labels read do not fit
-     side by side in the page's own 1440px content width (the drawing needs about 970px), so the steps sit under
-     the drawing rather than beside it. */
   .journey-now {
     margin: 2px 0 16px;
     padding: 0 16px;
     font-size: 15px;
     line-height: 1.5;
   }
-  /* The GitHub and Replay buttons drop under the card's own line on a phone, where the head cannot hold both. */
   @media (max-width: 700px) {
     .journey-page .panel-head {
       flex-wrap: wrap;
@@ -1049,13 +1003,11 @@
     font-size: 12px;
     line-height: 16px;
   }
-  /* The top bar's right side: the live dot. */
   .topbar .tools {
     display: flex;
     align-items: center;
     gap: 12px;
   }
-  /* A small spinner in a button at work; a reload onto a new build fades the page over. */
   .spinner {
     width: 12px;
     height: 12px;
@@ -1071,13 +1023,13 @@
   }
   body.fade-out {
     opacity: 0;
-    transition: opacity 0.15s ease-out;
+    transition: opacity 0.15s var(--ease-out);
   }
   html.fading-in body {
     opacity: 0;
   }
   body.fade-in {
-    animation: page-in 0.25s ease-out;
+    animation: page-in 0.25s var(--ease-out);
   }
   @keyframes page-in {
     from {
@@ -1143,7 +1095,6 @@
       opacity: 0.35;
     }
   }
-  /* Skeleton rows: the shape of the rows to come, so nothing shifts when the data lands. */
   .skel {
     display: block;
     height: 10px;
@@ -1170,7 +1121,6 @@
   tr.skel-row td {
     pointer-events: none;
   }
-  /* One text line per bar (padding, not margin, so nothing collapses): the same height as a real row. */
   .skel-row .skel,
   .skel-row .skel + .skel {
     margin: 0;
@@ -1283,7 +1233,6 @@
   .alert:last-child {
     border-bottom: 0;
   }
-  /* A row that leads inside Collector (needs triage, unread briefs): the whole row is the link (James, 2026-11-11). */
   .alert:has(.row-link) {
     position: relative;
   }
@@ -1292,7 +1241,6 @@
     position: absolute;
     inset: 0;
   }
-  /* The row's own buttons stay above the row link, so they still take their click. */
   .alert:has(.row-link) .act {
     position: relative;
     z-index: 1;
@@ -1303,8 +1251,6 @@
   .alert:has(.row-link):active .row-link {
     color: var(--blue-2);
   }
-  /* The copy column has a fixed reading width (James, 2026-11-11: "it's too long"): long text wraps sooner, and the
-     buttons and age keep their columns at the right edge. */
   .alert > span:not(.n):not(.aside):not(.act):not(.since),
   .alert > a {
     flex: 0 1 72ch;
@@ -1318,15 +1264,12 @@
   .alert .i {
     margin-top: 3px;
   }
-  /* A warning's right-side value (GitHub Actions sets the dollars billed this month): the row is a flex line,
-     so the free space before it pushes it to the right edge. */
   .alert .aside {
     margin-left: auto;
     font: 500 12px / 20px var(--mono);
     color: var(--faint);
     white-space: nowrap;
   }
-  /* A row's one-click fix, pushed to the right edge like .aside; a failed click's reason sits before the button. */
   .alert .act {
     margin-left: auto;
     display: flex;
@@ -1334,8 +1277,6 @@
     align-items: center;
     margin-top: -4px;
   }
-  /* A Debug and fix at work (James, 2026-11-11): the button itself says the step its session wrote, with the
-     spinner. Disabled, so a second click cannot open a second session. */
   .alert .act .btn.fixing {
     display: inline-flex;
     align-items: center;
@@ -1343,8 +1284,6 @@
     max-width: 260px;
     cursor: default;
   }
-  /* A session that reached its last step: finished, or waiting on James. Its colour says which, and it carries no
-     spinner, because nothing is running (James, 2026-11-12). */
   .alert .act .btn.fixing.done {
     border-color: var(--green-line, var(--line-2));
     color: var(--green, var(--text));
@@ -1368,8 +1307,6 @@
   .alert .act .why {
     color: var(--red);
   }
-  /* How long ago the row first showed up: always the last column. It takes the right edge itself when no
-     .aside or .act did, and a fixed width keeps the ages lined up down the list. */
   .alert .since {
     margin-left: auto;
     min-width: 72px;
@@ -1382,8 +1319,6 @@
   .alert .act ~ .since {
     margin-left: 0;
   }
-  /* A phone has no room for a right column: the text takes the line, and the button and age wrap under it,
-     lined up with the text. The text breaks a long SHA instead of pushing the panel wider. */
   @media (max-width: 600px) {
     .alert {
       flex-wrap: wrap;
@@ -1405,7 +1340,6 @@
     .alert .act ~ .since {
       margin-left: auto;
     }
-    /* A row with no button: its age sits at the right edge too, so every age lines up down the list. */
     .alert > :not(.act) + .since {
       flex: 1 0 100%;
       margin-left: 0;
@@ -1415,7 +1349,6 @@
   .alert.error .i {
     color: var(--red);
   }
-  /* An acknowledged row: dimmed, below the open rows, with what it waits for on its own line. */
   .alert.acked {
     color: var(--faint);
   }
@@ -1432,7 +1365,6 @@
     padding: 14px 16px;
     color: var(--muted);
   }
-  /* Priority tasks done: a link to the next stop, Waiting on you, at the right edge. */
   .empty .empty-next {
     margin-left: auto;
     color: var(--blue-2);
@@ -1440,7 +1372,6 @@
   .empty .empty-next:active {
     text-decoration: underline;
   }
-  /* The line above the acknowledged rows in Priority tasks. */
   .acked-rule {
     margin: 8px 0 0;
     border: 0;
@@ -1460,7 +1391,6 @@
       animation-name: none;
     }
   }
-  /* The open row just above the line drops its own border, so the line reads as one break, not a double rule. */
   .alert:has(+ .acked-rule) {
     border-bottom: 0;
   }
@@ -1472,8 +1402,6 @@
   .wrap {
     overflow-x: auto;
   }
-  /* Current work and Waiting on you hold about 15 rows and scroll the rest inside the panel, with the column heads
-     kept in view (James, 2026-11-16: "otherwise we have to scroll through every single card"). */
   .wrap.scroll {
     --row-h: 38px;
     max-height: calc(var(--row-h) * 15 + 40px);
@@ -1488,11 +1416,6 @@
   #current-work tr.done td {
     opacity: 0.6;
   }
-  /* Current work's Status column: the refs a card waits on (its blockers, the cards on deck) are a list, so they
-     wrap inside a capped cell. Without the cap the column took the width of the whole list and the table scrolled
-     sideways (collector#99). The pills keep their one line: they have a fixed height, so a wrapped label would
-     spill out of them. A ref never breaks inside itself: a line breaks only at the space after a ref's comma, so
-     `darndest#10` never reads as `darndest#1` (review on #100). */
   #current-work td.status {
     max-width: 320px;
     white-space: normal;
@@ -1525,7 +1448,6 @@
     white-space: normal;
     min-width: 220px;
   }
-  /* Card tooltip: what a running card is for, on hover or focus of its number. */
   .card-tip {
     cursor: help;
     border-bottom: 1px dotted var(--line-2);
@@ -1559,7 +1481,7 @@
   }
   #card-tip[hidden] {
     display: none;
-  } /* display: grid above would beat the hidden attribute */
+  }
   #card-tip strong {
     font-weight: 500;
     color: var(--text);
@@ -1567,9 +1489,6 @@
   #card-tip span {
     color: var(--muted);
   }
-  /* Labelled facts under a tooltip's text (the Network page's process): one per line, set apart from the text. */
-  /* A tooltip that wears its badge's colour (the Network page's Accessible to badges), the way the Card flow page's
-     tooltips wear their status's: the same tint and edge as the badge, over a solid panel. */
   #card-tip.tone-red {
     --tip-bg: var(--red-bg);
     border-color: var(--red-line);
@@ -1610,7 +1529,6 @@
     color: var(--text);
     overflow-wrap: anywhere;
   }
-  /* Projects: a full-page table that wraps inside its cells instead of scrolling sideways. */
   table.fit th,
   table.fit td {
     white-space: normal;
@@ -1634,7 +1552,6 @@
     max-width: 420px;
     color: var(--muted);
   }
-  /* Phones: Project, Status, Health, and the hand-set Stage; the project page has the rest. Agents: Status, Profile, Machine. */
   @media (max-width: 700px) {
     table.fit:not(.pool) tr > :is(th, td):is(:nth-child(2), :nth-child(3), :nth-child(5), :nth-child(6)),
     table.fit .desc {
@@ -1644,8 +1561,6 @@
       display: none;
     }
   }
-  /* Phones: Subscriptions keeps Name, Renews, Charge and Per month, on tighter padding; Billing and Per year go
-     (collector#78). */
   @media (max-width: 700px) {
     table.subs tr > :is(th, td):is(:nth-child(2), :nth-child(6)) {
       display: none;
@@ -1690,7 +1605,7 @@
     color: var(--faint);
     vertical-align: -1px;
     opacity: 0;
-    transition: opacity 0.12s ease;
+    transition: opacity var(--duration-hover) ease;
   }
   table.fit tr.row:active .chev {
     opacity: 1;
@@ -1719,7 +1634,6 @@
     flex-wrap: wrap;
     gap: 6px;
   }
-  /* Project page: the stack in two columns, so it is about as tall as the Stats card. A long row (UI) spans both. */
   .stack-list.two {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1775,7 +1689,6 @@
     margin: 0;
     padding: 14px 16px;
   }
-  /* Job page: three cards of label / value rows, side by side and the same height. */
   .kv-cards {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1785,7 +1698,6 @@
   .kv-cards .panel {
     margin: 0;
   }
-  /* Payment keys page: one card per key, with numbered steps. */
   #key-cards {
     display: grid;
     gap: 20px;
@@ -1827,7 +1739,6 @@
   .steps a {
     color: var(--blue-2);
   }
-  /* Project page: the stats on the left, the tech stack on the right. */
   .proj-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1840,7 +1751,6 @@
   .kv dd a.plain {
     color: inherit;
   }
-  /* The label column is as wide as the longest label, so each value starts right after the labels. */
   .kv {
     margin: 0;
     display: grid;
@@ -1938,7 +1848,6 @@
     background: var(--blue-bg);
     border-color: var(--blue-line);
   }
-  /* The lab droid's own row: its pill and its name in the one colour no other row uses (agent-stack#111). */
   .pill.lab,
   .lab {
     color: var(--violet);
@@ -1952,8 +1861,6 @@
     background: var(--amber-bg);
     border-color: var(--amber-line);
   }
-  /* A process left in a card's worktree: nothing is working the card, so it gets its own dashed badge in the colour
-     that asks for a look, instead of passing as the work script's own work (collector#32). */
   .pill.leftover {
     color: var(--amber);
     background: var(--amber-bg);
@@ -1984,7 +1891,6 @@
     background: var(--amber-bg);
     border-color: var(--amber-line);
   }
-  /* The Network page's badges: the tailnet in green (the local network wears the amber warning pill). */
   .pill.net-tailnet {
     color: var(--green);
     background: var(--green-bg);
@@ -1993,7 +1899,6 @@
   .pill.net-tailnet .dot {
     background: var(--green);
   }
-  /* A proposal the client signed is the one state past approved: the page's green, the tailnet pill's colour. */
   .pill.signed {
     color: var(--green);
     background: var(--green-bg);
@@ -2002,10 +1907,6 @@
   .pill.signed .dot {
     background: var(--green);
   }
-  /* Each machine's table sizes to its own rows: the port list wraps inside its cell, so one machine with a long list
-     (twenty UDP ports with no process name) cannot widen the column and push every other cell to the right. */
-  /* Fixed widths line the columns up across the machines' panels, at every width. Under 900px the table keeps a
-     minimum width and scrolls sideways inside its panel, as the other wide tables here do. */
   .net-table {
     table-layout: fixed;
     min-width: 860px;
@@ -2022,9 +1923,6 @@
   .net-table td.net-badges {
     white-space: normal;
   }
-  /* A machine's Security checks (James, 2026-11-06): a line saying where it stands, then one row per check with its
-     dot. The rows sit in two columns on a wide screen, one on a phone. */
-  /* A machine summary's shield wears its worst check's colour; its operating system sits at the right of the head. */
   .net-shield.ok {
     color: var(--green);
   }
@@ -2069,8 +1967,6 @@
     display: grid;
     gap: 2px;
   }
-  /* One row per check: the same three columns in every row, so every label and value lines up. The row is the hover
-     target for its card. */
   .net-checks li {
     display: grid;
     grid-template-columns: 8px minmax(0, 1.1fr) minmax(0, 1fr);
@@ -2126,7 +2022,6 @@
     font-size: 12px;
     color: var(--faint);
   }
-  /* What a toast's link glides to (lib/jump.ts): one soft pulse, then back to normal. A table row pulses its cells. */
   .jump-flash,
   tr.jump-flash td {
     animation: jump-flash 1.6s ease-out;
@@ -2136,7 +2031,6 @@
       background: var(--amber-bg);
     }
   }
-  /* A port the firewall opens on purpose (collector#65): reachable from the internet, but by a rule, so blue, not red. */
   .pill.net-firewalled {
     color: var(--blue-2);
     background: var(--blue-bg);
@@ -2169,8 +2063,6 @@
   .heat {
     padding: 14px 16px 16px;
   }
-  /* The toasts (collector#67): bottom right on every page, errors first. Each stays until its problem is resolved.
-     On a phone they span the width. */
   .toasts {
     position: fixed;
     right: calc(16px + env(safe-area-inset-right, 0px));
@@ -2191,8 +2083,8 @@
     border-radius: var(--radius);
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
     transition:
-      opacity 180ms var(--ease-out),
-      transform 180ms var(--ease-out);
+      opacity var(--duration-enter) var(--ease-out),
+      transform var(--duration-enter) var(--ease-out);
     @starting-style {
       opacity: 0;
       transform: translateY(8px);
@@ -2255,11 +2147,10 @@
   }
   #work-stats .stat {
     align-content: start;
-  } /* every number on one line, whatever sits under it */
+  }
   #work-stats .stat .sub span {
     white-space: nowrap;
   }
-  /* The map fills the panel: 53 week columns share the width and each day stays square. */
   .heat .months,
   .heat .grid {
     display: grid;
@@ -2286,7 +2177,6 @@
     background: var(--panel-2);
     box-shadow: inset 0 0 0 1px var(--line);
   }
-  /* Collector's own blue, not GitHub's green (James, 2026-11-11); in both themes, from --blue. */
   .heat .grid i[data-l="1"] {
     background: color-mix(in oklch, var(--blue) 25%, transparent);
   }
@@ -2299,8 +2189,6 @@
   .heat .grid i[data-l="4"] {
     background: var(--blue);
   }
-  /* Waiting on you's release check (James, 2026-11-12): inside the badge, the badge's own color; the hit area is
-     the badge's full height and 24px wide (design-rules: 24px floor), with no layout shift on hover. */
   .release {
     display: inline-flex;
     align-items: center;
@@ -2359,8 +2247,6 @@
   .pill.ok {
     color: var(--text);
   }
-  /* A scheduled card whose blocker is being worked on right now is on deck: the "after" line and the ref that is
-     moving take the accent, the refs that are not stay muted, and one pill names it (collector#28). */
   .sub.on-deck,
   .pill.deck {
     color: var(--blue);
@@ -2425,7 +2311,6 @@
     font: 500 20px var(--mono);
     letter-spacing: -0.02em;
   }
-  /* A stat that opens its own list (Closed today, James 2026-11-10): no underline, a hover like a table row. */
   a.stat {
     color: inherit;
     text-decoration: none;
@@ -2471,7 +2356,6 @@
     background: var(--red);
     box-shadow: 0 0 8px var(--red);
   }
-  /* AI plans: one block per provider, its usage windows as GitHub-limit style stats. */
   .plans .plan {
     border-top: 1px solid var(--line);
   }
@@ -2490,15 +2374,12 @@
   .plans .stats .stat:last-child {
     border-right: 0;
   }
-  /* The Nous row's four limits (collector#131): four across at desktop, two by two below. The separator is the
-     left edge of every stat that does not start a row, so neither layout leaves a line at the panel's edge. */
   .plans .stats.four {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .plans .stats.four .stat {
     border-right: 0;
     border-left: 1px solid var(--line);
-    /* Four stats in a 575px panel leave each one 143px, which the shared 160px bar and an auto column overflow. */
     grid-template-columns: minmax(0, 1fr);
   }
   .plans .stats.four .bar {
@@ -2523,8 +2404,6 @@
     padding: 6px 16px 14px;
   }
 
-  /* Briefs (collector#64): the Inbox and the Archived section, and one brief read as Markdown. */
-  /* Every word in a Briefs panel is 16px at least (James, 2026-11-10), the shared 12px heads and dates included. */
   .briefs-panel,
   .briefs-panel th,
   .briefs-panel td,
@@ -2535,8 +2414,6 @@
   .briefs-panel .count {
     font-size: 16px;
   }
-  /* An open brief's head stays under the top bar while the brief scrolls, so Inbox and Archive are always in reach
-     (James, 2026-11-10). A sticky head needs its panel to let it out, so this panel keeps its corners itself. */
   .brief-panel {
     overflow: visible;
   }
@@ -2547,7 +2424,6 @@
     background: var(--panel);
     border-radius: var(--radius) var(--radius) 0 0;
   }
-  /* Inbox, back from a brief: a button-shaped link with an arrow, on the Archive button's line, never underlined. */
   .briefs-panel a.back {
     display: inline-flex;
     align-items: center;
@@ -2557,7 +2433,6 @@
   .briefs-panel a.back:active {
     color: var(--text);
   }
-  /* Unread is the brief's name in bold; a read one stays where it is, dimmed. */
   .briefs tr.unread td.name a {
     font-weight: 600;
   }
@@ -2572,8 +2447,6 @@
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
   }
-  /* The body's shape while a brief loads: the same padding and line height as .brief-body, so the text lands
-     where the lines were. */
   .brief-skel {
     padding: 14px 16px 20px;
     max-width: 940px;
@@ -2607,8 +2480,6 @@
     padding: 6px 16px 20px;
     max-width: 940px;
     line-height: 1.55;
-    /* A brief carries long bare URLs (the posts Lead Watch found): they wrap inside the panel instead of running
-       off its right edge, on a phone as much as on the desktop. */
     overflow-wrap: anywhere;
   }
   .brief-body h1,
@@ -2661,13 +2532,10 @@
     border-top: 1px solid var(--line);
     margin: 16px 0;
   }
-  /* A brief's tables wrap in their cells: the page's other tables keep one line per row, and a quoted sentence is
-     longer than any of them. */
   .brief-body th,
   .brief-body td {
     white-space: normal;
   }
-  /* At 16px a short head (Impr., Clicks, Pos.) broke inside its word; a head keeps one line, its cells wrap. */
   .brief-body th {
     white-space: nowrap;
   }
@@ -2728,8 +2596,6 @@
   }
 }
 
-/* Outside the layers on purpose: React Flow's own stylesheet is unlayered, so a layered rule loses to its white
-   attribution box and grey text, which read as one colour on the dark ground (owner QA, collector#51). */
 .flow-canvas .react-flow__attribution {
   background: transparent;
 }

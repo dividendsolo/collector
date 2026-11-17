@@ -2,11 +2,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * Opening a brief (James, 2026-11-16): "when I click to open a brief, it's blank and then it just sort of pops in."
- * While the body is on its way the page shows the brief's own head from the inbox list and a skeleton of text
- * lines, never an empty panel.
- */
 const swr = vi.hoisted(() => ({ byKey: {} as Record<string, unknown> }));
 vi.mock("swr", () => ({ default: (key: string) => ({ data: swr.byKey[key] }), mutate: vi.fn() }));
 

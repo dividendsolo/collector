@@ -39,10 +39,10 @@ describe("parseBoard", () => {
         nodes: [
           { status: { optionId: "o1" }, priority: { optionId: "p0" }, content: issue("app", 1, ["bug"]) },
           { status: { optionId: "o2" }, priority: null, content: issue("app", 2) },
-          { status: { optionId: "zzz" }, priority: null, content: issue("app", 3) }, // a lane we do not list
-          { status: { optionId: "o1" }, priority: null, content: {} }, // a draft or a PR
+          { status: { optionId: "zzz" }, priority: null, content: issue("app", 3) },
+          { status: { optionId: "o1" }, priority: null, content: {} },
           { status: { optionId: "o1" }, priority: null, content: issue("app", 4, [], "CLOSED") },
-          { status: { optionId: "o1" }, priority: null, content: issue("labels", 5) }, // label repo: label wins
+          { status: { optionId: "o1" }, priority: null, content: issue("labels", 5) },
         ],
       },
     },
@@ -50,7 +50,7 @@ describe("parseBoard", () => {
       pageInfo: { hasNextPage: false, endCursor: "s1" },
       nodes: [
         issue("labels", 6, ["enhancement", "verify-in-progress", "P2", "P1"]),
-        issue("labels", 7, ["enhancement"]), // no lane label
+        issue("labels", 7, ["enhancement"]),
       ],
     },
   };
@@ -149,9 +149,7 @@ describe("workCards", () => {
     expect(workCards(rows, ["agent-in-progress", "closed", "code-review"], ["closed"]).map((c) => c.number)).toEqual([
       1, 3,
     ]);
-    // A user's own done status, and the lane list is still the `all` lanes: needs-triage is not on the Work page.
     expect(workCards(rows, ["agent-in-progress", "needs-triage"], ["needs-triage"]).map((c) => c.number)).toEqual([1]);
-    // No done status set: every card in `all` is open work, which is what the page did before the setting.
     expect(workCards(rows, ["agent-in-progress", "closed", "code-review"], []).map((c) => c.number)).toEqual([1, 2, 3]);
   });
 });

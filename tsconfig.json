@@ -32,5 +32,5 @@
     ".next-rebuild/types/**/*.ts",
     ".next-rebuild/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", ".artifacts", ".worktrees"]
+  "exclude": ["node_modules", ".artifacts", ".worktrees", "tools/no-comments"]
 }

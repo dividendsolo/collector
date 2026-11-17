@@ -23,10 +23,6 @@ function reducedMotionBlocks(source: string): string[] {
   return blocks;
 }
 
-/**
- * Every toast links to its page and the element on it (James, 2026-11-06: "they need to go to the page that it's
- * on, and it needs to scroll down to the section ... consistent throughout all the toast notifications").
- */
 describe("the toast links", () => {
   it("names the page and the element id, and reads the id back", () => {
     const href = jumpHref("network", "check:vps:ssh");

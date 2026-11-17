@@ -2,11 +2,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/**
- * Each page says its name once, in the top bar (James, 2026-11-10: "I don't want to see four or five briefs in a
- * row"). No page title under the top bar, no panel title on a page with one panel, and no column headed with the
- * page's own name.
- */
 const dir = path.join(process.cwd(), "components");
 const src = (f: string) => readFileSync(path.join(dir, f), "utf8");
 const pages = readdirSync(dir).filter((f) => f.endsWith(".tsx") && f !== "markdown.tsx");

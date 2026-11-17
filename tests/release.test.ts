@@ -1,14 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * One click releases a waiting card (James, 2026-11-12): "in the waiting stuff, be able to click the badge for the
- * status and just change it ... to ready for agent ... and then it'll just jump up into the current work". The
- * example was situation#964, waiting on "Start Docker Desktop", which he had already done.
- *
- * `POST /api/release` runs the agents' own card tool (`status set <repo>#<n> ready-for-agent --expect <lane>`), so
- * the move is the same one an agent makes, `--expect` refuses a card that moved meanwhile, and the board is read
- * again at once. The tool is mocked here: no test changes a real card.
- */
 const calls = vi.hoisted(() => ({
   runText: vi.fn(async (_cmd: string[], _o?: unknown) => ({
     ok: true,

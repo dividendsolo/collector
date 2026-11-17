@@ -25,8 +25,6 @@ import {
   trailLit,
 } from "@/lib/flow";
 
-/** The drawing this page replaces: every status its Graphviz source carried, with the colour it gave the box
- * (#8bd17c green, #f2b84b amber, #6cb6ff blue, #d0d4dc grey) and the label's line breaks. */
 const DRAWING: { id: string; lines: string[]; tone: string }[] = [
   { id: "needs-triage", lines: ["needs-", "triage"], tone: "wait" },
   { id: "closed-intake", lines: ["closed"], tone: "park" },
@@ -45,8 +43,6 @@ const DRAWING: { id: string; lines: string[]; tone: string }[] = [
   { id: "closed", lines: ["closed"], tone: "park" },
 ];
 
-/** The same source's solid arrows, which are the paths a card moves along. The dashed lines to the note boxes are
- * not paths, so they are not here. */
 const DRAWING_PATHS = [
   "start->needs-triage",
   "needs-triage->ready-for-human",
@@ -73,7 +69,6 @@ describe("the statuses", () => {
   it("every one of them says what it means", () => {
     for (const s of FLOW_STATUSES) expect(s.tip.length, s.id).toBeGreaterThan(20);
     const tip = (id: string) => FLOW_STATUSES.find((s) => s.id === id)?.tip;
-    // The six note boxes the drawing showed beside a status, kept word for word.
     expect(tip("blocked")).toBe("Waits on another card. GitHub issue link: Blocked by (issue dependencies)");
     expect(tip("ready-for-human")).toBe("Requires a human in the loop (HITL)");
     expect(tip("ready-for-agent")).toBe("Goes into the agent queue");
@@ -92,7 +87,6 @@ describe("the statuses", () => {
     expect(x("needs-triage")).toBe(0);
     expect(FLOW_STATUSES.every((s) => s.y > FLOW_START.y)).toBe(true);
     expect(y("needs-triage")).toBe(FLOW_ROW);
-    // One y per level: nothing shares a row with a status a level away.
     const levels = [...new Set(FLOW_STATUSES.map((s) => s.y))];
     expect(levels.length).toBe(8);
     const onRow = (row: number) =>
@@ -108,7 +102,6 @@ describe("the statuses", () => {
     ]);
     expect(onRow(FLOW_ROW * 4)).toEqual(["needs-info", "verify-in-progress"]);
     expect(onRow(FLOW_ROW * 6)).toEqual(["needs-manual-qa", "ready-to-merge", "changes-requested"]);
-    // Side by side means side by side: no two boxes on a row overlap, and the row is centred on the one above.
     for (const row of levels) {
       const boxes = FLOW_STATUSES.filter((s) => s.y === row).sort((a, b) => a.x - b.x);
       for (let i = 1; i < boxes.length; i++) expect(boxes[i].x - boxes[i - 1].x).toBeGreaterThanOrEqual(200);
@@ -139,7 +132,6 @@ describe("the paths", () => {
   });
 
   it("carries the main path brightest, from needs-triage to closed (James, 2026-11-02)", () => {
-    // The card's own list, in order, is on the path: the extra step is `merging`, which is how a card gets closed.
     const listed = ["needs-triage", "ready-for-agent", "agent-in-progress", "code-review", "ready-to-merge", "closed"];
     let at = -1;
     for (const id of listed) {
@@ -172,8 +164,6 @@ describe("the paths", () => {
   });
 
   it("is a route a card can actually take: every step of the main path is an arrow on the drawing", () => {
-    // The drawing has no agent-in-progress -> code-review arrow (a card goes through verify-in-progress), so the
-    // bright path has to carry that step itself or it would be brightest along a gap.
     for (const m of MAIN_EDGES)
       expect(
         FLOW_EDGES.some((e) => e.id === m.id),
@@ -205,7 +195,6 @@ describe("hovering a status", () => {
       "code-review->ready-to-merge",
       "code-review->changes-requested",
     ]);
-    // Its own box and the boxes it moves between stay lit; the far ones fade.
     expect(nodeDimmed("code-review", hovered)).toBe(false);
     expect(nodeDimmed("verify-in-progress", hovered)).toBe(false);
     expect(nodeDimmed("ready-to-merge", hovered)).toBe(false);
@@ -229,7 +218,6 @@ describe("the light pulses", () => {
     for (const b of begins) expect(b).toBeLessThanOrEqual(0);
     const gaps = begins.slice(1).map((b, i) => begins[i] - b);
     for (const g of gaps) expect(g).toBeCloseTo(FLOW_PULSE_SECONDS / FLOW_PULSES, 6);
-    // A second pulse a path of its own: the count and the length are what the page draws with.
     expect(pulseBegins(1, 2)).toEqual([0]);
     expect(pulseBegins(2, 4)).toEqual([0, -2]);
   });
@@ -255,12 +243,10 @@ describe("the drawing on a phone (425 wide)", () => {
   it("draws the labels at 9px or more on screen, never fitted down to the width", () => {
     const v = narrowViewport();
     expect(FLOW_LABEL_PX * v.zoom).toBeGreaterThanOrEqual(9);
-    // The canvas is as big as the drawing at that zoom, so the whole flow is in it and the page scrolls to it.
     expect(v.x + FLOW_BOUNDS.x * v.zoom).toBeGreaterThanOrEqual(0);
     expect(v.x + (FLOW_BOUNDS.x + FLOW_BOUNDS.width) * v.zoom).toBeLessThanOrEqual(v.width);
     expect(v.y + FLOW_BOUNDS.y * v.zoom).toBeGreaterThanOrEqual(0);
     expect(v.y + (FLOW_BOUNDS.y + FLOW_BOUNDS.height) * v.zoom).toBeLessThanOrEqual(v.height);
-    // and wider than the phone, which is what the sideways scroll is for.
     expect(v.width).toBeGreaterThan(425);
   });
 
@@ -272,10 +258,7 @@ describe("the drawing on a phone (425 wide)", () => {
   });
 });
 
-/** A card's own journey, drawn on the flow (collector#146): the statuses it reached light in time order, and every
- * arrow on the drawing one of its moves took. */
 describe("a journey on the drawing", () => {
-  // dividend-solo#146's 2026-11-13: needs-info -> blocked -> ready-for-agent -> agent-in-progress -> needs-info.
   const walk = ["needs-triage", "blocked", "ready-for-agent", "agent-in-progress", "needs-info"];
 
   it("lights one more status per step, in the walk's own order", () => {
@@ -290,11 +273,9 @@ describe("a journey on the drawing", () => {
   });
 
   it("lights the arrows the card took, and leaves the moves the drawing has no arrow for to their status", () => {
-    // The drawing has no `blocked -> ready-for-agent` arrow: the status lights and no path does.
     expect(trailLit(walk, 3).edges).toEqual(["start->needs-triage", "needs-triage->blocked"]);
     expect(trailLit(walk, 4).edges).toContain("ready-for-agent->agent-in-progress");
     expect(trailLit(walk, 5).edges).toContain("agent-in-progress->needs-info");
-    // A status visited twice is one node, and a path taken twice is one edge.
     const twice = trailLit(["needs-triage", "blocked", "needs-triage"], 3);
     expect(twice.nodes).toEqual(["needs-triage", "blocked"]);
     expect(twice.edges).toEqual(["start->needs-triage", "needs-triage->blocked"]);

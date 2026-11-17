@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { profilesByProvider } from "@/lib/server/ai";
 
-// James, 2026-11-11: "Why did our profile numbers grow so much?" Anthropic said 100 profiles: 55 on the Mac plus 45 on
-// ezio, though 39 names are on both. A profile is one agent, wherever it runs, so each name counts once.
 describe("profilesByProvider", () => {
   it("counts a profile on two machines once", () => {
     const machines = [

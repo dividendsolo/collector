@@ -3,10 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 
-/**
- * James, 2026-11-06: each Needs attention row shows how long ago it first showed up. The time is kept per row text,
- * survives a restart, and starts again when a row clears and comes back.
- */
 const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "first-seen-")), "seen.json");
 process.env.COLLECTOR_FIRST_SEEN = file;
 const { firstSeen, resetFirstSeen } = await import("@/lib/server/first-seen");

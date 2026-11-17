@@ -9,8 +9,6 @@ import { lastVendors } from "./vendors";
 import { warnings } from "./warnings";
 import { lastX, xUsage } from "./x";
 
-/** The page's main read: machines, the GitHub limit, Jog's runner minutes, X usage, subscriptions, notes, and Needs
- * attention. The warnings are worked out on every ask from the newest result of each reader. */
 export async function state() {
   const [snap] = await Promise.all([snapshot.get(), xUsage()]);
   const cfg = config();
@@ -36,9 +34,6 @@ export async function state() {
     x,
     subscriptions: cfg.subscriptions || [],
     agent_notes: cfg.agent_notes || {},
-    // Each row carries when it first showed up, for the age at the row's right edge.
-    // A row that knows when its thing happened (an incident's open time, a failed run's time) keeps it; the rest
-    // fall back to Collector's first sight of the row.
     warnings: list.map((w) => ({ ...w, since: w.since ?? seen[w.text] })),
   };
 }

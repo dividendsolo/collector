@@ -17,8 +17,6 @@ import { ServiceHealthPanel, useServices } from "./services";
 import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelPlans, SkelRows, SkelStat } from "./ui";
 import { withViewTransition } from "./view-transition";
 
-/** A row's one-click fix (Start Tailscale). A failure shows its reason beside the button; a fix that took calls
- * `done`, which hides the rows it fixed at once. */
 function AlertAction({ action, done }: { action: { label: string; post: string }; done: () => void }) {
   const [busy, setBusy] = useState(false);
   const [why, setWhy] = useState("");
@@ -45,22 +43,14 @@ function AlertAction({ action, done }: { action: { label: string; post: string }
   );
 }
 
-/** The Debug and fix panes open now, by job (machine/id), each with the step its session wrote and what that step
- * means: `working` (still going), `done` (finished) or `stuck` (needs James). The one triage pane also carries the
- * card it is on. Every 3 seconds. */
 interface OpenFix {
   pane: string;
   step: string;
   state: "working" | "done" | "stuck";
-  /** The triage pane only: the card that session is on, from the pane's own name. */
   card?: { repo: string; number: number };
 }
 const useFixes = () => useApi<{ fixes: Record<string, OpenFix> }>("/api/debug-fix", 3_000);
 
-/** A failed cron row's Debug and fix (James, 2026-11-11): opens a new pi session in a new tmux pane, split beside the
- * one James is looking at, which debugs the failure test first, ships the fix and reruns the job. While its pane is
- * open the button shows the step the session wrote, and does not open a second one; closing the pane brings the
- * button back. The row leaves on its own when the job's next run ends ok. */
 function DebugFix({
   debug,
   label = "Debug and fix",
@@ -101,8 +91,6 @@ function DebugFix({
     }
     setBusy(false);
   };
-  // Close a session that finished or is stuck: the pane closes, so the row's button comes back to Debug and fix,
-  // and a row whose cause is fixed leaves Priority tasks at the next machine read.
   const close = async () => {
     setBusy(true);
     setWhy("");
@@ -120,9 +108,6 @@ function DebugFix({
     }
     setBusy(false);
   };
-  // A session that reached its last step is not working any more (James, 2026-11-12: "I need that row to be
-  // resolved. Like, it's stuck right now"). `done` and `stuck` say so, drop the spinner, and give James the way
-  // out: a Close that ends the session and brings the button back.
   if (open) {
     const working = open.state === "working";
     const text = open.state === "stuck" ? "Stuck: needs you" : open.state === "done" ? "Done" : open.step;
@@ -157,13 +142,8 @@ function DebugFix({
   );
 }
 
-/** The address query that opens Waiting on you on one status (`#/dashboard?to=waiting-panel&lane=needs-triage`): the
- * Priority tasks triage row links there (James, 2026-11-11). Read once, then taken off the address. */
 const WAITING_FILTER = "lane";
 
-/** A Priority tasks row's text. A row that leads somewhere inside Collector (the needs-triage row, unread briefs) is
- * one link whose hit area covers the whole row (James, 2026-11-11: "make the row clickable regardless"); a web
- * address stays a link on its words, beside the row's own buttons. */
 export function PriorityRowText({ x }: { x: any }) {
   if (x.jump)
     return (
@@ -186,7 +166,6 @@ export function PriorityRowText({ x }: { x: any }) {
   return <span>{x.text}</span>;
 }
 
-/** "Mon 9 Nov, 8:30 AM" in the browser's own time zone. */
 function nextRun(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -194,7 +173,6 @@ function nextRun(iso: string): string {
   return `${day}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 }
 
-/** How long ago a Priority tasks row first showed up, the last column on the row (James, 2026-11-06). */
 function Since({ at }: { at?: number }) {
   return at ? (
     <span className="since" title={new Date(at * 1000).toLocaleString()}>
@@ -205,29 +183,23 @@ function Since({ at }: { at?: number }) {
 
 function PriorityTasks() {
   const { state } = useLive();
-  // A one-click fix the server confirmed (Tailscale is running again): its rows hide at once and stay hidden until
-  // a machine read newer than the click; if that read still fails, the rows come back (James, 2026-11-02).
   const [fixed, setFixed] = useState<{ post: string; at: number } | null>(null);
   const shown = fixed && state && state.at > fixed.at ? null : fixed;
   const acks = useAcks();
-  // The needs-triage row (James, 2026-11-11) comes from the same board read as Waiting on you, so the two agree.
   const waiting = useWaiting();
   const triage = waiting ? triageRow(waiting.list) : null;
-  // The unread briefs row (James, 2026-11-11), from the same read as the Briefs page.
   const { data: briefs } = useBriefs();
   const unread = briefsRow(briefs?.inbox || []);
   const all: any[] = priorityOrder([
     ...(state?.warnings || []).filter((x: any) => !(shown && x.action?.post === shown.post)),
     ...(triage ? [triage] : []),
-    // Each P0 card waiting on James, under the triage row (James, 2026-11-11).
     ...p0Rows(waiting?.list || []),
     ...(unread ? [unread] : []),
   ]);
-  // An acknowledged row leaves the count and moves under the open ones, dimmed, until its job runs again.
   const w = all.filter((x) => !acked(x, acks));
   const done = all.filter((x) => acked(x, acks));
   const names = new Map(transitionNames(all).map((n, i) => [all[i], n]));
-  const hot = w.some((x) => x.level === "error"); // red only for errors
+  const hot = w.some((x) => x.level === "error");
   return (
     <section className="panel" id="attention">
       <PanelHead icon="alert" title="Priority tasks">
@@ -252,22 +224,18 @@ function PriorityTasks() {
               {x.action ? (
                 <AlertAction action={x.action} done={() => setFixed({ post: x.action.post, at: Date.now() / 1000 })} />
               ) : x.unblock ? (
-                // A P0 waiting on James: a session gets it moving and brings him only what needs him (2026-11-11).
                 <span className="act">
                   <DebugFix debug={{ unblock: x.unblock }} label="Unblock" />
                 </span>
               ) : x.triage ? (
-                // One card to triage: a session opens beside James's own to triage it with him (2026-11-11).
                 <span className="act">
                   <DebugFix debug={{ triage: x.triage }} label="Triage" />
                 </span>
               ) : x.fixMain ? (
-                // A main that fails its checks on a machine: a session finds why and fixes it (2026-11-11).
                 <span className="act">
                   <DebugFix debug={{ fixMain: x.fixMain }} />
                 </span>
               ) : x.debug ? (
-                // A failed cron run or the work script's loop: fixed, never acknowledged (James, 2026-11-11).
                 <span className="act">
                   <DebugFix debug={x.debug} />
                 </span>
@@ -289,13 +257,11 @@ function PriorityTasks() {
           <div className="empty">
             <Icon name="check" />
             Nothing in priority tasks.
-            {/* Done here: the next stop is Waiting on you, one glide down (James, 2026-11-11). */}
             <a className="plain empty-next" href={jumpHref("dashboard", "waiting-panel")}>
               Waiting on you
             </a>
           </div>
         )}
-        {/* A line between the open rows and the acknowledged ones (James, 2026-11-11). */}
         {state && done.length ? <hr className="acked-rule" /> : null}
         {state
           ? done.map((x) => (
@@ -326,8 +292,6 @@ function PriorityTasks() {
   );
 }
 
-/** Work stats on the dashboard: open cards (live from the board), cards closed as done, PRs merged (today and 30 days,
- * James 2026-11-11), and deploys today per repo. */
 function WorkPanel() {
   const { data: d } = useApi("/api/work-stats");
   const { board } = useLive();
@@ -394,16 +358,11 @@ export function useWaiting() {
   const { board } = useLive();
   const d = board?.tickets;
   if (!d?.loaded) return null;
-  // The waiting set is a setting (collector#53): `each` is it, in its own order, resolved by the server.
   const list = waitingList(d.tickets, d.each);
   const p0 = list.filter((t: any) => t.priority === "P0").length;
   return { d, list, p0 };
 }
 
-/** A waiting row's status badge, with a check inside it that hands the card to the agents (James, 2026-11-12: "a little
- * button inside of that badge, like a check mark ... click it and then it could just automatically update the status to
- * ready for agent"). `POST /api/release` moves it with the agents' own card tool; the row leaves at once and the card
- * shows in Current work on the next board read. A refusal (the card moved meanwhile) shows beside the badge. */
 function ReleasePill({ t, done }: { t: any; done: () => void }) {
   const [busy, setBusy] = useState(false);
   const [why, setWhy] = useState("");
@@ -444,10 +403,6 @@ function ReleasePill({ t, done }: { t: any; done: () => void }) {
   );
 }
 
-/** A `needs-triage` row's badge (James, 2026-11-13): the check is gone, because the waiting crew already moves a
- * complete card to `ready-for-agent`, so the cards left need a real triage with James. The button starts the same
- * interactive triage session the Priority tasks Triage button starts, for that card. One triage session at a time:
- * the card being triaged says so where its status was, and the other cards' buttons wait for it. */
 function TriagePill({ t }: { t: any }) {
   const card = { repo: fullRepo(t), number: Number(t.number) };
   const { data, mutate } = useFixes();
@@ -497,11 +452,9 @@ function TriagePill({ t }: { t: any }) {
   );
 }
 
-/** Waiting on you: every ticket in the "each" lanes, needs-triage first, then by priority, then lane (waitingOrder), then oldest. The chip counts only the P0s, in red. */
 export function Waiting() {
   const w = useWaiting();
   const [lane, setLane] = useState("all");
-  // A link that names a status opens the list on it: the triage row's click shows only the needs-triage cards.
   useEffect(() => {
     const read = () => {
       const [page, query] = location.hash.split("?");
@@ -571,8 +524,6 @@ export function Waiting() {
                 {shown.map((t: any) => (
                   <tr key={t.url} style={{ viewTransitionName: transitionName("wait", fullRepo(t), t.number) }}>
                     <td>
-                      {/* A needs-triage card's badge starts its own triage session; the other lanes keep the
-                          check that hands the card to the agents (James, 2026-11-13). */}
                       {t.lane === TRIAGE_LANE ? (
                         <TriagePill t={t} />
                       ) : (
@@ -640,7 +591,6 @@ function AiUsage() {
   return (
     <section className="panel">
       <PanelHead icon="gauge" title="AI usage">
-        {/* When Collector last read the providers: a cached answer keeps its read's time (James, 2026-11-11). */}
         <span className="sub fetched" title={data?.at ? new Date(data.at * 1000).toLocaleString() : undefined}>
           {fetchedText(data?.at)}
         </span>

@@ -1,9 +1,7 @@
 import { duration, prio, runDoing } from "./format";
 import { AGENT_STACK_STATUSES } from "./statuses";
 
-/** One live agent or script run, as the machines report it. */
 export interface WorkRun {
-  /** `agent`, `script`, or `leftover`: a process left in a card's worktree that nothing is working for. */
   type: string;
   name?: string;
   model?: string;
@@ -11,21 +9,14 @@ export interface WorkRun {
   kind: string;
   feature?: string;
   machine: string;
-  /** The card the run works on. A Claude Code or Codex session outside a card worktree has none. */
   card?: number | null;
-  /** The repo the run's folder is in. A session outside any repo has none, and the page says "no repo". */
   repo?: string | null;
   seconds: number;
-  /** A session whose process runs inside tmux (`collect.py`, collector#37): its Running for cell reads `tmux`. */
   tmux?: boolean | null;
-  /** The TCP port a leftover process listens on, when the machine shows one (`ss` on Linux, `lsof` on a Mac). */
   port?: number | null;
   wait?: { on: string; why?: string | null; until: number } | null;
 }
 
-/** The lab droid's own run (agent-stack#111): a headless Claude Code process under its own `lab` user on ezio,
- * working in its own home rather than a card worktree. Its row carries that marker repo and kind, and the card it
- * links to is the experiment's own card — not a card of the marker repo. */
 export const LAB = {
   marker: "lab",
   repo: "agent-stack",
@@ -33,13 +24,9 @@ export const LAB = {
   url: "https://github.com/dividendsolo/agent-stack/issues/111",
 } as const;
 
-/** Whether a run is the lab droid's own, which the panel draws in its own colour. */
 export const labRun = (r: { repo?: string | null; kind?: string | null }) =>
   r.repo === LAB.marker && r.kind === LAB.marker;
 
-/** The name a run's row shows: the droid is "Lab droid", a process left in a card's worktree is the program it runs
- * with the port it listens on ("bun start :4123") — never the work script's name, which it is not (collector#32) —
- * every other run the name it reported, or "unknown". */
 export const runName = (r: {
   name?: string | null;
   repo?: string | null;
@@ -47,27 +34,17 @@ export const runName = (r: {
   port?: number | null;
 }) => (labRun(r) ? "Lab droid" : `${r.name || "unknown"}${r.port ? ` :${r.port}` : ""}`);
 
-/** A Claude Code or Codex session: a live run that waits on the person at the keyboard, not a card's build. */
 export const isSession = (r: { kind?: string | null }) => r.kind === "session";
 
-/** What a session row's Machine cell says (James, 2026-10-25, card #29: "I said local for those, not the machine
- * name"). Current work already says it for a card worked by hand. */
 export const SESSION_MACHINE = "local";
 
-/** What a session row's Running for cell says: it waits on the person, so its length says nothing about it and a
- * real duration there read as a stuck run (James, 2026-10-25, card #29). */
 export const SESSION_TIME = "interactive";
 
-/** What it says instead when the session runs inside tmux (James, 2026-10-29, card #37): the row tells where the
- * session runs, which `interactive` alone did not — his tmux `Work` window read the same as any other session. */
 export const SESSION_TMUX = "tmux";
 
-/** The Machine cell of a run: `local` for a session, the machine the run is on for everything else. */
 export const runMachine = (r: { kind?: string | null; machine?: string | null }) =>
   isSession(r) ? SESSION_MACHINE : r.machine || "";
 
-/** The Running for cell of a run: `interactive` for a session — `tmux` when it runs inside tmux — its own length
- * for everything else. */
 export function runWait(r: Pick<WorkRun, "wait">, timeZone?: string): string {
   if (!r.wait) return "";
   const at = new Date(r.wait.until * 1000).toLocaleTimeString("en-GB", {
@@ -96,24 +73,16 @@ export interface WorkCard {
   priority: string | null;
   created: string;
   hold?: { after: { ref: string; url: string }[]; from: string | null; why: string | null; to?: string | null } | null;
-  /** A `blocked` card's open "blocked by" cards (James, 2026-11-04). */
   blockers?: { ref: string; url: string }[];
   closed_at?: number;
   labels?: string[];
 }
 
-/** The status of a card that waits on another card through GitHub's native "blocked by" link (James, 2026-11-04:
- * "it's not ready for agent if it's not ready for agent"). Housekeeping moves it to ready-for-agent when the last
- * blocker closes. */
 export const BLOCKED = "blocked";
 
-/** The cards a row waits on: a `blocked` card's blockers, or a scheduled card's `Waiting on:` refs. */
 export const waitsOn = (card: WorkCard | null | undefined): { ref: string; url: string }[] =>
   !card ? [] : card.lane === BLOCKED ? (card.blockers ?? []) : (card.hold?.after ?? []);
 
-/** One Current work row: a card, a live run, or both. `group` orders the rows. `local`: an interactive
- * session works the card by hand (the card's `local` label). `onDeck`: the refs of a scheduled card's
- * `Waiting on:` line that are being worked on right now, which lifts the card to the top of its group. */
 export interface WorkRow {
   key: string;
   group: number;
@@ -124,13 +93,8 @@ export interface WorkRow {
   onDeck?: string[];
 }
 
-/** Seconds after which the page's machine snapshot is stale: the server reads every 10 s and the page asks every
- * 15 s, so a snapshot past 45 s means reads are failing, not slow. */
 export const STALE_SECONDS = 45;
 
-/** How old the run data behind the page is. `page`: the snapshot's age when it is past STALE_SECONDS (the server
- * stopped answering), else null. `machines`: each machine whose last read failed, by the age of its last good read
- * (null: never read). `names`: every machine, to tell a card's host label from its other labels. */
 export interface Staleness {
   page: number | null;
   machines: Record<string, number | null>;
@@ -143,7 +107,6 @@ interface SnapMachine {
   read_at?: number | null;
 }
 
-/** The staleness of `/api/state`'s answer at `now` (seconds). */
 export function staleness(state: { at?: number; machines?: SnapMachine[] } | null, now = Date.now() / 1000) {
   const age = state?.at ? now - state.at : null;
   const machines: Record<string, number | null> = {};
@@ -157,9 +120,6 @@ export function staleness(state: { at?: number; machines?: SnapMachine[] } | nul
 
 const ago = (s: number) => (s < 60 ? `${Math.round(s)} s` : duration(s));
 
-/** Why a claim with no run joined may be wrong: the stale data it was matched against, or null when the data is
- * fresh and the lane is the truth. A card's host label (`ezio`, `altair`) names the machine to ask about; a card
- * with none is matched against every machine, so any stale one counts. */
 function staleText(card: WorkCard | null, stale?: Staleness): string | null {
   if (!stale) return null;
   if (stale.page !== null) return `stale ${ago(stale.page)}`;
@@ -170,15 +130,6 @@ function staleText(card: WorkCard | null, stale?: Staleness): string | null {
   return age === null ? `${name} unread` : `${name} stale ${ago(age)}`;
 }
 
-/** What a card row's State cell shows when no run joined it: `session` (an interactive session holds it), the stale
- * data a claim was matched against (card #41: builds running on ezio read as idle while the page held a snapshot
- * minutes old), or the card's own status.
- *
- * The stale reading is for the `working` statuses, which are a setting (collector#53): a status that says a machine
- * or a session holds the card, with no run behind it, is a claim the page's read disagrees with, so the row says how
- * old the data is rather than repeating the status. Their name is never the State cell: a live run shows its own
- * badge, a `local` card shows the session's (the `no run` badge was removed on 2026-11-01; a claim with nothing
- * behind it for hours is housekeeping's to send back, agent-stack#187). Every other status is the truth as it is. */
 export const cardState = (
   row: Pick<WorkRow, "state" | "local" | "run"> & { card?: WorkCard | null },
   stale?: Staleness,
@@ -194,22 +145,12 @@ export const cardState = (
           ? (staleText(row.card ?? null, stale) ?? row.state)
           : row.state;
 
-/** Groups, top to bottom: live runs, cards in progress, review or merge, closed in the last hour, ready-for-agent,
- * scheduled. A card in any other status is in progress: only the agent stack's own queue and scheduled statuses sit
- * lower, and a `done` status is not open work at all (the server leaves those rows out of the view). */
 const groupOf = (lane: string) => (lane === "ready-for-agent" ? 3 : lane === "scheduled" || lane === BLOCKED ? 4 : 1);
 
-/** Whether the page shows the card as being worked on: its own row is with the live work or the work in review
- * (groups 0-1). A closed, ready-for-agent or scheduled card moves nothing along. */
 const moving = (r: WorkRow) => r.group < 2;
 
-/** The `repo#number` a `Waiting on:` ref names. A bare `#12` is the holding card's own repo, as parseHold wrote
- * it; anything else is already `repo#12`. */
 const holdKey = (ref: string, repo: string) => (ref.startsWith("#") ? `${repo}${ref}` : ref);
 
-/** The refs of a scheduled row's `Waiting on:` line that the page is working on right now. Empty: not on deck.
- * Only a row in the scheduled group (4) can be on deck: a scheduled card with a live run or the `local` label is
- * live work (group 0) and keeps the live order. */
 const deckOf = ({ group, card }: WorkRow, working: Set<string>) =>
   group === 4 && card && waitsOn(card).length
     ? waitsOn(card)
@@ -217,11 +158,6 @@ const deckOf = ({ group, card }: WorkRow, working: Set<string>) =>
         .map((a) => a.ref)
     : [];
 
-/** Every open card that is not waiting on James, the cards closed in the last hour, and every live run, one row
- * each. A run on a card joins that card's row. Live runs first (longest first), then by group, priority, oldest.
- * A scheduled card whose blocker is being worked on is on deck: `onDeck` names those refs and lifts the card to
- * the top of the scheduled group, ahead of the "Show all" cut. The rest of the scheduled group: the cards waiting
- * on another card (`after`) first, then the dated ones (`from`) soonest first (James, 2026-10-30). */
 export function currentWork(
   cards: WorkCard[],
   closed: WorkCard[],
@@ -270,29 +206,22 @@ export function currentWork(
   );
 }
 
-/** "after #146, agent-stack#149" or "from 2026-11-01": why a scheduled card has not moved. */
 export const holdText = (h: WorkCard["hold"]) =>
   !h ? "" : h.after.length ? `after ${h.after.map((a) => a.ref).join(", ")}` : h.from ? `from ${h.from}` : "";
 
-/** What hovering a scheduled card's badge or date shows (collector#50): the reason its `Not before:` line gives. A
- * card that gives none says so, and what it waits for, so every scheduled badge answers the hover. */
 export function holdTip(h: WorkCard["hold"]): { title: string; text: string } | null {
   if (!h) return null;
   const why = h.why?.trim();
   if (why) return { title: "Why it waits", text: why };
-  // A `Waiting on:` card's reason is the card it waits on.
   if (h.after.length)
     return { title: "Why it waits", text: `It waits until ${h.after.map((a) => a.ref).join(", ")} closes.` };
   if (!h.from) return null;
-  // A dated card must say why it waits (James, 2026-11-04); one that does not is shown in yellow and belongs in
-  // needs-info.
   return {
     title: "No reason given",
     text: `This card does not say why it waits, so it belongs in needs-info. It waits until ${h.from}${h.to ? `, then moves to ${h.to}` : ""}.`,
   };
 }
 
-/** A scheduled card that says neither what it waits on nor why it waits for its date (James, 2026-11-04). */
 export const holdLacksReason = (h: WorkCard["hold"]) => !!h && !h.after.length && !h.why?.trim();
 
 export interface ClosedRow {
@@ -303,8 +232,6 @@ export interface ClosedRow {
   closed_at: string;
 }
 
-/** GitHub's search hits for the cards closed today, as rows for the Closed today page, newest first. A pull request
- * is not a card, so it is dropped (James, 2026-11-10). */
 export function closedRows(items: any[]): ClosedRow[] {
   return (items || [])
     .filter((i) => /\/issues\/\d+$/.test(i?.html_url || ""))

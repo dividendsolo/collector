@@ -16,7 +16,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import collect  # noqa: E402  (the app's own reader, imported once the repo root is on the path)
+import collect
 
 
 def main():
@@ -24,7 +24,6 @@ def main():
     home = tempfile.mkdtemp()
     now = datetime.datetime.fromisoformat(case["now"])
     for rel, spec in (case.get("files") or {}).items():
-        # A case names its files the way the reader finds them: `notices/<job>.jsonl` under the case's home's .hermes.
         path = os.path.join(home, ".hermes", rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:

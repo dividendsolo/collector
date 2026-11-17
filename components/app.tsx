@@ -67,22 +67,15 @@ const useHash = () =>
     () => "",
   );
 
-/** The page a hash opens, without its query: `#/network?to=check:vps:internet` and `#/network` are one page. The Shell
- * scrolls to the top when this changes, so a page that takes a query off its own address is not sent back up
- * (collector#67: the toast's link scrolled to the port, then back to the top). */
 export const pageOf = (hash: string) => hash.replace(/^#\/?/, "").split("?", 1)[0];
 
-/** Pages: the hash picks one (#/cron); the sidebar and the top bar follow it. */
 export function route(hash: string) {
-  // A page may carry a query after its name (`#/network?to=check:vps:internet`): the page reads it, the route ignores it.
   let name = hash.replace(/^#\/?/, "").split("?", 1)[0] || "dashboard";
-  if (name === "running") name = "agents"; // the old address of the Agents page
+  if (name === "running") name = "agents";
   const repo = name.match(/^projects\/([\w.-]+\/[\w.-]+)$/);
   const agent = name.match(/^agents\/([\w.-]+)\/([\w.-]+)$/);
   const job = name.match(/^cron\/([^/]+)\/([^/]+)$/);
-  // One brief open: `#/briefs/<machine>/<file>` (collector#64), the way a job's own page is addressed.
   const brief = name.match(/^briefs\/([^/]+)\/([^/]+)$/);
-  // One card's journey: `#/card/<repo>/<n>`, where every card number on the page goes (collector#146).
   const card = name.match(/^card\/([\w.-]+)\/(\d+)$/);
   const page = card
     ? "card"
@@ -121,15 +114,10 @@ export function route(hash: string) {
   };
 }
 
-/** The sidebar's counts: Needs attention, briefs in the inbox, running agents, P0s waiting (red), failing jobs
- * (red), ports open to the internet (red), vendor incidents. */
 type Tag = { text: string; hot: boolean; dot?: boolean; wait?: boolean; tip?: Record<string, string> };
 
-/** Briefs: the inbox count, and a dot on the closed sidebar's icon while the inbox holds a brief (James, 2026-11-10). */
 export const briefsTag = (n: number): Tag => ({ text: n ? String(n) : "", hot: false, dot: n > 0 });
 
-/** Dashboard: the Priority tasks panel's open rows, the needs-triage row with them (James, 2026-11-11: the count said 3
- * while the panel showed 4). Red only when a row is an error. */
 export function attentionTag(
   warnings: any[],
   tickets: { lane?: string | null; priority?: string | null }[],
@@ -150,7 +138,6 @@ function useTags(): Record<string, Tag> {
   const vendors = useVendors();
   const acks = useAcks();
   const { data: briefs } = useBriefs();
-  // An acknowledged failed run leaves the count until the job runs again (James, 2026-11-06).
   const failing = state
     ? failingJobs(
         state.machines.flatMap((m: any) => m.jobs || []),
@@ -256,12 +243,10 @@ function Topbar({ r }: { r: ReturnType<typeof route> }) {
 function Page({ r }: { r: ReturnType<typeof route> }) {
   switch (r.page) {
     case "card":
-      // Keyed by the card, so the drawing and the timeline start fresh on the next card opened.
       return r.card ? <JourneyPage key={r.card.join("/")} repo={r.card[0]} number={r.card[1]} /> : null;
     case "briefs":
       return <BriefsPage />;
     case "brief":
-      // Keyed by the brief, so one brief's Archived button state never carries to the next one opened.
       return r.brief ? <BriefPage key={r.brief.join("/")} machine={r.brief[0]} file={r.brief[1]} /> : null;
     case "agents":
       return <AgentsPage />;
@@ -300,21 +285,21 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
   }
 }
 
+function TopOfPage() {
+  useEffect(() => {
+    scrollTo({ top: 0, behavior: "instant" });
+  }, []);
+  return null;
+}
+
 function Shell() {
   const hash = useHash();
   useJump();
   const r = route(hash);
-  // Scroll to the top on every page change. Braces matter: scrollTo returns a promise in current Chrome, and React
-  // would call it as the cleanup.
-  // A query on the same page (`?to=<id>`) is no page change: the top is only for a new page.
   const at = pageOf(hash);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the page is the trigger
-  useEffect(() => {
-    // Instant: a new page starts at its top, and a page that then glides somewhere (the toast's link) glides from there.
-    scrollTo({ top: 0, behavior: "instant" });
-  }, [at]);
   return (
     <div className="app">
+      <TopOfPage key={at} />
       <Sidebar lit={r.lit} />
       <div className="shell">
         <Topbar r={r} />

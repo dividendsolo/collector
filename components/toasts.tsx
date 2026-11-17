@@ -20,8 +20,6 @@ import { useAi } from "./ai";
 import { useLive } from "./data";
 import { useServices } from "./services";
 
-/** The amber toasts dismissed in this browser: key -> the state it was dismissed in (localStorage, like the Needs
- * attention acknowledgements; Collector has no database). */
 const KEY = "collector.toasts";
 const EVENT = "collector-toasts";
 let cache = "";
@@ -53,8 +51,6 @@ function dismiss(key: string, state: string) {
   dispatchEvent(new Event(EVENT));
 }
 
-/** The toasts, bottom right on every page: a service that is Slow or Down, and each machine's Security checks that
- * are not green. Red stays until fixed; amber has Dismiss, and comes back when its value changes. */
 export function Toasts() {
   const services = useServices();
   const { state } = useLive();
@@ -80,7 +76,6 @@ export function Toasts() {
     ],
     [state?.github, services, machines, acks, ai],
   );
-  // A fixed check forgets its dismissal, so the next time it breaks the toast shows again.
   useEffect(() => {
     if (!state) return;
     const kept = forgetFixed(gone, machines);

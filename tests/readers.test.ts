@@ -35,9 +35,6 @@ describe("readFeed", () => {
       { name: "Slow", impact: "minor", url: "u" },
     ]);
   });
-  // Card #84: a feed's own link lands in an `<a href>` on Collector's origin, whose routes restart the server, start
-  // the tailnet or the Hermes gateway and write config.json. React writes a known attribute straight through, so a
-  // scheme that runs script there is not a link: the incident falls back to the vendor's own status page.
   it("keeps an incident's feed link only when it is a web address", () => {
     const link = (shortlink: string) =>
       readFeed(
@@ -49,9 +46,6 @@ describe("readFeed", () => {
     }
     expect(link("http://status.example.com/incidents/y")).toBe("http://status.example.com/incidents/y");
   });
-  // Card #46: MongoDB Atlas sat at "major" all week on a 2026-09-03 incident it never updated, in regions we do
-  // not use. An incident with no update in 7 days is stale, carries its age and the regions it names, and sits
-  // below the fresh ones.
   it("marks an incident with no update in 7 days stale, with its dates, its regions and its components", () => {
     expect(
       readFeed(
@@ -391,7 +385,6 @@ describe("warnings", () => {
       x: { credits: { total: 2, free: 0, prepaid: 2, free_expires: null } },
       ai: [],
     });
-    // James's group order (lib/priority.ts, 2026-11-11), no longer errors first: can't work, then jobs, then money.
     expect(w.map((x) => x.group)).toEqual([
       "cant-work",
       "cant-work",
@@ -559,7 +552,6 @@ describe("warnings", () => {
       ["error", "SSH on vps: password authentication is on"],
       ["error", "SSH on vps: root login is on"],
     ]);
-    // Read from the config file alone, a drop-in may override it: no warning (ezio, 2026-11-06).
     const fromFile = { ...network, ssh: { ...network.ssh, source: "/etc/ssh/sshd_config" } };
     expect(netWarnings([{ name: "vps", network: fromFile }]).map((x) => x.text)).toEqual([
       "2 ports on vps are open to anyone on the internet: tcp 5432, udp 5353",
@@ -594,11 +586,6 @@ describe("warnings", () => {
     expect(netWarnings([{ name: "vps", network }, { name: "laptop" }])).toEqual([]);
   });
   it("says nothing about a machine's connections: a process or a destination never seen before is no row (collector#75)", () => {
-    // The read this row used to come from: two connections out, one of them a process and a site Collector had not
-    // seen before, and the marks the server's fold made of exactly those (collector#66) — "a process not seen here
-    // before" and "connected somewhere new". James, 2026-11-08: the feature he asked for was the page and the
-    // toasts, "not every single thing that's ever connected to the computer", so nothing about a connection is a
-    // Needs attention row now.
     const connections = [
       {
         proto: "tcp",
@@ -647,7 +634,6 @@ describe("warnings", () => {
     ];
     const network = { networks: { lan: [], internet: [], tailnet: null }, sockets: [], ssh: null, connections, marks };
     expect(netWarnings([{ name: "ezio", network }])).toEqual([]);
-    // The connections alone are no row either.
     expect(netWarnings([{ name: "ezio", network: { ...network, marks: [] } }])).toEqual([]);
   });
   it("puts the month's Actions bill on the right of the Actions row", () => {
@@ -682,7 +668,6 @@ describe("warnings", () => {
       x: null,
       ai: [],
     });
-    // Could not list tickets is can't work, so it goes above the Actions row (money).
     expect(w.map((x) => [x.level, x.aside])).toEqual([
       ["warn", undefined],
       ["warn", "$0.00 billed"],
@@ -726,7 +711,6 @@ describe("a machine whose read fails keeps its last good read, marked stale (car
     );
     expect(next[0]).toEqual({ ...ezio, error: "timed out after 20 s", read_at: 100, stale: true });
     expect(next[1]).toEqual({ name: "altair", error: null, read_at: 400, stale: false });
-    // A second failure still carries the first good read, not the failed one.
     expect(mergeMachines(next, [{ name: "ezio", error: "exit 255" }], 700)[0]).toMatchObject({
       read_at: 100,
       stale: true,
@@ -743,8 +727,6 @@ describe("nousTopup", () => {
   it("reads the balance as the share of the current $25 top-up used", () => {
     expect(nousTopup(15.35)).toMatchObject({ label: "Top-up ($25)", used: 39, left: "$15.35 of $25 left" });
   });
-  // James, 2026-11-12: "there's $25 and it should show how much is left of the $25 ... I don't know what the fuck one
-  // more $25 top-up waiting means." The balance is shown as it is, never split into blocks.
   it("shows the whole balance left, with no top-ups waiting", () => {
     expect(nousTopup(25.071492236524648)).toMatchObject({ used: 0, left: "$25.07 of $25 left" });
     expect(nousTopup(40)).toMatchObject({ used: 0, left: "$40.00 of $25 left" });
@@ -754,9 +736,6 @@ describe("nousTopup", () => {
   });
 });
 
-// James, 2026-11-12: a paid plan's limits are not credits — "we need a card to put the today limit, the daily
-// limit, the weekly limit, and the monthly limit ... we need to rebuild that card to accurately represent." The
-// portal's Usage page and its `/api/oauth/account` payload, read at 15:22 ET that day.
 describe("nousReading", () => {
   const gauge = (id: string, label: string, used: number, at: number) => ({
     id,
@@ -826,8 +805,6 @@ describe("nousReading", () => {
     expect(r.windows).toEqual([{ label: "Top-up ($25)", used: 0, resets: null, left: "$25.07 of $25 left" }]);
     expect(r.detail).toBeUndefined();
   });
-  // The payload is outside data: a reset time it cannot place is no reset time, never a read that throws on every
-  // provider's row (the whole panel comes from one Promise.all in lib/server/ai.ts).
   it("reads an unplaceable reset time as no reset", () => {
     const r = nousReading({
       ...portal,
@@ -842,7 +819,6 @@ describe("nousReading", () => {
 
 describe("kimiReading", () => {
   it("reads the 5-hour and 7-day limits from Kimi's usage endpoint", () => {
-    // The shape of api.kimi.com/coding/v1/usages on 2026-11-09: the 5-hour window used up, 84% of the week.
     const r = kimiReading({
       usages: {
         limit_5h: { used_ratio: 1, reset_time: "2026-11-09T23:48:05Z" },

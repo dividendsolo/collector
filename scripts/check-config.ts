@@ -1,10 +1,3 @@
-/**
- * Check a config.json against the keys Collector reads: `bun run check:config [path]`.
- *
- * Names every key Collector would never read and exits 1, so the setup prompt (SETUP.md) — or anyone editing by hand —
- * catches a typo instead of a key the page quietly ignores. Without a path it checks `config.json` beside the repo, or
- * the file in `COLLECTOR_CONFIG` when that is set.
- */
 import fs from "node:fs";
 import { badConfigValues, CONFIG_KEYS, unknownConfigKeys } from "../lib/server/config";
 import { CONFIG_PATH } from "../lib/server/paths";
@@ -36,8 +29,6 @@ if (unknown.length) {
   process.exit(1);
 }
 
-// A value Collector would not use (a project's stage, a vendor's criticality, a renewal date: collector#78): the
-// key is right and the setting still does nothing, so it is refused here too.
 const bad = badConfigValues(cfg);
 if (bad.length) {
   console.error(

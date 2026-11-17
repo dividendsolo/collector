@@ -1,19 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type Block, parseInline, parseMarkdown } from "@/lib/markdown";
 
-/**
- * One brief's Markdown as data (collector#64). A brief is written by our own cron prompts, and it carries what other
- * people posted, so the two things that matter here are that the shapes the briefs really use come out as blocks —
- * headings, tables, lists, links — and that nothing in the text can become markup: the page draws every part as a
- * React node, and the only link it will follow is an `http`/`https` one.
- *
- * The fixtures are the real briefs' own text: today's Lead Watch digest, and a slice of the YouTube Weekly Review's
- * tables.
- */
-
-/** Just the kinds, for a test that reads the shape of a brief rather than every word of it. */
 const kinds = (blocks: Block[]) => blocks.map((b) => b.kind);
-/** The text of a part list, as the page would read it: links and emphasis flattened. */
 const plain = (parts: { kind: string; text?: string; parts?: any[]; href?: string }[]): string =>
   parts.map((p) => (p.kind === "text" ? p.text : p.kind === "link" ? plain(p.parts || []) : "")).join("");
 
@@ -60,7 +48,6 @@ describe("a brief's blocks (collector#64)", () => {
     expect(blocks[0]).toMatchObject({ kind: "heading", level: 1 });
     expect(plain((blocks[0] as any).parts)).toBe("Lead Watch - 2026-11-08");
     expect(blocks[2]).toMatchObject({ kind: "list", ordered: true });
-    // One lead is one list item: the lines indented under it carry on that item.
     expect((blocks[2] as any).items).toHaveLength(1);
     const item = (blocks[2] as any).items[0];
     expect(plain(item)).toContain("Asked for:   a no-holds-barred roast");
@@ -68,7 +55,6 @@ describe("a brief's blocks (collector#64)", () => {
     expect(blocks[4]).toMatchObject({ kind: "paragraph" });
     expect(blocks[5]).toMatchObject({ kind: "list", ordered: false });
     expect((blocks[5] as any).items).toHaveLength(2);
-    // A paragraph keeps its own lines apart, so one fact per line reads as one fact per line.
     expect((blocks[6] as any).parts.filter((p: any) => p.kind === "break")).toHaveLength(1);
   });
 
@@ -153,7 +139,6 @@ describe("a brief's inline parts (collector#64)", () => {
   });
 
   it("never makes a link of anything but http and https", () => {
-    // The pitch is a quoted post, so it can say anything: only an http/https URL is ever a link.
     for (const line of ["[click](javascript:alert(1))", "[x](data:text/html,<script>alert(1)</script>)"]) {
       expect(
         parseInline(line).some((p) => p.kind === "link"),
@@ -167,7 +152,7 @@ describe("a brief's inline parts (collector#64)", () => {
     const blocks = parseMarkdown('# Hi\n\n<img src=x onerror=alert(1)>\n\n<a href="https://evil.example.com">go</a>\n');
     expect(kinds(blocks)).toEqual(["heading", "paragraph", "paragraph"]);
     expect(JSON.stringify(blocks)).not.toContain('"html"');
-    expect(JSON.stringify(blocks).includes("https://evil.example.com")).toBe(true); // as text, never as a link
+    expect(JSON.stringify(blocks).includes("https://evil.example.com")).toBe(true);
     expect((blocks as any)[2].parts.every((p: any) => p.kind === "text")).toBe(true);
   });
 });

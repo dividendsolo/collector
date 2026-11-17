@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { downText, markUpdating, UPDATE_GRACE_MS, updating } from "@/lib/updating";
 
-/**
- * James, 2026-11-06, a screenshot of the top bar during an update: "Could not reach the Collector server: Failed to
- * fetch". The update restarts the server on purpose, so a failed read in that window is the restart, not a fault.
- */
 const store = new Map<string, string>();
 (globalThis as any).sessionStorage = {
   getItem: (k: string) => store.get(k) ?? null,

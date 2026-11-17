@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 import { briefsRow, PRIORITY_GROUPS, p0Rows, priorityOrder, triageRow } from "@/lib/priority";
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * Priority tasks in James's order (2026-11-11, "lock that"): the rows go in groups, and the groups in this order:
- * can't work, security, needs triage, jobs failing, money and limits, good news. Inside a group, the order of the
- * rows is kept. Errors no longer jump above warnings of an earlier group.
- */
 const base = { github: {}, cfg: {}, services: [], domains: [], ticketsError: null, x: null, ai: [] } as any;
 
 describe("Priority tasks groups", () => {
@@ -68,7 +63,6 @@ describe("the needs-triage row", () => {
       jump: "waiting-panel",
       filter: "needs-triage",
     });
-    // James, 2026-11-11: one card names itself, so it can be triaged at once.
     expect(triageRow([{ lane: "needs-triage", repo: "dividendsolo/omarchy4mac", number: 45 }])?.text).toBe(
       "1 card needs triage: omarchy4mac#45",
     );
@@ -89,7 +83,6 @@ describe("the needs-triage row", () => {
   });
 });
 
-// James, 2026-11-11: unread briefs go between money and limits and good news.
 describe("the unread briefs row", () => {
   it("counts the inbox's unread briefs and links to the Briefs page", () => {
     const row = briefsRow([{ read: false }, { read: true }, { read: false }]);
@@ -112,7 +105,6 @@ describe("the unread briefs row", () => {
   });
 });
 
-// James, 2026-11-11: under needs triage, the P0 cards waiting on him, one row each.
 describe("the P0 rows", () => {
   const card = (n: number, lane: string, priority: string) => ({
     repo: "dividendsolo/situation",
@@ -140,7 +132,6 @@ describe("the P0 rows", () => {
     expect(p0Rows([card(4, "needs-triage", "P0")])).toEqual([]);
   });
 
-  // James, 2026-11-11: "i was wrong i want p0 before the triage cards".
   it("sits above needs triage and a failed job", () => {
     const rows = priorityOrder([
       { group: "jobs", text: "job" },
@@ -151,8 +142,6 @@ describe("the P0 rows", () => {
   });
 });
 
-// James, 2026-11-11: "let's put the time like when it was open ... the way that the cron job says two hours ago ...
-// so that the buttons all line up, and you could do that for the P0 as well". The time is when the card was opened.
 describe("the age on the triage and P0 rows", () => {
   const at = (iso: string) => Date.parse(iso) / 1000;
   it("gives the triage row the oldest card's open time", () => {

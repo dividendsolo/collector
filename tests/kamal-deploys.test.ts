@@ -5,11 +5,6 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { countDeploys } from "@/lib/server/workstats";
 
-/**
- * James, 2026-11-11: "it should be reading those". The Work panel counted deploys from GitHub only, so a Kamal app
- * that ezio deploys itself (pull-deploy) showed none. collect.py now reads pull-deploy's state file, and a commit
- * deployed both ways (zero-phase: Vercel and Kamal) counts once.
- */
 const read = (state: unknown) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-pull-deploy-"));
   fs.writeFileSync(path.join(dir, "state.json"), JSON.stringify(state));

@@ -1,6 +1,3 @@
-// James, 2026-11-12, on the Priority tasks row for darndest's main: "the stuck button on the row ... is still
-// clickable and it shouldn't be while it's doing a loading thing." And: "I need that row to be resolved. Like,
-// it's stuck right now. ... the button needs to come back and say, I don't know, something else."
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -17,7 +14,6 @@ describe("a disabled fix button is not clickable", () => {
   });
 
   it("stops the hover state on a disabled button, so it does not light up under the pointer", () => {
-    // `.btn:hover` alone also paints a disabled button. The hover rule must exclude it.
     const hover = css.match(/\.btn:hover(:not\(:disabled\))?\s*\{/);
     expect(hover, ".btn:hover must exist").not.toBeNull();
     expect(hover?.[0]).toContain(":not(:disabled)");
@@ -54,7 +50,6 @@ describe("a session that ends resolves the row", () => {
   });
 
   it("shows no spinner on a done or stuck button: a spinner says work is still running", () => {
-    // The page spins only while the state is working.
     expect(dashboard).toMatch(/state === "working".*spinner|spinner.*state === "working"/s);
   });
 
@@ -63,7 +58,6 @@ describe("a session that ends resolves the row", () => {
   });
 });
 
-// The Close button's own route: it may only close a pane Collector tagged, found by its key.
 describe("closing a session", () => {
   const panes = (out: string) => async (cmd: string[]) => {
     calls.push(cmd);
