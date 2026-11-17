@@ -486,6 +486,7 @@
     gap: 2px;
     max-height: 420px;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .picks label {
     display: flex;
@@ -1530,6 +1531,7 @@
     word-break: break-word;
     max-height: 640px;
     overflow: auto;
+    overscroll-behavior: contain;
   }
   .code.prose {
     font-family: inherit;
