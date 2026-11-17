@@ -27,9 +27,28 @@ const reducedToastBlock = () => {
   return media as string;
 };
 
+const durationMs = (value: string): number => {
+  const token = value.match(/^var\((--[\w-]+)\)$/);
+  if (token) {
+    const declared = css.match(new RegExp(`${token[1]}:\\s*([^;]+);`));
+    expect(declared, `${token[1]} is declared`).not.toBeNull();
+    return durationMs((declared as RegExpMatchArray)[1].trim());
+  }
+  const time = value.match(/^(\d*\.?\d+)(ms|s)$/);
+  expect(time, `${value} is a duration`).not.toBeNull();
+  const [, amount, unit] = time as RegExpMatchArray;
+  return Number(amount) * (unit === "s" ? 1000 : 1);
+};
+
+const opacityFadeMs = () => {
+  const fade = toastRule().match(/transition:[^;]*?opacity\s+(var\(--[\w-]+\)|\d*\.?\d+m?s)/);
+  expect(fade, "the toast transitions opacity").not.toBeNull();
+  return durationMs((fade as RegExpMatchArray)[1]);
+};
+
 describe("a toast under reduced motion", () => {
   it("still fades in, so it never pops in during one frame", () => {
-    expect(toastRule()).toMatch(/transition:[^;]*opacity \d+ms/);
+    expect(opacityFadeMs()).toBeGreaterThan(0);
     expect(toastRule()).toMatch(/@starting-style\s*\{[^}]*opacity:\s*0/);
     const reduced = reducedToastBlock();
     expect(reduced).not.toMatch(/(animation|transition)(-[a-z]+)?:\s*none/);
