@@ -6,6 +6,8 @@ import "@xyflow/react/dist/style.css";
 export const metadata: Metadata = { title: "Collector" };
 
 export const viewport: Viewport = {
+  themeColor: "#131415",
+  colorScheme: "dark",
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
 };

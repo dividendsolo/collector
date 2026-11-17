@@ -68,6 +68,7 @@
     --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --sidebar: 48px;
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     color-scheme: dark;
@@ -118,6 +119,7 @@
   }
   html {
     scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
   @media (prefers-reduced-motion: reduce) {
     html {
@@ -130,6 +132,12 @@
     color: var(--text);
     font: 13px / 1.5 var(--sans);
     -webkit-font-smoothing: antialiased;
+  }
+  button,
+  a,
+  [role="button"],
+  tr.row {
+    touch-action: manipulation;
   }
   svg.i {
     width: 14px;
@@ -168,9 +176,6 @@
     overflow: hidden;
     border-right: 1px solid var(--line);
     background: var(--bg);
-    transition:
-      width 0.18s ease,
-      box-shadow 0.18s ease;
   }
   .rail:hover,
   .rail:focus-within {
@@ -227,7 +232,6 @@
   .rail .label,
   .rail .tag {
     opacity: 0;
-    transition: opacity 0.12s ease;
   }
   .rail:hover .label,
   .rail:hover .tag,
@@ -235,11 +239,13 @@
   .rail:focus-within .tag {
     opacity: 1;
   }
-  .rail a.item:hover {
+  .rail a.item:hover,
+  .rail a.item:active {
     color: var(--text);
     background: var(--hover);
   }
-  .rail a.item:hover svg.i {
+  .rail a.item:hover svg.i,
+  .rail a.item:active svg.i {
     color: var(--text);
   }
   .rail a.item[aria-current="page"] {
@@ -270,7 +276,6 @@
     border-radius: 50%;
     background: var(--red);
     box-shadow: 0 0 6px var(--red);
-    transition: opacity 0.12s ease;
   }
   /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
   .rail a.item:has(.tag.inbox-dot)::after {
@@ -283,7 +288,6 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 6px var(--blue);
-    transition: opacity 0.12s ease;
   }
   .rail:hover a.item::after,
   .rail:focus-within a.item::after {
@@ -311,7 +315,8 @@
     color: inherit;
     text-decoration: none;
   }
-  .tile:hover {
+  .tile:hover,
+  .tile:active {
     border-color: var(--line-2);
     background: var(--panel-2);
   }
@@ -399,8 +404,18 @@
       margin-left: auto;
     }
   }
-  .panel-head .more:hover {
+  .panel-head .more:hover,
+  .panel-head .more:active {
     color: var(--text);
+  }
+  button,
+  .btn,
+  [role="button"],
+  .seg button,
+  .chip {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
   .btn {
     font: 500 12px var(--sans);
@@ -414,8 +429,10 @@
     color: var(--text);
     transition: transform 160ms var(--ease-out);
   }
-  .btn:hover:not(:disabled) {
-    background: var(--hover);
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover:not(:disabled) {
+      background: var(--hover);
+    }
   }
   .btn:active:not(:disabled),
   .seg button:active,
@@ -449,8 +466,10 @@
     border-color: var(--red-line);
     color: var(--red);
   }
-  .btn.danger:hover {
-    background: oklch(0.55 0.14 25 / 0.2);
+  @media (hover: hover) and (pointer: fine) {
+    .btn.danger:hover {
+      background: oklch(0.55 0.14 25 / 0.2);
+    }
   }
   .btn.primary {
     background: var(--blue-bg);
@@ -483,6 +502,11 @@
     border-color: var(--blue-line);
     box-shadow: var(--glow);
   }
+  @media (pointer: coarse) {
+    .search {
+      font-size: 16px;
+    }
+  }
   .picks {
     list-style: none;
     margin: 0;
@@ -492,6 +516,7 @@
     gap: 2px;
     max-height: 420px;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .picks label {
     display: flex;
@@ -501,7 +526,8 @@
     border-radius: var(--radius);
     cursor: pointer;
   }
-  .picks label:hover {
+  .picks label:hover,
+  .picks label:active {
     background: var(--hover);
   }
   .picks input {
@@ -574,7 +600,8 @@
     color: inherit;
     text-decoration: none;
   }
-  a.plain:hover {
+  a.plain:hover,
+  a.plain:active {
     color: var(--blue-2);
   }
   tr.total td {
@@ -606,9 +633,11 @@
     cursor: pointer;
     transition: transform 160ms var(--ease-out);
   }
-  .blur-toggle:hover {
-    color: var(--text);
-    background: var(--hover);
+  @media (hover: hover) and (pointer: fine) {
+    .blur-toggle:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
   }
   .blur-toggle[aria-pressed="true"] {
     color: var(--blue-2);
@@ -659,7 +688,8 @@
     color: inherit;
     text-decoration: none;
   }
-  .health .sub a:hover {
+  .health .sub a:hover,
+  .health .sub a:active {
     color: var(--text);
   }
   .health .right {
@@ -1025,6 +1055,38 @@
       opacity: 0;
     }
   }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  #waiting-panel .wrap.scroll {
+    view-transition-name: waiting-rows;
+    view-transition-group: contain;
+  }
+  #waiting-panel thead {
+    view-transition-name: waiting-head;
+    position: relative;
+    z-index: 2;
+  }
+  ::view-transition-group(waiting-rows) {
+    overflow: clip;
+  }
+  ::view-transition-group(waiting-head) {
+    z-index: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation: none;
+    }
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation-duration: 200ms;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .spinner {
       animation-duration: 1.6s;
@@ -1039,10 +1101,9 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 8px var(--blue);
-    animation: pulse 2s ease-in-out infinite;
   }
   .live.busy .pulse {
-    animation-duration: 0.6s;
+    animation: pulse 0.6s ease-in-out infinite;
   }
   .live.down .pulse {
     background: var(--red);
@@ -1098,7 +1159,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pulse {
+    .pulse,
+    .live.busy .pulse {
       animation: none;
     }
   }
@@ -1206,10 +1268,12 @@
     position: relative;
     z-index: 1;
   }
-  .alert:has(.row-link):hover {
+  .alert:has(.row-link):hover,
+  .alert:has(.row-link):active {
     background: var(--panel-2);
   }
-  .alert:has(.row-link):hover .row-link {
+  .alert:has(.row-link):hover .row-link,
+  .alert:has(.row-link):active .row-link {
     color: var(--blue-2);
   }
   /* The copy column has a fixed reading width (James, 2026-11-11: "it's too long"): long text wraps sooner, and the
@@ -1346,7 +1410,8 @@
     margin-left: auto;
     color: var(--blue-2);
   }
-  .empty .empty-next:hover {
+  .empty .empty-next:hover,
+  .empty .empty-next:active {
     text-decoration: underline;
   }
   /* The line above the acknowledged rows in Priority tasks. */
@@ -1354,6 +1419,20 @@
     margin: 8px 0 0;
     border: 0;
     border-top: 1px solid var(--line);
+    view-transition-name: acked-rule;
+  }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-in-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation-name: none;
+    }
   }
   /* The open row just above the line drops its own border, so the line reads as one break, not a double rule. */
   .alert:has(+ .acked-rule) {
@@ -1548,7 +1627,8 @@
   tr.row {
     cursor: pointer;
   }
-  tr.row:hover td {
+  tr.row:hover td,
+  tr.row:active td {
     background: var(--hover);
   }
   .code {
@@ -1560,6 +1640,7 @@
     word-break: break-word;
     max-height: 640px;
     overflow: auto;
+    overscroll-behavior: contain;
   }
   .code.prose {
     font-family: inherit;
@@ -1569,7 +1650,8 @@
   table.fit tr.row {
     cursor: pointer;
   }
-  table.fit tr.row:hover td {
+  table.fit tr.row:hover td,
+  table.fit tr.row:active td {
     background: var(--hover);
   }
   table.fit .chev {
@@ -1581,7 +1663,8 @@
     opacity: 0;
     transition: opacity 0.12s ease;
   }
-  table.fit tr.row:hover .chev {
+  table.fit tr.row:hover .chev,
+  table.fit tr.row:active .chev {
     opacity: 1;
   }
   .stack-list {
@@ -1654,7 +1737,8 @@
     color: inherit;
     text-decoration: none;
   }
-  .crumbs a:hover {
+  .crumbs a:hover,
+  .crumbs a:active {
     color: var(--text);
   }
   .facts {
@@ -1969,6 +2053,7 @@
     cursor: help;
   }
   .net-checks li:hover,
+  .net-checks li:active,
   .net-checks li:focus-visible {
     background: var(--hover);
     outline: none;
@@ -2207,7 +2292,12 @@
     cursor: pointer;
     transition: transform 160ms var(--ease-out);
   }
-  .release-btn:hover,
+  @media (hover: hover) and (pointer: fine) {
+    .release-btn:hover {
+      opacity: 1;
+      background: color-mix(in srgb, currentColor 14%, transparent);
+    }
+  }
   .release-btn:focus-visible {
     opacity: 1;
     background: color-mix(in srgb, currentColor 14%, transparent);
@@ -2270,8 +2360,10 @@
     color: var(--muted);
     transition: transform 160ms var(--ease-out);
   }
-  .seg button:hover {
-    color: var(--text);
+  @media (hover: hover) and (pointer: fine) {
+    .seg button:hover {
+      color: var(--text);
+    }
   }
   .seg button[aria-pressed="true"] {
     background: var(--hover);
@@ -2305,7 +2397,8 @@
     color: inherit;
     text-decoration: none;
   }
-  a.stat:hover {
+  a.stat:hover,
+  a.stat:active {
     background: var(--hover);
   }
   .stat .value small {
@@ -2429,7 +2522,8 @@
     gap: 6px;
     text-decoration: none;
   }
-  .briefs-panel a.back:hover {
+  .briefs-panel a.back:hover,
+  .briefs-panel a.back:active {
     color: var(--text);
   }
   /* Unread is the brief's name in bold; a read one stays where it is, dimmed. */
