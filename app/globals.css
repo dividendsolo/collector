@@ -402,6 +402,15 @@
   .panel-head .more:active {
     color: var(--text);
   }
+  button,
+  .btn,
+  [role="button"],
+  .seg button,
+  .chip {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
   .btn {
     font: 500 12px var(--sans);
     height: 28px;
