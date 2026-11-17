@@ -250,13 +250,11 @@ function PriorityTasks() {
           <div className="empty">
             <Icon name="check" />
             Nothing in priority tasks.
-            {}
             <a className="plain empty-next" href={jumpHref("dashboard", "waiting-panel")}>
               Waiting on you
             </a>
           </div>
         )}
-        {}
         {state && done.length ? <hr className="acked-rule" /> : null}
         {state
           ? done.map((x) => (
@@ -582,7 +580,6 @@ function AiUsage() {
   return (
     <section className="panel">
       <PanelHead icon="gauge" title="AI usage">
-        {}
         <span className="sub fetched" title={data?.at ? new Date(data.at * 1000).toLocaleString() : undefined}>
           {fetchedText(data?.at)}
         </span>

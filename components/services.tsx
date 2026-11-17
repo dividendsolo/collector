@@ -90,7 +90,6 @@ export function ServiceHealthPanel({ svc }: { svc: Svc[] | null }) {
         </a>
       </PanelHead>
       <div className="spend-total" id="health-total">
-        {}
         {svc?.length && slowest ? (
           <>
             <span className="value">

@@ -128,7 +128,6 @@ export function Sprite() {
         <path d="M12 3l7 3v5c0 4.5-2.9 7.9-7 10-4.1-2.1-7-5.5-7-10V6z" />
         <path d="m9 12 2 2 4-4.5" />
       </symbol>
-      {}
       <symbol id="i-split" viewBox="0 0 24 24">
         <path d="M16 3h5v5" />
         <path d="M8 3H3v5" />

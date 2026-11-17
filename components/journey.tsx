@@ -52,7 +52,6 @@ export function JourneyPage({ repo, number }: { repo: string; number: number }) 
           </p>
         ) : (
           <>
-            {}
             <p className="journey-now">{nowLine(moves) || "This card's timeline holds no status change yet."}</p>
             <Drawing journey={trail} drawKey={drawKey} hoverNode={hoverNode} onHover={setHoverNode} />
           </>

@@ -89,7 +89,6 @@ export function AiPlan({ a }: { a: any }) {
               </div>
             ) : null}
           </div>
-          {}
           {a.kind === "usage" && a.windows?.length && a.detail ? (
             <div className="note sub">
               <BlurText text={a.detail} />

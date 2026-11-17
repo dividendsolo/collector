@@ -905,7 +905,6 @@ export function ProposalsPage() {
           </table>
         </div>
       </section>
-      {}
       {form ? (
         <ProposalForm key={form.id ?? "new"} draft={form} onSaved={saved} onCancel={() => setForm(null)} />
       ) : null}
