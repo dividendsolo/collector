@@ -559,12 +559,21 @@
   .fields select,
   .fields textarea {
     font: 12px var(--sans);
+    width: 100%;
+    min-width: 0;
     height: 28px;
     padding: 0 10px;
     border-radius: var(--radius);
     border: 1px solid var(--line-2);
     background: var(--bg);
     color: var(--text);
+  }
+  @media (pointer: coarse) {
+    .fields input,
+    .fields select,
+    .fields textarea {
+      font-size: 16px;
+    }
   }
   .fields textarea {
     height: 52px;
