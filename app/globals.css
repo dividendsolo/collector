@@ -511,6 +511,8 @@
   .fields select,
   .fields textarea {
     font: 12px var(--sans);
+    width: 100%;
+    min-width: 0;
     height: 28px;
     padding: 0 10px;
     border-radius: var(--radius);

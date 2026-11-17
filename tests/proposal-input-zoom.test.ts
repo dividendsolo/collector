@@ -70,6 +70,15 @@ describe("a proposal form field does not zoom the page on a phone", () => {
     }
   });
 
+  it("keeps every control inside its grid cell, whatever its font size", () => {
+    for (const control of CONTROLS) {
+      const base = rules.filter((r) => r.media === null && r.selector.split(",").some((s) => s.trim() === control));
+      const decls = base.map((r) => r.decls).join(";");
+      expect(decls, `${control} fills its cell`).toMatch(/(?:^|[;{\s])width:\s*100%/);
+      expect(decls, `${control} may shrink below its intrinsic size`).toMatch(/min-width:\s*0(?:px)?\s*(?:;|$)/);
+    }
+  });
+
   it("never disables zoom instead", () => {
     expect(layout).not.toMatch(/maximum-scale|user-scalable/);
     expect(css).not.toMatch(/maximum-scale|user-scalable/);
