@@ -24,9 +24,9 @@ describe("the sidebar rail snaps (collector#163)", () => {
     expect(railRules().length).toBeGreaterThan(10);
   });
 
-  it("keeps the end states: the open rail is 200px wide, with its shadow", () => {
+  it("keeps the end states: the open rail is 200px wide plus the left safe-area inset, with its shadow", () => {
     const open = rule(".rail:hover, .rail:focus-within");
-    expect(open).toMatch(/width:\s*200px/);
+    expect(open).toMatch(/width:\s*calc\(200px \+ env\(safe-area-inset-left, 0px\)\)/);
     expect(open).toMatch(/box-shadow:/);
   });
 
