@@ -578,6 +578,12 @@ links to the page with the details.
 away by itself when the problem is resolved (James, 2026-11-06). Each toast has a `key` (`service:<url>`,
 `network:<machine>`) and a `state` (the status and error, or the sorted list of open ports).
 
+A toast leaves by the bottom edge it came in by (card #160): it rises 8px and fades in over 180ms (`@starting-style`),
+and on Dismiss or when the poll drops it, it sinks 8px and fades out over 150ms before the stack closes up. Both are
+CSS transitions on `.toast`, not keyframes, so a toast that comes back mid-exit turns around from where it is.
+`withLeaving` in `lib/toasts.ts` keeps a dropped toast in its place, marked `leaving`, until its opacity transition
+ends; Dismiss writes the dismissal on that same `transitionend`. Reduced motion keeps the fades and drops the 8px.
+
 A toast makes no sound (James, 2026-11-11: "remove the alert sound on the dashboard, don't need it"). The two-tone
 Web Audio alarm a new red toast played is gone, and `tests/toasts.test.ts` fails if page code makes a sound again.
 
@@ -716,6 +722,19 @@ reason, that date carries the page's own hover card (`components/card-tip.tsx`, 
 `lib/work.ts`'s `holdTip` is what decides the text, and it is null when the line has no reason, so an older card's
 date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
 `holdTip` is the reason hovering it shows.
+
+## The Jog and GitHub limits panel (collector#186)
+
+The Dashboard's "Jog and GitHub limits" panel shows the two limits the droids run on: Jog's runner minutes this month
+and GitHub's GraphQL limit (used, of the limit, and the reset, red at 90% used), the same stats as on the APIs page.
+
+On 2026-11-16 a triage run used up the GraphQL limit while the gauge read about 1,400 of 5,000: GitHub's secondary
+limit (too many calls in a short time) is not in `gh api rate_limit`. So `githubLimit` in `lib/server/machines.ts` also
+sends one small GraphQL call, `{ viewer { login } }`, at most once a minute (`graphqlProbe`, one try, 1 point). When
+GitHub refuses it with a rate-limit error (`isRateLimited`: "rate limit" or `RATE_LIMITED` in gh's error), the read
+carries `refused`, the epoch second of that refusal, also when `rate_limit` itself could not be read. The panel and the
+APIs page then say "GitHub is refusing calls" with that time, in red, whatever the count says. The next call that
+GitHub answers clears it. `tests/limits-panel.test.ts` holds the gauge, the 90% bar and the refusing state.
 
 ## The AI usage rows
 

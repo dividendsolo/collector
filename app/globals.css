@@ -2079,12 +2079,6 @@
       background: var(--amber-bg);
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .jump-flash,
-    tr.jump-flash td {
-      animation: none;
-    }
-  }
   /* A port the firewall opens on purpose (collector#65): reachable from the internet, but by a rule, so blue, not red. */
   .pill.net-firewalled {
     color: var(--blue-2);
@@ -2139,7 +2133,19 @@
     border: 1px solid var(--line-2);
     border-radius: var(--radius);
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
-    animation: toast-in 0.18s ease-out;
+    transition:
+      opacity 180ms var(--ease-out),
+      transform 180ms var(--ease-out);
+    @starting-style {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  .toast.leaving {
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition-duration: 150ms;
   }
   .toast.error {
     border-color: var(--red-line);
@@ -2180,15 +2186,14 @@
     font-size: 13px;
     overflow-wrap: anywhere;
   }
-  @keyframes toast-in {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
     .toast {
-      animation: none;
+      @starting-style {
+        transform: none;
+      }
+    }
+    .toast.leaving {
+      transform: none;
     }
   }
   #work-stats .stat {
