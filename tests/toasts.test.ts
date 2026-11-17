@@ -1,5 +1,16 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { githubToasts, internetPortCount, networkToasts, serviceToasts, sortToasts, sshToasts } from "@/lib/toasts";
+import {
+  githubToasts,
+  internetPortCount,
+  networkToasts,
+  serviceToasts,
+  sortToasts,
+  sshToasts,
+  type Toast,
+  withLeaving,
+} from "@/lib/toasts";
 
 /**
  * The toasts (collector#67). James, 2026-11-06: "a little toast notification that will pop up if one of our services
@@ -178,5 +189,54 @@ describe("githubToasts", () => {
     expect(githubToasts(limit(4500, 0), at)).toEqual([]);
     expect(githubToasts({ error: "gh failed" }, at)).toEqual([]);
     expect(githubToasts(undefined, at)).toEqual([]);
+  });
+});
+
+const toast = (key: string): Toast => ({ key, level: "warn", title: key, text: "", href: "#/", state: key });
+
+describe("a toast that goes away", () => {
+  it("stays in its place, marked leaving, when the poll drops it", () => {
+    const prev = withLeaving([], [toast("a"), toast("b"), toast("c")]);
+    expect(withLeaving(prev, [toast("a"), toast("c")]).map((t) => [t.key, t.leaving])).toEqual([
+      ["a", false],
+      ["b", true],
+      ["c", false],
+    ]);
+  });
+
+  it("keeps the first one first when it leaves", () => {
+    const prev = withLeaving([], [toast("a"), toast("b")]);
+    expect(withLeaving(prev, [toast("b")]).map((t) => [t.key, t.leaving])).toEqual([
+      ["a", true],
+      ["b", false],
+    ]);
+  });
+
+  it("is no longer leaving when it comes back mid-exit", () => {
+    const leaving = withLeaving(withLeaving([], [toast("a")]), []);
+    expect(leaving.map((t) => t.leaving)).toEqual([true]);
+    expect(withLeaving(leaving, [toast("a")]).map((t) => t.leaving)).toEqual([false]);
+  });
+
+  it("fades and sinks back down through the bottom edge, with a transition a returning toast retargets", () => {
+    const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
+    expect(css).toMatch(/--ease-out:\s*cubic-bezier\(0\.23, 1, 0\.32, 1\)/);
+    expect(css).toMatch(
+      /\.toast \{[^}]*transition:\s*opacity [^;]*var\(--ease-out\),\s*transform [^;]*var\(--ease-out\)/,
+    );
+    expect(css).toMatch(
+      /\.toast\.leaving \{[^}]*opacity:\s*0;[^}]*transform:\s*translateY\(8px\);[^}]*pointer-events:\s*none/,
+    );
+    expect(css).toMatch(/\.toast\.leaving \{[^}]*transition-duration:\s*150ms/);
+    expect(css).not.toMatch(/animation:\s*toast-in/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)[\s\S]*?\.toast\.leaving \{\s*transform:\s*none/);
+  });
+
+  it("is dismissed when its fade ends, not on the click", () => {
+    const src = readFileSync(path.join(process.cwd(), "components", "toasts.tsx"), "utf8");
+    expect(src).not.toMatch(/onClick=\{\(\) => dismiss\(/);
+    expect(src).toMatch(/onTransitionEnd/);
+    expect(src).toMatch(/propertyName [!=]== "opacity"/);
+    expect(src).toMatch(/" leaving"/);
   });
 });

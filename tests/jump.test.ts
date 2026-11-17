@@ -1,6 +1,27 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { jumpHref, jumpTargetOf, withoutJump } from "@/lib/jump";
 import { checkToasts, githubToasts, serviceToasts } from "@/lib/toasts";
+
+const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
+const src = (f: string) => readFileSync(path.join(process.cwd(), "components", f), "utf8");
+
+function reducedMotionBlocks(source: string): string[] {
+  const needle = "@media (prefers-reduced-motion: reduce)";
+  const blocks: string[] = [];
+  for (let at = source.indexOf(needle); at > -1; at = source.indexOf(needle, at + 1)) {
+    let depth = 0;
+    for (let i = source.indexOf("{", at); i < source.length; i++) {
+      if (source[i] === "{") depth++;
+      else if (source[i] === "}" && --depth === 0) {
+        blocks.push(source.slice(at, i + 1));
+        break;
+      }
+    }
+  }
+  return blocks;
+}
 
 /**
  * Every toast links to its page and the element on it (James, 2026-11-06: "they need to go to the page that it's
@@ -38,5 +59,21 @@ describe("the toast links", () => {
       "ports:vps:internet",
       "github-limit",
     ]);
+  });
+});
+
+describe("the jump flash under reduced motion", () => {
+  it("flashes the target for every user", () => {
+    expect(css).toMatch(/\.jump-flash,\s*\n?\s*tr\.jump-flash td \{\s*\n?\s*animation: jump-flash 1\.6s ease-out;/);
+  });
+
+  it("keeps the flash when a user asks for less motion, since it is colour and not movement", () => {
+    const flash = reducedMotionBlocks(css).filter((b) => b.includes("jump-flash"));
+    expect(flash.join("\n")).not.toMatch(/animation:\s*none/);
+  });
+
+  it("still drops the glide, which is the movement", () => {
+    expect(reducedMotionBlocks(css).join("\n")).toMatch(/html \{\s*scroll-behavior:\s*auto;/);
+    expect(src("jump.tsx")).toMatch(/behavior: still \? "auto" : "smooth"/);
   });
 });

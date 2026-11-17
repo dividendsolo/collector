@@ -157,6 +157,18 @@ export function checkToasts(machines: { name: string; checks: Check[] }[]): Toas
   return out;
 }
 
+export type Shown = Toast & { leaving: boolean };
+
+export function withLeaving(prev: Shown[], next: Toast[]): Shown[] {
+  const out: Shown[] = next.map((t) => ({ ...t, leaving: false }));
+  prev.forEach((p, i) => {
+    if (out.some((t) => t.key === p.key)) return;
+    const before = i === 0 ? -1 : out.findIndex((t) => t.key === prev[i - 1].key);
+    out.splice(before + 1, 0, { ...p, leaving: true });
+  });
+  return out;
+}
+
 /** The toasts to show: the dismissed amber ones left out while their state is the same. A dismissal holds for that
  * state only, so a new value (another app on the allow list) shows again. */
 export function visibleToasts(all: Toast[], dismissed: Record<string, string>): Toast[] {
