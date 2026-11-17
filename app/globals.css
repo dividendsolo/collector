@@ -799,7 +799,13 @@
     text-align: left;
     box-shadow: 0 10px 24px oklch(0 0 0 / 0.45);
     pointer-events: none;
-    animation: flow-tip-in 0.12s ease;
+    animation: flow-tip-in 125ms var(--ease-out);
+  }
+  .flow-tip[data-side="top"] {
+    transform-origin: bottom center;
+  }
+  .flow-tip[data-side="bottom"] {
+    transform-origin: top center;
   }
   .flow-tip.tone-go {
     --tip-bg: var(--green-bg);
@@ -819,6 +825,20 @@
   @keyframes flow-tip-in {
     from {
       opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+  @keyframes flow-tip-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  .flow-canvas[data-warm] .flow-tip {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flow-tip {
+      animation-name: flow-tip-fade;
     }
   }
   /* The dot a card starts from. */
