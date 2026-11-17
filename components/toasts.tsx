@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { type TransitionEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { securityChecks } from "@/lib/checks";
 import {
   aiToasts,
@@ -8,9 +8,12 @@ import {
   forgetFixed,
   githubToasts,
   noticeToasts,
+  type Shown,
   serviceToasts,
   sortToasts,
+  type Toast,
   visibleToasts,
+  withLeaving,
 } from "@/lib/toasts";
 import { useAcks } from "./acks";
 import { useAi } from "./ai";
@@ -87,14 +90,30 @@ export function Toasts() {
     }
   }, [state, machines, gone]);
   const shown = useMemo(() => sortToasts(visibleToasts(all, gone)), [all, gone]);
-  if (!shown.length) return null;
+  const [last, setLast] = useState<Toast[]>([]);
+  const [rendered, setRendered] = useState<Shown[]>([]);
+  const [dismissing, setDismissing] = useState<ReadonlySet<string>>(new Set());
+  if (last !== shown) {
+    setLast(shown);
+    setRendered(withLeaving(rendered, shown));
+  }
+  const onFaded = (t: Shown) => (e: TransitionEvent) => {
+    if (e.target !== e.currentTarget || e.propertyName !== "opacity") return;
+    if (dismissing.has(t.key)) {
+      setDismissing((d) => new Set([...d].filter((k) => k !== t.key)));
+      dismiss(t.key, t.state);
+    } else if (!t.leaving) return;
+    setRendered((r) => r.filter((x) => x.key !== t.key));
+  };
+  if (!rendered.length) return null;
   return (
     <section className="toasts" aria-live="polite" aria-label="Alerts">
-      {shown.map((t) => (
+      {rendered.map((t) => (
         <div
           key={t.key}
-          className={`toast ${t.level}${t.noDot ? " no-dot" : ""}`}
+          className={`toast ${t.level}${t.noDot ? " no-dot" : ""}${t.leaving || dismissing.has(t.key) ? " leaving" : ""}`}
           role={t.level === "error" ? "alert" : "status"}
+          onTransitionEnd={onFaded(t)}
         >
           {t.noDot ? null : <span className="toast-dot" />}
           <div className="toast-body">
@@ -109,7 +128,7 @@ export function Toasts() {
             </a>
           ) : null}
           {t.dismissible ? (
-            <button className="btn ghost" type="button" onClick={() => dismiss(t.key, t.state)}>
+            <button className="btn ghost" type="button" onClick={() => setDismissing((d) => new Set(d).add(t.key))}>
               Dismiss
             </button>
           ) : null}
