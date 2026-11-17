@@ -59,6 +59,9 @@ def main():
             ports=case.get("ports", {}),
             children=case.get("children", {}),
         )
+    elif fn == "steps":
+        out = list(collect.step_rows({tuple(r["key"]): r["row"] for r in case.get("found", [])}, case["steps"],
+                                     case["now"]).values())
     elif fn == "sessions":
         out = collect.tool_sessions(case["ps"], skip=set(case.get("skip", [])), parents=case.get("parents", {}))
     elif fn == "droid":

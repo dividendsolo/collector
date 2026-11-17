@@ -1,4 +1,4 @@
-import { duration, prio } from "./format";
+import { duration, prio, runDoing } from "./format";
 import { AGENT_STACK_STATUSES } from "./statuses";
 
 /** One live agent or script run, as the machines report it. */
@@ -20,6 +20,7 @@ export interface WorkRun {
   tmux?: boolean | null;
   /** The TCP port a leftover process listens on, when the machine shows one (`ss` on Linux, `lsof` on a Mac). */
   port?: number | null;
+  wait?: { on: string; why?: string | null; until: number } | null;
 }
 
 /** The lab droid's own run (agent-stack#111): a headless Claude Code process under its own `lab` user on ezio,
@@ -67,6 +68,22 @@ export const runMachine = (r: { kind?: string | null; machine?: string | null })
 
 /** The Running for cell of a run: `interactive` for a session — `tmux` when it runs inside tmux — its own length
  * for everything else. */
+export function runWait(r: Pick<WorkRun, "wait">, timeZone?: string): string {
+  if (!r.wait) return "";
+  const at = new Date(r.wait.until * 1000).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone,
+  });
+  return `waiting on ${r.wait.on}${r.wait.why ? ` (${r.wait.why})` : ""}, retry at ${at}`;
+}
+
+export const runningTip = (runs: WorkRun[], timeZone?: string): [string, string][] =>
+  runs.map((r) => [
+    r.card == null ? (r.repo ?? "no repo") : `${labRun(r) ? LAB.repo : r.repo}#${r.card}`,
+    `${runName(r)} on ${runMachine(r)}, ${runTime(r)}, ${runWait(r, timeZone) || runDoing(r)}`,
+  ]);
+
 export const runTime = (r: { kind?: string | null; seconds: number; tmux?: boolean | null }) =>
   isSession(r) ? (r.tmux ? SESSION_TMUX : SESSION_TIME) : duration(r.seconds);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const TIP = ".card-tip, [data-tip]";
 type Fact = [label: string, value: string];
@@ -28,17 +28,19 @@ export function CardTip() {
   const forKey = useRef<string | null>(null);
   const anchor = useRef<HTMLElement | null>(null);
 
+  useLayoutEffect(() => {
+    const el = anchor.current;
+    const t = tip.current;
+    if (!body || !el || !t) return;
+    const r = el.getBoundingClientRect();
+    t.style.left = "0px";
+    const w = t.offsetWidth;
+    const h = t.offsetHeight;
+    t.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+    t.style.top = `${r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6}px`;
+  }, [body]);
+
   useEffect(() => {
-    const place = () => {
-      const el = anchor.current;
-      const t = tip.current;
-      if (!el || !t) return;
-      const r = el.getBoundingClientRect();
-      const w = t.offsetWidth;
-      const h = t.offsetHeight;
-      t.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
-      t.style.top = `${r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6}px`;
-    };
     const show = async (el: HTMLElement) => {
       const key =
         el.dataset.tip || el.dataset.tipFacts
@@ -59,7 +61,6 @@ export function CardTip() {
           },
           loading: false,
         });
-        requestAnimationFrame(place);
         return;
       }
       if (!cache.has(key))
@@ -72,12 +73,10 @@ export function CardTip() {
             .catch(() => null),
         );
       setBody({ key, loading: true });
-      requestAnimationFrame(place);
       const c = await cache.get(key);
       if (forKey.current !== key) return;
       if (!c) cache.delete(key); // try again on the next hover
       setBody({ key, card: c, loading: false });
-      requestAnimationFrame(place);
     };
     const hide = () => {
       forKey.current = null;
@@ -128,8 +127,8 @@ export function CardTip() {
           {body.card.text ? <span>{body.card.text}</span> : null}
           {body.card.facts?.length ? (
             <div className="tip-facts">
-              {body.card.facts.map(([label, value]) => (
-                <div key={label}>
+              {body.card.facts.map(([label, value], i) => (
+                <div key={`${i}-${label}`}>
                   <span className="tip-label">{label}:</span> <span className="tip-value">{value}</span>
                 </div>
               ))}

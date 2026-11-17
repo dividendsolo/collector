@@ -13,7 +13,9 @@ import {
   labRun,
   runMachine,
   runName,
+  runningTip,
   runTime,
+  runWait,
   type Staleness,
   staleness,
   type WorkRow,
@@ -32,6 +34,13 @@ export function useRunning(): Run[] | null {
     .flatMap((m: any) => (m.running || []).map((r: any) => ({ ...r, machine: m.name })))
     .sort((a: Run, b: Run) => b.seconds - a.seconds);
 }
+
+export const runningTipProps = (runs: Run[] | null): Record<string, string> =>
+  runs?.length
+    ? { "data-tip": "", "data-tip-title": "Running now", "data-tip-facts": JSON.stringify(runningTip(runs)) }
+    : {};
+
+export const pillClass = (r: Run) => (labRun(r) ? LAB.marker : r.wait ? "waiting" : r.type);
 
 export const ModelCell = ({ model, provider }: { model?: string; provider?: string }) =>
   model ? (
@@ -55,7 +64,9 @@ export function RunningNow() {
   return (
     <section className="panel">
       <PanelHead icon="play" title="Running now">
-        <span className="count">{running?.length ?? 0}</span>
+        <span className="count" {...runningTipProps(running)} tabIndex={running?.length ? 0 : undefined}>
+          {running?.length ?? 0}
+        </span>
       </PanelHead>
       <div className="wrap">
         <table>
@@ -80,7 +91,7 @@ export function RunningNow() {
                 return (
                   <tr key={`${r.machine}-${r.repo}-${r.card}-${i}`}>
                     <td>
-                      <span className={`pill ${lab ? LAB.marker : r.type}`}>
+                      <span className={`pill ${pillClass(r)}`}>
                         <Icon name={r.type === "agent" ? "bot" : "term"} />
                         {r.type}
                       </span>
@@ -90,7 +101,7 @@ export function RunningNow() {
                       <ModelCell model={r.model} provider={r.provider} />
                     </td>
                     <td>
-                      {runDoing(r)}
+                      {runWait(r) || runDoing(r)}
                       {r.feature ? (
                         <>
                           {" "}
@@ -157,7 +168,7 @@ function StateCell({ row }: { row: WorkRow }) {
   return (
     <td className="status">
       {row.run ? (
-        <span className={`pill ${labRun(row.run) ? LAB.marker : row.run.type}`}>
+        <span className={`pill ${pillClass(row.run)}`}>
           <Icon name={row.run.type === "agent" ? "bot" : "term"} />
           {row.run.type}
         </span>
@@ -272,7 +283,7 @@ export function CurrentWork() {
                     <td>
                       {r ? (
                         <>
-                          {runDoing(r)}
+                          {runWait(r) || runDoing(r)}
                           {r.feature ? (
                             <>
                               {" "}

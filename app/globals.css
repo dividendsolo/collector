@@ -307,6 +307,20 @@
     background: var(--blue);
     box-shadow: 0 0 6px var(--blue);
   }
+  .rail .tag.wait {
+    color: var(--amber);
+  }
+  .rail a.item:has(.tag.wait)::after {
+    content: "";
+    position: absolute;
+    left: 21px;
+    top: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+  }
   .page {
     display: grid;
     gap: 20px;
@@ -1538,6 +1552,11 @@
     white-space: normal;
     pointer-events: none;
   }
+  @media (max-width: 496px) {
+    #card-tip {
+      max-width: calc(100vw - 16px);
+    }
+  }
   #card-tip[hidden] {
     display: none;
   } /* display: grid above would beat the hidden attribute */
@@ -1927,6 +1946,11 @@
   .pill.lab {
     background: var(--violet-bg);
     border-color: var(--violet-line);
+  }
+  .pill.waiting {
+    color: var(--amber);
+    background: var(--amber-bg);
+    border-color: var(--amber-line);
   }
   /* A process left in a card's worktree: nothing is working the card, so it gets its own dashed badge in the colour
      that asks for a look, instead of passing as the work script's own work (collector#32). */
