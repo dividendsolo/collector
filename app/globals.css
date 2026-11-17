@@ -167,9 +167,6 @@
     overflow: hidden;
     border-right: 1px solid var(--line);
     background: var(--bg);
-    transition:
-      width 0.18s ease,
-      box-shadow 0.18s ease;
   }
   .rail:hover,
   .rail:focus-within {
@@ -222,7 +219,6 @@
   .rail .label,
   .rail .tag {
     opacity: 0;
-    transition: opacity 0.12s ease;
   }
   .rail:hover .label,
   .rail:hover .tag,
@@ -265,7 +261,6 @@
     border-radius: 50%;
     background: var(--red);
     box-shadow: 0 0 6px var(--red);
-    transition: opacity 0.12s ease;
   }
   /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
   .rail a.item:has(.tag.inbox-dot)::after {
@@ -278,7 +273,6 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 6px var(--blue);
-    transition: opacity 0.12s ease;
   }
   .rail:hover a.item::after,
   .rail:focus-within a.item::after {
