@@ -25,16 +25,17 @@ describe("the sidebar rail snaps (collector#163)", () => {
   });
 
   it("keeps the end states: the open rail is 200px wide plus the left safe-area inset, with its shadow", () => {
-    const open = rule(".rail:hover, .rail:focus-within");
-    expect(open).toMatch(/width:\s*calc\(200px \+ env\(safe-area-inset-left, 0px\)\)/);
-    expect(open).toMatch(/box-shadow:/);
+    for (const open of [rule(".rail:has(:focus-visible)"), rule(".rail:hover")]) {
+      expect(open).toMatch(/width:\s*calc\(200px \+ env\(safe-area-inset-left, 0px\)\)/);
+      expect(open).toMatch(/box-shadow:/);
+    }
   });
 
   it("keeps the labels and the collapsed dots revealing on hover and on Tab", () => {
-    expect(rule(".rail:hover .label, .rail:hover .tag, .rail:focus-within .label, .rail:focus-within .tag")).toMatch(
-      /opacity:\s*1/,
-    );
-    expect(rule(".rail:hover a.item::after, .rail:focus-within a.item::after")).toMatch(/opacity:\s*0/);
+    expect(rule(".rail:has(:focus-visible) .label, .rail:has(:focus-visible) .tag")).toMatch(/opacity:\s*1/);
+    expect(rule(".rail:hover .label, .rail:hover .tag")).toMatch(/opacity:\s*1/);
+    expect(rule(".rail:has(:focus-visible) a.item::after")).toMatch(/opacity:\s*0/);
+    expect(rule(".rail:hover a.item::after")).toMatch(/opacity:\s*0/);
     expect(rule(".rail a.item:has(.tag.hot)::after")).toMatch(/background:\s*var\(--red\)/);
     expect(rule(".rail a.item:has(.tag.inbox-dot)::after")).toMatch(/background:\s*var\(--blue\)/);
   });

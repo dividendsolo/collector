@@ -823,6 +823,17 @@ is that folder, worked the way an email inbox works.
   briefs: a line break inside a paragraph or a list item is drawn as a line break (the briefs write one fact per line),
   and a list nested inside an item is read as a list of its own.
 
+## The rail opens for a pointer that hovers, or for the keyboard (collector#165)
+
+Navigation is by hash (`#/cron`), so a tap on a sidebar icon never reloads the page, and a phone left the rail open
+at 200px with its `8px 0 24px` shadow over the content: the tap's own faked `:hover` held it there, and on Android the
+focus it left on the link matched `.rail:focus-within` until the user tapped somewhere else. Touch has no hover, so
+every one of the rail's hover styles sits in `@media (hover: hover) and (pointer: fine)`, and the keyboard's own case
+is `.rail:has(:focus-visible)`, which a tap's focus never matches. `tests/rail-hover.test.ts` holds both rules and the
+absence of `.rail:focus-within`. The open rail is still 200px plus the left safe-area inset (collector#177), with
+its shadow, and it still snaps with no transition (collector#163). A pressed item keeps its ungated `:active` state
+(collector#170).
+
 ## Layout
 
 - `lib/server/`: every reader (machines, board, AI, vendors, domains, projects, revenue, DataFast) and its cache.
