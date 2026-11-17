@@ -518,6 +518,13 @@
     background: var(--bg);
     color: var(--text);
   }
+  @media (pointer: coarse) {
+    .fields input,
+    .fields select,
+    .fields textarea {
+      font-size: 16px;
+    }
+  }
   .fields textarea {
     height: 52px;
     padding: 6px 10px;
