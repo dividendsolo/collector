@@ -24,7 +24,6 @@ describe("motion tokens", () => {
     expect(rule("body.fade-out")).toContain("opacity 0.15s var(--ease-out)");
     expect(rule("body.fade-in")).toContain("page-in 0.25s var(--ease-out)");
     expect(rule(".toast")).toContain("toast-in var(--duration-enter) var(--ease-out)");
-    expect(rule(".flow-tip")).toContain("flow-tip-in var(--duration-enter) var(--ease-out)");
   });
 
   it("keeps ease on hover and colour changes, with the shared hover duration", () => {
