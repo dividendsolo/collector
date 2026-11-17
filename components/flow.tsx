@@ -338,10 +338,10 @@ export function Drawing({
       requestAnimationFrame(() =>
         document
           .querySelector(`[data-tip="${CSS.escape(n.id)}"]`)
-          ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }),
+          ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: still ? "auto" : "smooth" }),
       );
     },
-    [setHover],
+    [setHover, still],
   );
   const highlight = useMemo<Highlight>(() => ({ hover, setHover, still, trail }), [hover, setHover, still, trail]);
 
