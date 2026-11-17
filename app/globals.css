@@ -69,6 +69,7 @@
     --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --sidebar: 48px;
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     color-scheme: dark;
@@ -167,9 +168,6 @@
     overflow: hidden;
     border-right: 1px solid var(--line);
     background: var(--bg);
-    transition:
-      width 0.18s ease,
-      box-shadow 0.18s ease;
   }
   .rail:hover,
   .rail:focus-within {
@@ -222,7 +220,6 @@
   .rail .label,
   .rail .tag {
     opacity: 0;
-    transition: opacity 0.12s ease;
   }
   .rail:hover .label,
   .rail:hover .tag,
@@ -265,7 +262,6 @@
     border-radius: 50%;
     background: var(--red);
     box-shadow: 0 0 6px var(--red);
-    transition: opacity 0.12s ease;
   }
   /* Briefs waiting in the inbox: the same dot in blue, since a brief to read is not a fault (James, 2026-11-10). */
   .rail a.item:has(.tag.inbox-dot)::after {
@@ -278,7 +274,6 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 6px var(--blue);
-    transition: opacity 0.12s ease;
   }
   .rail:hover a.item::after,
   .rail:focus-within a.item::after {
@@ -1032,10 +1027,9 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 8px var(--blue);
-    animation: pulse 2s ease-in-out infinite;
   }
   .live.busy .pulse {
-    animation-duration: 0.6s;
+    animation: pulse 0.6s ease-in-out infinite;
   }
   .live.down .pulse {
     background: var(--red);
@@ -1091,7 +1085,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pulse {
+    .pulse,
+    .live.busy .pulse {
       animation: none;
     }
   }
@@ -1345,6 +1340,20 @@
     margin: 8px 0 0;
     border: 0;
     border-top: 1px solid var(--line);
+    view-transition-name: acked-rule;
+  }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-in-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation-name: none;
+    }
   }
   /* The open row just above the line drops its own border, so the line reads as one break, not a double rule. */
   .alert:has(+ .acked-rule) {
