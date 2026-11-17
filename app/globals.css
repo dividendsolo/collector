@@ -149,7 +149,7 @@
   /* Supabase-style rail: icons only; hovering the rail widens it over the page and shows the labels. */
   .sidebar {
     flex: none;
-    width: var(--sidebar);
+    width: calc(var(--sidebar) + env(safe-area-inset-left, 0px));
     position: sticky;
     top: 0;
     height: 100dvh;
@@ -158,7 +158,7 @@
   .rail {
     position: absolute;
     inset: 0 auto 0 0;
-    width: var(--sidebar);
+    width: calc(var(--sidebar) + env(safe-area-inset-left, 0px));
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -174,16 +174,20 @@
   }
   .rail:hover,
   .rail:focus-within {
-    width: 200px;
+    width: calc(200px + env(safe-area-inset-left, 0px));
     box-shadow: 8px 0 24px oklch(0 0 0 / 0.45);
   }
   .rail .home {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 48px;
+    height: calc(48px + env(safe-area-inset-top, 0px));
     padding: 0 12px;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
     margin: 0 -8px 8px;
+    margin-left: calc(-8px - env(safe-area-inset-left, 0px));
     border-bottom: 1px solid var(--line);
     color: var(--text);
     text-decoration: none;

@@ -35,6 +35,22 @@ describe("the page letterboxes inside the safe area instead of painting edge to 
     expect(rail).toMatch(/padding-bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\)/);
   });
 
+  it("widens the rail and its column by the left inset, so the padding past the notch keeps every icon inside", () => {
+    const wide = /width:\s*calc\(var\(--sidebar\) \+ env\(safe-area-inset-left, 0px\)\)/;
+    expect(rule(".sidebar")).toMatch(wide);
+    expect(rule(".rail")).toMatch(wide);
+    expect(rule(".rail:focus-within")).toMatch(/width:\s*calc\(200px \+ env\(safe-area-inset-left, 0px\)\)/);
+  });
+
+  it("grows the rail's head by the top inset, so the logo clears the status bar and its line meets the top bar's", () => {
+    const home = rule(".rail .home");
+    expect(home).toMatch(/height:\s*calc\(48px \+ env\(safe-area-inset-top, 0px\)\)/);
+    expect(home).toMatch(/padding-top:\s*env\(safe-area-inset-top, 0px\)/);
+    expect(home).toMatch(/flex:\s*none/);
+    expect(home).toMatch(/margin-left:\s*calc\(-8px - env\(safe-area-inset-left, 0px\)\)/);
+    expect(home).toMatch(/padding-left:\s*calc\(12px \+ env\(safe-area-inset-left, 0px\)\)/);
+  });
+
   it("lifts the toasts past the home indicator and the inset on the right", () => {
     const toasts = rule(".toasts");
     expect(toasts).toMatch(/bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\)/);
