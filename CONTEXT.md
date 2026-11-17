@@ -265,6 +265,12 @@ once, and `.flow-canvas` in `app/globals.css` restates the page's own tokens ove
   hover (or a tap, on a touch screen) above or below the box (`tipAbove`), running toward the middle from the outer
   columns (`tipAlign`), so the canvas never clips one. Each is a React Flow `NodeToolbar`, drawn outside the zoomed
   viewport, so it reads at 11px at any zoom: inside the node it shrank with the canvas to 3.6px text on a phone.
+  The entrance (collector#153) is Emil Kowalski's tooltip rule: 125ms on the page's own `--ease-out` curve, from
+  `scale(0.97)` and no opacity, growing out of the box it belongs to (`data-side`, `top`/`bottom`, its
+  `transform-origin` the tip's own bottom or top edge). Once one tooltip of a group is open the next ones appear at
+  once: `tipWarm` in `lib/flow.ts` (300ms, `FLOW_TIP_WARM_MS`) marks a tip entered right after the last one closed
+  warm, and a warm canvas (`data-warm`) turns the entrance off — the first tooltip after the pointer arrives from
+  outside the drawing still grows in. With `prefers-reduced-motion` the scale goes and the 125ms fade stays.
 - **Light pulses**: every path carries three dots moved by SVG `animateMotion` along the very curve they travel
   (`pulseBegins` spreads them so one is always in flight), in the status's own colour, brightest down `MAIN_PATH`,
   with an arrowhead per path saying which way a card moves; a status glows as a pulse lands on it.
