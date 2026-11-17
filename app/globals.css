@@ -406,8 +406,10 @@
     background: var(--panel-2);
     color: var(--text);
   }
-  .btn:hover:not(:disabled) {
-    background: var(--hover);
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover:not(:disabled) {
+      background: var(--hover);
+    }
   }
   /* A button that cannot be clicked does not look or feel clickable (James, 2026-11-12: "it's still clickable and
      it shouldn't be while it's doing a loading thing"). */
@@ -426,8 +428,10 @@
     border-color: var(--red-line);
     color: var(--red);
   }
-  .btn.danger:hover {
-    background: oklch(0.55 0.14 25 / 0.2);
+  @media (hover: hover) and (pointer: fine) {
+    .btn.danger:hover {
+      background: oklch(0.55 0.14 25 / 0.2);
+    }
   }
   .btn.primary {
     background: var(--blue-bg);
@@ -582,9 +586,11 @@
     color: var(--muted);
     cursor: pointer;
   }
-  .blur-toggle:hover {
-    color: var(--text);
-    background: var(--hover);
+  @media (hover: hover) and (pointer: fine) {
+    .blur-toggle:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
   }
   .blur-toggle[aria-pressed="true"] {
     color: var(--blue-2);
@@ -2158,7 +2164,12 @@
     opacity: 0.7;
     cursor: pointer;
   }
-  .release-btn:hover,
+  @media (hover: hover) and (pointer: fine) {
+    .release-btn:hover {
+      opacity: 1;
+      background: color-mix(in srgb, currentColor 14%, transparent);
+    }
+  }
   .release-btn:focus-visible {
     opacity: 1;
     background: color-mix(in srgb, currentColor 14%, transparent);
@@ -2220,8 +2231,10 @@
     background: transparent;
     color: var(--muted);
   }
-  .seg button:hover {
-    color: var(--text);
+  @media (hover: hover) and (pointer: fine) {
+    .seg button:hover {
+      color: var(--text);
+    }
   }
   .seg button[aria-pressed="true"] {
     background: var(--hover);
