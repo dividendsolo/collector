@@ -69,6 +69,7 @@
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
     --sidebar: 48px;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     color-scheme: dark;
     --topbar: oklch(0.19 0.0025 var(--hue) / 0.85);
   }
@@ -405,9 +406,25 @@
     border: 1px solid var(--line-2);
     background: var(--panel-2);
     color: var(--text);
+    transition: transform 160ms var(--ease-out);
   }
   .btn:hover:not(:disabled) {
     background: var(--hover);
+  }
+  .btn:active:not(:disabled),
+  .seg button:active,
+  .blur-toggle:active,
+  .release-btn:active:not(:disabled) {
+    transform: scale(0.97);
+    background: var(--hover);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn:active:not(:disabled),
+    .seg button:active,
+    .blur-toggle:active,
+    .release-btn:active:not(:disabled) {
+      transform: scale(0.99);
+    }
   }
   /* A button that cannot be clicked does not look or feel clickable (James, 2026-11-12: "it's still clickable and
      it shouldn't be while it's doing a loading thing"). */
@@ -581,6 +598,7 @@
     background: transparent;
     color: var(--muted);
     cursor: pointer;
+    transition: transform 160ms var(--ease-out);
   }
   .blur-toggle:hover {
     color: var(--text);
@@ -2151,6 +2169,7 @@
     color: inherit;
     opacity: 0.7;
     cursor: pointer;
+    transition: transform 160ms var(--ease-out);
   }
   .release-btn:hover,
   .release-btn:focus-visible {
@@ -2213,6 +2232,7 @@
     cursor: pointer;
     background: transparent;
     color: var(--muted);
+    transition: transform 160ms var(--ease-out);
   }
   .seg button:hover {
     color: var(--text);
