@@ -38,7 +38,9 @@ describe("the rail opens for a mouse and for the keyboard, never for a tap", () 
   });
 
   it("opens the rail on the keyboard's own focus", () => {
-    expect(gated.rest).toMatch(/\.rail:has\(:focus-visible\)\s*\{[^}]*width:\s*200px/);
+    expect(gated.rest).toMatch(
+      /\.rail:has\(:focus-visible\)\s*\{[^}]*width:\s*calc\(200px \+ env\(safe-area-inset-left, 0px\)\)/,
+    );
     expect(gated.rest).toMatch(/\.rail:has\(:focus-visible\)\s+\.label/);
     expect(gated.rest).toMatch(/\.rail:has\(:focus-visible\)\s+a\.item::after/);
   });
