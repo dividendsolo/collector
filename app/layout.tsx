@@ -5,7 +5,12 @@ import "@xyflow/react/dist/style.css";
 
 export const metadata: Metadata = { title: "Collector" };
 
-export const viewport: Viewport = { themeColor: "#131415", colorScheme: "dark" };
+export const viewport: Viewport = {
+  themeColor: "#131415",
+  colorScheme: "dark",
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
 
 /** Fonts come from Google Fonts with the old page's exact link: the full files carry the arrows (← →) the page uses,
  * which next/font's latin subset leaves to a fallback font. */
