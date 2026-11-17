@@ -265,6 +265,12 @@ once, and `.flow-canvas` in `app/globals.css` restates the page's own tokens ove
   hover (or a tap, on a touch screen) above or below the box (`tipAbove`), running toward the middle from the outer
   columns (`tipAlign`), so the canvas never clips one. Each is a React Flow `NodeToolbar`, drawn outside the zoomed
   viewport, so it reads at 11px at any zoom: inside the node it shrank with the canvas to 3.6px text on a phone.
+  The entrance (collector#153) is Emil Kowalski's tooltip rule: 125ms on the page's own `--ease-out` curve, from
+  `scale(0.97)` and no opacity, growing out of the box it belongs to (`data-side`, `top`/`bottom`, its
+  `transform-origin` the tip's own bottom or top edge). Once one tooltip of a group is open the next ones appear at
+  once: `tipWarm` in `lib/flow.ts` (300ms, `FLOW_TIP_WARM_MS`) marks a tip entered right after the last one closed
+  warm, and a warm canvas (`data-warm`) turns the entrance off — the first tooltip after the pointer arrives from
+  outside the drawing still grows in. With `prefers-reduced-motion` the scale goes and the 125ms fade stays.
 - **Light pulses**: every path carries three dots moved by SVG `animateMotion` along the very curve they travel
   (`pulseBegins` spreads them so one is always in flight), in the status's own colour, brightest down `MAIN_PATH`,
   with an arrowhead per path saying which way a card moves; a status glows as a pulse lands on it.
@@ -710,6 +716,19 @@ reason, that date carries the page's own hover card (`components/card-tip.tsx`, 
 `lib/work.ts`'s `holdTip` is what decides the text, and it is null when the line has no reason, so an older card's
 date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
 `holdTip` is the reason hovering it shows.
+
+## The Jog and GitHub limits panel (collector#186)
+
+The Dashboard's "Jog and GitHub limits" panel shows the two limits the droids run on: Jog's runner minutes this month
+and GitHub's GraphQL limit (used, of the limit, and the reset, red at 90% used), the same stats as on the APIs page.
+
+On 2026-11-16 a triage run used up the GraphQL limit while the gauge read about 1,400 of 5,000: GitHub's secondary
+limit (too many calls in a short time) is not in `gh api rate_limit`. So `githubLimit` in `lib/server/machines.ts` also
+sends one small GraphQL call, `{ viewer { login } }`, at most once a minute (`graphqlProbe`, one try, 1 point). When
+GitHub refuses it with a rate-limit error (`isRateLimited`: "rate limit" or `RATE_LIMITED` in gh's error), the read
+carries `refused`, the epoch second of that refusal, also when `rate_limit` itself could not be read. The panel and the
+APIs page then say "GitHub is refusing calls" with that time, in red, whatever the count says. The next call that
+GitHub answers clears it. `tests/limits-panel.test.ts` holds the gauge, the 90% bar and the refusing state.
 
 ## The AI usage rows
 
