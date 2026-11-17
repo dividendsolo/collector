@@ -993,10 +993,9 @@
     border-radius: 50%;
     background: var(--blue);
     box-shadow: 0 0 8px var(--blue);
-    animation: pulse 2s ease-in-out infinite;
   }
   .live.busy .pulse {
-    animation-duration: 0.6s;
+    animation: pulse 0.6s ease-in-out infinite;
   }
   .live.down .pulse {
     background: var(--red);
@@ -1052,7 +1051,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pulse {
+    .pulse,
+    .live.busy .pulse {
       animation: none;
     }
   }
