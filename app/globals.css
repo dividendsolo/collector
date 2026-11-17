@@ -988,6 +988,19 @@
   ::view-transition-new(root) {
     animation: none;
   }
+  #waiting-panel .wrap.scroll {
+    view-transition-name: waiting-rows;
+    view-transition-group: contain;
+  }
+  #waiting-panel thead {
+    view-transition-name: waiting-head;
+  }
+  ::view-transition-group(waiting-rows) {
+    overflow: clip;
+  }
+  ::view-transition-group(waiting-head) {
+    z-index: 1;
+  }
   @media (prefers-reduced-motion: reduce) {
     ::view-transition-group(*) {
       animation: none;
