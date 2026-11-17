@@ -126,6 +126,7 @@ function Picker({ onClose }: { onClose: () => void }) {
             type="search"
             placeholder="Find a repo"
             aria-label="Find a repo"
+            enterKeyHint="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             ref={search}
