@@ -68,7 +68,9 @@
     --sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --sidebar: 48px;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     color-scheme: dark;
     --topbar: oklch(0.19 0.0025 var(--hue) / 0.85);
   }
@@ -143,7 +145,7 @@
 
   .app {
     display: flex;
-    min-height: 100vh;
+    min-height: 100dvh;
   }
   /* Supabase-style rail: icons only; hovering the rail widens it over the page and shows the labels. */
   .sidebar {
@@ -151,7 +153,7 @@
     width: var(--sidebar);
     position: sticky;
     top: 0;
-    height: 100vh;
+    height: 100dvh;
     z-index: 5;
   }
   .rail {
@@ -405,9 +407,25 @@
     border: 1px solid var(--line-2);
     background: var(--panel-2);
     color: var(--text);
+    transition: transform 160ms var(--ease-out);
   }
   .btn:hover:not(:disabled) {
     background: var(--hover);
+  }
+  .btn:active:not(:disabled),
+  .seg button:active,
+  .blur-toggle:active,
+  .release-btn:active:not(:disabled) {
+    transform: scale(0.97);
+    background: var(--hover);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn:active:not(:disabled),
+    .seg button:active,
+    .blur-toggle:active,
+    .release-btn:active:not(:disabled) {
+      transform: scale(0.99);
+    }
   }
   /* A button that cannot be clicked does not look or feel clickable (James, 2026-11-12: "it's still clickable and
      it shouldn't be while it's doing a loading thing"). */
@@ -581,6 +599,7 @@
     background: transparent;
     color: var(--muted);
     cursor: pointer;
+    transition: transform 160ms var(--ease-out);
   }
   .blur-toggle:hover {
     color: var(--text);
@@ -781,7 +800,13 @@
     text-align: left;
     box-shadow: 0 10px 24px oklch(0 0 0 / 0.45);
     pointer-events: none;
-    animation: flow-tip-in 0.12s ease;
+    animation: flow-tip-in 125ms var(--ease-out);
+  }
+  .flow-tip[data-side="top"] {
+    transform-origin: bottom center;
+  }
+  .flow-tip[data-side="bottom"] {
+    transform-origin: top center;
   }
   .flow-tip.tone-go {
     --tip-bg: var(--green-bg);
@@ -801,6 +826,20 @@
   @keyframes flow-tip-in {
     from {
       opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+  @keyframes flow-tip-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  .flow-canvas[data-warm] .flow-tip {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flow-tip {
+      animation-name: flow-tip-fade;
     }
   }
   /* The dot a card starts from. */
@@ -1306,6 +1345,20 @@
     margin: 8px 0 0;
     border: 0;
     border-top: 1px solid var(--line);
+    view-transition-name: acked-rule;
+  }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-in-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation-name: none;
+    }
   }
   /* The open row just above the line drops its own border, so the line reads as one break, not a double rule. */
   .alert:has(+ .acked-rule) {
@@ -2157,6 +2210,7 @@
     color: inherit;
     opacity: 0.7;
     cursor: pointer;
+    transition: transform 160ms var(--ease-out);
   }
   .release-btn:hover,
   .release-btn:focus-visible {
@@ -2219,6 +2273,7 @@
     cursor: pointer;
     background: transparent;
     color: var(--muted);
+    transition: transform 160ms var(--ease-out);
   }
   .seg button:hover {
     color: var(--text);
