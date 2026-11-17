@@ -10,7 +10,6 @@ const fetcher = async (url: string) => {
   return r.json();
 };
 
-/** One reader's answer, asked again once a minute (each reader has its own refresh rate on the server). */
 export function useApi<T = any>(url: string, every = 60_000) {
   return useSWR<T>(url, fetcher, { refreshInterval: every, revalidateOnFocus: false, dedupingInterval: 2_000 });
 }
@@ -26,8 +25,6 @@ export interface Live {
 const LiveContext = createContext<Live | null>(null);
 export const useLive = () => useContext(LiveContext) as Live;
 
-/** Reload on a new build with a short fade instead of a redraw in one frame (James, 2026-11-06: "it just redraws the
- * whole page, like in one instant"): the page fades out, reloads, and the new page fades in (`body.fade-in`). */
 function softReload() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return location.reload();
   sessionStorage.setItem("collector.fade-in", "1");
@@ -35,8 +32,6 @@ function softReload() {
   setTimeout(() => location.reload(), 160);
 }
 
-/** The main read every 15 seconds, the board pushed over server-sent events, and a reload
- * when the server runs a new build. */
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<any | null>(null);
   const [updated, setUpdated] = useState("Loading…");
@@ -52,7 +47,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setUpdated(`Updated ${new Date(d.at * 1000).toLocaleTimeString()}`);
       setLiveClass("live");
     } catch (e) {
-      // During an update the server is away on purpose: that is a restart, not an outage.
       setUpdated(downText(e));
       setLiveClass(updating() ? "live busy" : "live down");
     }
@@ -64,19 +58,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, [tick]);
 
-  // The board: pushed by the server within a second of each read that sees a change.
   useEffect(() => {
     const es = new EventSource("/api/events");
     es.addEventListener("board", (e) => {
       const v = JSON.parse((e as MessageEvent).data);
       setBoard({ tickets: v.tickets, work: v.work });
     });
-    // The server's SIGTERM: the reads that fail next are the restart onto a new build, not an outage.
     es.addEventListener("restarting", () => markUpdating());
     return () => es.close();
   }, []);
 
-  // The page a soft reload brought back fades in once.
   useEffect(() => {
     if (sessionStorage.getItem("collector.fade-in") !== "1") return;
     sessionStorage.removeItem("collector.fade-in");
@@ -86,7 +77,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, []);
 
-  // Hot reload: a new build on the server reloads the page.
   useEffect(() => {
     let seen: string | null = null;
     const t = setInterval(async () => {

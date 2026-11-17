@@ -2,15 +2,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * collector#139 (James, 2026-11-13): "the check in a needs-triage badge under Waiting on you is redundant now".
- * The waiting crew (agent-stack#261) already moves a complete needs-triage card to ready-for-agent, so the cards
- * left there need a real triage with James. A needs-triage badge starts the same interactive triage session the
- * Priority tasks Triage button starts, for any of the cards, not only when there is one; the other waiting lanes
- * (ready-for-human, needs-info, needs-manual-qa) keep the check that hands the card to the agents.
- *
- * The board and the fix read are mocked here: the page renders from its own reads, and no test opens a session.
- */
 const page = vi.hoisted(() => ({ board: null as any, fixes: null as any }));
 vi.mock("@/components/data", async () => {
   const actual = await vi.importActual<typeof import("@/components/data")>("@/components/data");
@@ -47,7 +38,7 @@ const { parseFixes } = await import("@/lib/server/debug-fix");
 
 const REPO = "dividendsolo/agent-stack";
 const card = (number: number, lane: string) => ({
-  repo: "agent-stack", // the board names the repo without its owner, as the Unblock 500 showed (2026-11-11)
+  repo: "agent-stack",
   number,
   title: `Card ${number}`,
   url: `https://github.com/${REPO}/issues/${number}`,
@@ -62,8 +53,6 @@ const boardOf = (tickets: any[]) => ({
   work: null,
 });
 
-/** One row of the rendered table, by the card it shows. The Card cell names the card (`agent-stack#1`) and opens
- * its journey in Collector (collector#146), so the row no longer carries the issue's GitHub URL. */
 const rowOf = (html: string, number: number) =>
   html.split("<tr").find((r) => r.includes(`agent-stack#${number}`)) ?? "";
 
@@ -81,7 +70,6 @@ describe("a needs-triage row's badge", () => {
     expect(triage).toContain('href="#i-split"');
     expect(triage).not.toContain("#i-check");
     expect(triage).toContain("needs-triage");
-    // The other waiting lane is untouched: the check that moves the card to ready-for-agent is still there.
     const other = rowOf(html, 3);
     expect(other).toContain("#i-check");
     expect(other).toContain('title="Ready for agent"');
@@ -103,7 +91,6 @@ describe("a needs-triage row's badge", () => {
     expect(other).toContain(">needs-triage<");
     expect(other).toContain('title="A triage session is open"');
     expect(other).toMatch(/<button[^>]*disabled/);
-    // The other lanes' checks are not held by a triage session.
     expect(rowOf(html, 3)).not.toMatch(/<button[^>]*disabled/);
   });
 
@@ -129,7 +116,6 @@ describe("the triage pane's card", () => {
         card: { repo: REPO, number: 1 },
       },
     });
-    // A pane opened before this change carries no name: the session still reads, its card unknown.
     expect(parseFixes("%9|triage|starting\n")).toEqual({
       triage: { pane: "%9", step: "triaging", state: "working" },
     });
@@ -142,7 +128,6 @@ describe("the triage pane's card", () => {
   });
 
   it("is asked for on every read of the open panes", async () => {
-    // The real read, not the route test's mock of it.
     const real = await vi.importActual<typeof import("@/lib/server/debug-fix")>("@/lib/server/debug-fix");
     const calls: string[][] = [];
     const run = async (cmd: string[]) => {
@@ -183,7 +168,6 @@ describe("POST /api/debug-fix with a triage card", () => {
     expect(api.opened).toHaveLength(1);
     expect(api.opened[0].key).toBe("triage");
     expect(api.opened[0].name).toBe("triage dividendsolo/agent-stack#2");
-    // The same session the Priority tasks Triage button opens: the triage skill's own command, then the request.
     expect(api.opened[0].prompt.startsWith("/skill:triage ")).toBe(true);
     expect(api.opened[0].prompt).toContain("dividendsolo/agent-stack#2");
   });

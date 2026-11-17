@@ -9,7 +9,7 @@ import { run, runText } from "./run";
 import { check } from "./services";
 
 export const AI_LOW_USD = 5;
-export { AI_LOW_PERCENT } from "../format"; // under these, a provider goes to Needs attention
+export { AI_LOW_PERCENT } from "../format";
 
 import { AI_LOW_PERCENT, limitLow, resetText } from "../format";
 
@@ -23,19 +23,13 @@ export interface AiRow {
   detail?: string | null;
   note?: string;
   low?: boolean;
-  /** Nothing left to call: a window at 0%, or no Nous credit. Low is a warning; out stops the lanes. */
   out?: boolean;
   alert?: string;
-  /** Nous keep-going is off: past a plan limit Hermes waits for the reset and the top-up is not used. */
   waits?: boolean;
-  /** `limit`: a plan limit (a Nous gauge), not a balance. */
   windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string; limit?: boolean }[];
 }
 type Reading = Omit<AiRow, "provider" | "profiles" | "link" | "kind">;
 
-/** Nous credits and plan limits through Hermes's own portal client: the portal login lives in Hermes's auth.json.
- * `raw_account` is the `/api/oauth/account` payload itself, so it carries `usage_window` — the plan's day, week and
- * month limits, which the normalized dataclass drops (James, 2026-11-12). */
 const NOUS_SCRIPT = `
 import json, os, sys
 sys.path.insert(0, os.path.expanduser("~/.hermes/hermes-agent"))
@@ -60,7 +54,6 @@ const LINKS: Record<string, string> = {
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 
-/** "renews in 9 days (Oct 30)", in local time. */
 export function renewsText(iso: string | null | undefined, now = new Date()): string {
   const end = new Date(iso || "");
   if (Number.isNaN(end.getTime())) return "";
@@ -72,8 +65,6 @@ export function renewsText(iso: string | null | undefined, now = new Date()): st
 
 export const NOUS_TOPUP_USD = 25;
 
-/** James tops up Nous $25 at a time: the bar is the share of $25 used, and the text is the whole balance left
- * (James, 2026-11-12: "it should show how much is left of the $25"; a balance is never split into waiting top-ups). */
 export function nousTopup(left: number, size = NOUS_TOPUP_USD) {
   return {
     label: `Top-up ($${size})`,
@@ -83,7 +74,6 @@ export function nousTopup(left: number, size = NOUS_TOPUP_USD) {
   };
 }
 
-/** Why the Nous row is empty: a lost login needs James to sign in again, anything else is a read error. */
 export function nousNote(data: any, err?: string | null): string {
   if (data && data.logged_in === false) return "Nous signed out. Run: hermes auth add nous";
   return `Could not read the Nous portal: ${err || "no answer"}`;
@@ -96,8 +86,6 @@ async function nous(): Promise<Reading> {
   return nousReading(data);
 }
 
-/** One of the portal's usage gauges as a window. `used_bp` is basis points (6549 = 65.49%), and the portal shows the
- * whole percent below it, so 6549 reads 65% (James, 2026-11-12, the portal's own Usage page). */
 export function nousGauge(g: any) {
   const label = typeof g?.label === "string" && g.label ? g.label : String(g?.id ?? "");
   const at = isNum(g?.resets_at_ms) ? new Date(g.resets_at_ms) : null;
@@ -105,20 +93,14 @@ export function nousGauge(g: any) {
     label,
     limit: true,
     used: Math.floor(g.used_bp / 100),
-    // A reset time the payload cannot place is no reset time: the payload is outside data, and a throw here would
-    // take every provider's row down with it (`readAll`'s Promise.all).
     resets: at && !Number.isNaN(at.getTime()) ? at.toISOString() : null,
   };
 }
 
-/** The Nous row from the portal's numbers: the plan's own limits first — a paid plan runs on included usage with
- * daily, weekly and monthly windows, not on credits (James, 2026-11-12) — then the top-up balance. */
 export function nousReading(data: any): Reading {
   const usable = data.usable;
   const topup = isNum(data.topup) ? data.topup : usable;
   const topupWindow = isNum(topup) ? nousTopup(topup) : null;
-  // The plan is named by what it costs (James, 2026-11-12: "100% of the $20 subscription is used"). At 0 monthly
-  // credits the plan has no credits bar at all: its limits are the gauges below it.
   const charge = isNum(data.charge) && data.charge > 0 ? data.charge : null;
   const planUsed =
     isNum(data.monthly) && data.monthly > 0 && isNum(data.plan_left)
@@ -126,7 +108,6 @@ export function nousReading(data: any): Reading {
       : null;
   const planLabel = charge !== null ? `Plan ($${charge.toFixed(0)}/month)` : "Plan credits";
   const uw = data.usage_window || {};
-  // The payload's own order and labels, so a gauge Nous adds or removes shows without a code change (card #131).
   const gauges = (Array.isArray(uw.gauges) ? uw.gauges : []).filter((g: any) => isNum(g?.used_bp)).map(nousGauge);
   const going = typeof uw.keep_going_on_credits === "boolean" ? uw.keep_going_on_credits : null;
   return {
@@ -143,8 +124,6 @@ export function nousReading(data: any): Reading {
         : going
           ? "Past a limit, Hermes keeps going on the top-up."
           : "Past a limit, Hermes waits for the reset; the top-up is not used.",
-    // A limit at 90% or more, and the credits nearly gone, mark the row low; a limit used up while keep-going is
-    // off, or no credit at all, marks it out ("waits for the reset").
     ...(going === false ? { waits: true } : {}),
     low: gauges.some((g: { used: number }) => limitLow(g.used)) || (isNum(usable) && usable < AI_LOW_USD),
     out: (going === false && gauges.some((g: { used: number }) => g.used >= 100)) || (isNum(usable) && usable <= 0),
@@ -178,7 +157,6 @@ async function minimax(): Promise<Reading> {
   };
 }
 
-/** The Kimi coding plan's 5-hour and 7-day limits, from Kimi's own usage endpoint (James, 2026-11-09). */
 export function kimiReading(d: any): Reading {
   const u = d?.usages || {};
   const five = u.limit_5h,
@@ -210,8 +188,6 @@ async function kimi(): Promise<Reading> {
   }
 }
 
-/** The Claude subscription's session and week limits, through Claude Code's own login in the macOS keychain (read
- * only). It never refreshes that login: Claude Code owns it. The token stays in memory for one request. */
 async function anthropic(): Promise<Reading> {
   const plan0 = "Claude subscription";
   let login: any;
@@ -253,7 +229,6 @@ async function anthropic(): Promise<Reading> {
   };
 }
 
-/** xAI has no usage API for a Grok subscription login, so this checks the login itself: a free models list. */
 async function grok(): Promise<Reading> {
   let token: string;
   try {
@@ -282,9 +257,6 @@ async function grok(): Promise<Reading> {
 const READERS: Record<string, () => Promise<Reading>> = { nous, minimax, anthropic, xai: grok, "kimi-coding": kimi };
 const KIND: Record<string, "usage"> = { nous: "usage" };
 
-/** How many Hermes profiles use each AI provider, the most used first. A fallback provider is a subscription the
- * profile can call too (MiniMax is only ever a fallback), so it counts (James, 2026-11-09). A profile is one agent
- * wherever it runs: a name on two machines counts once (James, 2026-11-11: 100 profiles were 61 names). */
 export function profilesByProvider(
   machines: { profiles?: { name: string; provider?: string | null; fallbacks?: string[] | null }[] }[],
 ): [string, number][] {
@@ -293,14 +265,12 @@ export function profilesByProvider(
     for (const prof of m.profiles || [])
       for (const provider of new Set([prof.provider, ...(prof.fallbacks || [])])) {
         if (!provider) continue;
-        // One account, one row: the Claude SDK login is the same Claude subscription as "anthropic".
         const slug = provider.startsWith("claude") ? "anthropic" : provider;
         users.set(slug, (users.get(slug) || new Set()).add(prof.name));
       }
   return [...users].map(([slug, names]): [string, number] => [slug, names.size]).sort((a, b) => b[1] - a[1]);
 }
 
-/** One row per AI provider the Hermes profiles use (each profile's config.yaml), read from the provider. */
 async function readAll(): Promise<{ at: number; providers: AiRow[] }> {
   const snap = await snapshot.get();
   const sorted = profilesByProvider(snap.machines);
@@ -321,6 +291,5 @@ async function readAll(): Promise<{ at: number; providers: AiRow[] }> {
   return { at: Date.now() / 1000, providers };
 }
 
-/** A read takes seconds (the Nous portal), so a stale list is served while a new one is read in the background. */
 export const ai = swr("ai", 300_000, readAll);
 export const lastAi = () => ai.peek()?.providers ?? [];

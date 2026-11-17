@@ -18,7 +18,6 @@ export interface Agent {
   note: string;
 }
 
-/** Every Hermes profile per machine, A to Z by profile, then by machine. */
 export function useAgents(): Agent[] | null {
   const { state } = useLive();
   const running = useRunning();
@@ -39,7 +38,6 @@ export function useAgents(): Agent[] | null {
     .sort((a: Agent, b: Agent) => a.name.localeCompare(b.name) || a.machine.localeCompare(b.machine));
 }
 
-/** The cron jobs a profile owns: the active ones, plus the paused ones in grey. */
 function CronCount({ p }: { p: Agent }) {
   const on = p.cronJobs.filter((j) => j.enabled).length;
   const off = p.cronJobs.length - on;

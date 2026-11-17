@@ -2,13 +2,6 @@ import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { status } from "@/lib/format";
 
-/**
- * The plain-cron and systemd reading lives in collect.py, which runs on each machine (over ssh), so these
- * fixtures go through the same functions the reader itself calls: this driver imports collect.py and hands one
- * fixture to one function, with a fixed `now` (Friday 2026-10-23, 09:30 in the machine's own zone) so the next
- * runs a cron line works out are the same on every machine. No live system is needed — a Mac has no systemctl,
- * and a fixture covers a failed service.
- */
 const DRIVER = `import inspect, json, os, sys
 sys.path.insert(0, os.getcwd())
 from datetime import datetime
@@ -21,7 +14,6 @@ print(json.dumps(fn(*spec["args"], **kw), default=lambda x: x.isoformat()))
 
 const NOW = "2026-10-23T09:30:00-04:00";
 
-/** One function of collect.py, on fixture text, with `now` where the reader takes it. */
 function call(fn: string, ...args: unknown[]): any {
   return JSON.parse(
     execFileSync("python3", ["-c", DRIVER], {
@@ -32,7 +24,6 @@ function call(fn: string, ...args: unknown[]): any {
   );
 }
 
-/** A user's `crontab -l`, as it comes: settings and comments first, then the lines that are jobs. */
 const CRONTAB = `# m h  dom mon dow   command
 SHELL=/bin/sh
 PATH=/usr/bin:/bin
@@ -56,7 +47,6 @@ describe("parse_crontab", () => {
       ["~/bin/tick.py", "0 0 * * *", "2026-10-24T00:00:00-04:00", "tick.py"],
       ["/usr/local/bin/startup", "@reboot", null, "startup"],
     ]);
-    // The @-shortcut stays on the page as the person wrote it, and @reboot has no next run to work out.
     expect(rows[2].schedule_raw).toBe("@daily");
     expect(rows[3].schedule_raw).toBe("@reboot");
   });
@@ -98,21 +88,18 @@ describe("cron_next", () => {
   });
 
   it("moves to the next day once the time has gone by, weekdays included", () => {
-    // 09:30 on a Friday: today's 09:30 has gone, so a weekday line waits for Monday.
     expect(call("cron_next", "30 9 * * 1-5")).toBe("2026-10-26T09:30:00-04:00");
     expect(call("cron_next", "0 3 * * *")).toBe("2026-10-24T03:00:00-04:00");
     expect(call("cron_next", "* * * * *")).toBe("2026-10-23T09:31:00-04:00");
   });
 });
 
-/** `systemctl list-timers --all` on a Linux machine: the columns are NEXT, LEFT, LAST, PASSED, UNIT, ACTIVATES. */
 const LISTED = `Fri 2026-10-23 18:20:00 UTC     5min Fri 2026-10-23 18:10:20 UTC     4min ago sysstat-collect.timer          sysstat-collect.service
 Sat 2026-10-24 00:08:38 UTC        6h Fri 2026-10-23 00:47:09 UTC      17h ago logrotate.timer                logrotate.service
 Mon 2026-10-26 00:00:00 UTC 2 days 6h Mon 2026-10-19 00:00:15 UTC            - tmp-sweep.timer                tmp-sweep.service
 -                                      - -                                      - apport-autoreport.timer        apport-autoreport.service
 `;
 
-/** `systemctl show <timer>...`: one block per unit, which is what tells the row when it ran and when it runs. */
 const TIMERS_SHOW = `Id=sysstat-collect.timer
 ActiveState=active
 TimersCalendar={ OnCalendar=*-*-* *:00/10:00 ; next_elapse=Fri 2026-10-23 18:20:00 UTC }
@@ -135,7 +122,6 @@ Id=apport-autoreport.timer
 ActiveState=inactive
 `;
 
-/** `systemctl show <service>...`: the last exit of the service each timer starts, a failed one included. */
 const SERVICES_SHOW = `Id=sysstat-collect.service
 Result=success
 ExecMainExitTimestamp=Fri 2026-10-23 18:10:20 UTC
@@ -183,7 +169,6 @@ describe("parse_timers", () => {
   });
 
   it("trusts systemd's own verdict: a non-zero exit the unit lists in SuccessExitStatus is ok", () => {
-    // fwupd-refresh exits 2 for "no new metadata" and its unit says SuccessExitStatus=2 (Result=success).
     const show = `Id=fwupd-refresh.service
 Result=success
 ExecMainExitTimestamp=Mon 2026-10-26 12:04:21 UTC
@@ -228,7 +213,6 @@ describe("read_command", () => {
   it("reads a command that works, and nothing at all for one that is missing or fails", () => {
     expect(call("read_command", ["python3", "-c", "print('one line')"]).trim()).toBe("one line");
     expect(call("read_command", ["there-is-no-command-called-this"])).toBe(null);
-    // `crontab -l` with no crontab exits 1: a machine with neither cron nor systemd is not an error.
     expect(call("read_command", ["python3", "-c", "import sys; sys.exit(1)"])).toBe(null);
   });
 });

@@ -1,6 +1,3 @@
-/** Tech stack: [category, chip, test]. A test is a package name in package.json, a gem in a Gemfile ("gem:..."), or a
- * file name anywhere in the repo ("file:..."); a trailing * matches a package scope ("@radix-ui/*"). Order inside a
- * category is the order the chips show. */
 export const STACK: [string, string, string][] = [
   ["Language", "TypeScript", "file:tsconfig.json"],
   ["Language", "Ruby", "file:Gemfile"],
@@ -85,7 +82,6 @@ export interface StackGroup {
   items: string[];
 }
 
-/** Chips grouped by category from the repo's file names, package.json deps, and Gemfile gems. */
 export function stackChips(
   paths: Iterable<string>,
   deps: Set<string>,
@@ -115,10 +111,8 @@ export function stackChips(
   return [...found].filter(([, items]) => items.length).map(([category, items]) => ({ category, items }));
 }
 
-/** Gem names in a Gemfile. */
 export const gemsOf = (text: string) => new Set([...text.matchAll(/^\s*gem\s+['"]([\w-]+)['"]/gm)].map((m) => m[1]));
 
-/** The paths of package.json (or Gemfile) at the root or one folder down, outside node_modules. */
 export const near = (paths: string[], file: string) =>
   paths.filter(
     (p) => p === file || (p.split("/").length === 2 && p.endsWith(`/${file}`) && !p.includes("node_modules")),

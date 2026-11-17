@@ -4,19 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/**
- * What a stranger installs with (collector#55): the one command, and the README that carries it. The card's Done-when
- * is that a clean checkout on a machine with none of the user's files installs with that command and opens the main
- * page; `tests/clean-machine.test.ts` is the other half of it, the reader on a machine with none of the tools.
- *
- * Every path, name and key in these two files has to work on somebody else's machine, so the test that matters most
- * here is the one that fails when our own machine leaks into them.
- */
 const ROOT = process.cwd();
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const INSTALL = read("install.sh");
 const README = read("README.md");
-/** One `## ` section of the README, up to the next heading. */
 const section = (name: string) => README.split(`## ${name}`)[1].split("\n## ")[0];
 const ONE_COMMAND = "curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install.sh | sh";
 
@@ -40,8 +31,8 @@ describe("install.sh", () => {
     expect(INSTALL).not.toMatch(/dividendsolo\.com/);
   });
   it("reads the repo from the checkout it is run in, and clones into the user's own home otherwise", () => {
-    expect(INSTALL).toContain("is_checkout"); // the folder it sits in, when it came as a file
-    expect(INSTALL).toContain("$HOME/collector"); // the piped form's own default folder
+    expect(INSTALL).toContain("is_checkout");
+    expect(INSTALL).toContain("$HOME/collector");
     expect(INSTALL).toContain("COLLECTOR_DIR");
   });
   it("uses the port the app reads, and starts the app the app's own way", () => {
@@ -49,9 +40,6 @@ describe("install.sh", () => {
     expect(INSTALL).toContain("bun start");
   });
   it("installs the folder it is run from, even as `sh install.sh` with no path in `$0`", () => {
-    // A folder that looks like a Collector checkout, on a machine with nothing on PATH: the run stops at the bun
-    // check, which is past the decision this test is about — that the script read the checkout, not cloned one.
-    // realpath: on a Mac the temp folder is a symlink (/var -> /private/var), and the script prints the real path.
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "collector-install-")));
     fs.writeFileSync(path.join(dir, "install.sh"), INSTALL);
     for (const file of ["package.json", "collect.py"]) fs.writeFileSync(path.join(dir, file), "{}");
@@ -68,8 +56,6 @@ describe("install.sh", () => {
     });
     expect(out.stdout).toContain(`Collector is here: ${dir}`);
     expect(out.stderr).toContain("bun is not installed");
-    // Piped in from a folder with nothing in it, the same script takes the clone branch: the git check that only
-    // that branch has is what fails.
     const piped = spawnSync("/bin/sh", ["-s", "--", "--dir", path.join(dir, "a-repo")], {
       input: INSTALL,
       cwd: fs.mkdtempSync(path.join(os.tmpdir(), "collector-install-")),
@@ -105,7 +91,7 @@ describe("README, for a stranger", () => {
     expect(settings).toContain("`watch`");
     expect(settings).toMatch(/waiting.*working.*done/s);
     expect(settings).toContain('"heartbeat"');
-    expect(settings).toContain("check:config"); // every other key, and the check that catches a typo
+    expect(settings).toContain("check:config");
   });
   it("tells a reader with no agent crew where to start", () => {
     expect(README).toMatch(/no agent crew yet/i);

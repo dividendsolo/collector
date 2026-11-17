@@ -49,18 +49,9 @@ import { isAgentStack, otherStatuses, STATUS_GROUPS, STATUS_PILL, type StatusSet
 import { useLive } from "./data";
 import { PanelHead, Pill, SkelItems } from "./ui";
 
-/**
- * Card flow: every status a card can have and the statuses it can move to (James, 2026-11-02). The drawing is
- * `lib/flow.ts` laid out with React Flow (`@xyflow/react`, MIT). What the old Graphviz picture showed as white
- * note boxes are the statuses' hover tooltips now, every path carries light pulses travelling the way a card
- * moves — brightest down the main path — and hovering a status brightens its own paths, dims the rest and opens
- * its tooltip.
- */
-
 const NODE_W = FLOW_NODE_W;
 const NODE_H = FLOW_NODE_H;
 
-/** The colour a status's paths and pulses wear: the status's own tone, in the page's tokens. */
 const TONE: Record<FlowTone, string> = {
   go: "var(--green)",
   wait: "var(--amber)",
@@ -71,26 +62,11 @@ const TONE: Record<FlowTone, string> = {
 type StatusData = { status: FlowStatus };
 type StatusNode = Node<StatusData, "status">;
 
-/**
- * What is hovered, whether the page should stay still, and the trail a card's own journey lights (collector#146),
- * read by the boxes and the paths. It is a context and not props on the nodes: passing a fresh nodes array on every
- * hover makes React Flow rebuild its own DOM under the pointer, which fires `mouseleave` and `mouseenter` again and
- * sets the whole thing spinning. The arrays handed to React Flow are therefore built once, and only the boxes and
- * the paths below react to a hover.
- */
 type Trail = { nodes: string[]; edges: string[]; visits: Record<string, number>; now: string | null } | null;
 type Highlight = { hover: string | null; setHover: (id: string | null) => void; still: boolean; trail: Trail };
 const FlowHighlight = createContext<Highlight>({ hover: null, setHover: () => {}, still: false, trail: null });
 const useHighlight = () => useContext(FlowHighlight);
 
-/**
- * One status box, with its tooltip. React Flow measures the box, so it stays the size the drawing laid out. The
- * tooltip is a `NodeToolbar`: React Flow draws it outside the zoomed viewport, at the box's place on screen, so it
- * reads at its own 11px at any zoom (on a phone the canvas zoom made it a 71px box of 3.6px text, collector#51
- * review). It shows while the status is hovered, or tapped on a touch screen.
- *
- * A journey's trail fades every status the card never reached and counts the ones it passed more than once.
- */
 function StatusBox({ data }: NodeProps<StatusNode>) {
   const { status } = data;
   const { hover, trail } = useHighlight();
@@ -128,7 +104,6 @@ function StatusBox({ data }: NodeProps<StatusNode>) {
   );
 }
 
-/** The dot the drawing starts from: a card lands on the board here. */
 function StartBox() {
   return (
     <div className="flow-box flow-start">
@@ -142,12 +117,6 @@ function StartBox() {
 type PulseData = { tone: FlowTone; main: boolean; from: string; to: string };
 type PulseEdgeType = Edge<PulseData, "pulse">;
 
-/**
- * One path: a thin line, an arrowhead at the box a card moves to, and light pulses travelling it in the direction
- * a card moves. A pulse is a dot moved by SVG `animateMotion` along the very path it draws, so it follows the
- * curve; the pulses are spread along the path (`pulseBegins`) so one is always in flight, and with
- * `prefers-reduced-motion` they are not drawn at all and the path stays.
- */
 function PulsePath({
   id,
   sourceX,
@@ -162,7 +131,6 @@ function PulsePath({
   const [d] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   const tone = data ? TONE[data.tone] : TONE.park;
   const main = Boolean(data?.main);
-  // A journey lights the paths the card took, and dims every path it did not.
   const onTrail = Boolean(trail?.edges.includes(id));
   const dim = (data ? edgeDimmed({ id, from: data.from, to: data.to }, hover) : false) || (Boolean(trail) && !onTrail);
   const arrow = `flow-arrow-${id}`;
@@ -171,8 +139,6 @@ function PulsePath({
       className={`flow-edge${main ? " main" : ""}${onTrail ? " trail" : ""}${dim ? " dim" : ""}`}
       style={{ "--flow-tone": tone } as CSSProperties}
     >
-      {/* One arrowhead per path, at the box the card moves to: the pulses say which way a card goes, and the head
-          says it without waiting for one to arrive. Its id carries the edge's, so no two markers share one. */}
       <defs>
         <marker
           id={arrow}
@@ -211,38 +177,22 @@ function useMedia(query: string) {
   return matches;
 }
 
-/** `prefers-reduced-motion`: the pulses stop, the paths stay (James, 2026-11-02). Exported for the journey page,
- * whose replay button draws nothing when nothing may move. */
 export const useReducedMotion = () => useMedia("(prefers-reduced-motion: reduce)");
 
-/** A phone-wide window, the same break as the page's own (`max-width: 700px` in `app/globals.css`). */
 const NARROW = "(max-width: 700px)";
 const NARROW_VIEW = narrowViewport();
 
 const nodeTypes = { status: StatusBox, start: StartBox };
 const edgeTypes = { pulse: PulsePath };
 
-/**
- * The drawing. Hovering a status is its own state — or the journey page's, when it hands one down so its timeline
- * rows light the same status. Hover decides what stays bright and what fades, on the boxes and on the paths, and it
- * is handed down through `FlowHighlight` so React Flow's own arrays never change.
- *
- * A journey draws itself here (collector#146): node by node in time order, the whole walk in
- * `JOURNEY_DRAW_SECONDS` whatever the number of steps, then it stays. `drawKey` is the Replay button; with
- * `prefers-reduced-motion` the path is simply there, with nothing moving.
- */
 export function Drawing({
   journey,
   drawKey = 0,
   hoverNode,
   onHover,
 }: {
-  /** The card's own path to light. Built by the page, and the page memoizes it: a fresh object every render would
-   * restart the draw. */
   journey?: JourneyTrail | null;
-  /** Bumped by the Replay button: the walk draws again. */
   drawKey?: number;
-  /** The node the page's pointer is over (its timeline rows). Left out, the drawing keeps its own hover. */
   hoverNode?: string | null;
   onHover?: (id: string | null) => void;
 }) {
@@ -258,18 +208,18 @@ export function Drawing({
   );
   const walk = useMemo(() => journey?.walk ?? [], [journey]);
   const [drawn, setDrawn] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the Replay button's key is the trigger, not an input
+  const replay = useMemo(() => ({ steps: walk.length, round: drawKey }), [walk, drawKey]);
   useEffect(() => {
-    if (!walk.length || still) return;
+    if (!replay.steps || still) return;
     setDrawn(0);
     let step = 0;
     const timer = setInterval(() => {
       step += 1;
       setDrawn(step);
-      if (step >= walk.length) clearInterval(timer);
-    }, journeyStepMs(walk.length));
+      if (step >= replay.steps) clearInterval(timer);
+    }, journeyStepMs(replay.steps));
     return () => clearInterval(timer);
-  }, [walk, still, drawKey]);
+  }, [replay, still]);
   const shown = still ? walk.length : drawn;
   const trail = useMemo<Trail>(() => {
     if (!journey || !walk.length) return null;
@@ -277,13 +227,11 @@ export function Drawing({
     return { ...lit, visits: journey.visits, now: shown > 0 ? walk[Math.min(shown, walk.length) - 1] : null };
   }, [journey, walk, shown]);
 
-  // A phone opens the drawing on its middle, where needs-triage sits, not on its left edge.
   useEffect(() => {
     const el = scroller.current;
     if (narrow && el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
   }, [narrow]);
 
-  // Built once, and never again on a hover: see `FlowHighlight`.
   const nodes = useMemo<Node[]>(
     () => [
       {
@@ -329,8 +277,6 @@ export function Drawing({
 
   const enter = useCallback((_: unknown, n: Node) => setHover(n.id), [setHover]);
   const leave = useCallback(() => setHover(null), [setHover]);
-  // A touch screen has no hover: a tap opens the status's tooltip (and its highlight), a tap on the ground closes
-  // it, and the tooltip is scrolled into the screen, since on a phone the drawing is wider than the screen.
   const tap = useCallback(
     (_: unknown, n: Node) => {
       if (n.type !== "status") return;
@@ -345,10 +291,6 @@ export function Drawing({
   );
   const highlight = useMemo<Highlight>(() => ({ hover, setHover, still, trail }), [hover, setHover, still, trail]);
 
-  // On a phone the drawing is not fitted down to the screen's width (labels about 4px): it is drawn at a zoom
-  // that keeps them at 9px or more, on a canvas as big as the drawing at that zoom, and the canvas scrolls
-  // sideways inside its panel. The canvas's own drag and pinch are off there, so a finger scrolls the page and the
-  // drawing the way it scrolls anything else. A wide window is unchanged: fitted, pannable, zoomable.
   const view = narrow
     ? {
         defaultViewport: { x: NARROW_VIEW.x, y: NARROW_VIEW.y, zoom: NARROW_VIEW.zoom },
@@ -369,7 +311,6 @@ export function Drawing({
         <FlowHighlight.Provider value={highlight}>
           <ReactFlowProvider>
             <ReactFlow
-              // A new window width is a new viewport: the drawing mounts again with the other one.
               key={narrow ? "narrow" : "wide"}
               nodes={nodes}
               edges={edges}
@@ -396,20 +337,15 @@ export function Drawing({
   );
 }
 
-/** A status's pill wears its colour in the drawing above, so ready-for-human is green there and here. A status the
- * drawing does not have keeps its group's colour. */
 const PILL_BY_TONE: Record<FlowTone, string> = { go: "human", wait: "warning", work: "agent", park: "" };
 const pillFor = (status: string, fallback: string) => {
   const tone = FLOW_STATUSES.find((f) => f.id === status)?.tone;
   return tone ? PILL_BY_TONE[tone] : fallback;
 };
 
-/** The statuses Collector reads, which are a setting (collector#53): `config.json`'s `statuses`, in the set's own
- * order, from the board view. With nothing set they are the agent stack's own statuses, and the page says so. */
 function Statuses() {
   const { board } = useLive();
   const t = board?.tickets;
-  // `each` is the waiting set under the name this view has always used; working and done come beside it.
   const sets: StatusSets | null = t ? { waiting: t.each, working: t.working, done: t.done } : null;
   const custom = sets ? !isAgentStack(sets) : false;
   return (

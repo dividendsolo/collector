@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetNames, resolveNames, withHostNames } from "@/lib/server/names";
 
-/**
- * The host names the Going out table shows (collector#66): reverse DNS for the addresses a machine is connected to,
- * asked once per address and never allowed to hold a read up. The JSON file that used to keep them beside
- * `config.json` is gone with the marks (collector#75); this is the cache in memory that replaced it, and a test hands
- * in its own resolver, so no DNS query leaves the machine.
- */
 const conn = (address: string, over: Record<string, unknown> = {}) => ({
   proto: "tcp",
   address,
@@ -35,7 +29,6 @@ describe("reverse DNS (collector#66)", () => {
     const again = await resolveNames(["198.51.100.1", "203.0.113.9"], first, lookup);
     expect(again).toEqual(first);
     expect(asked).toEqual(["198.51.100.1", "203.0.113.9"]);
-    // This machine's own loopback is never asked about.
     expect(await resolveNames(["127.0.0.1", "::1"], {}, lookup)).toEqual({});
     expect(asked).toEqual(["198.51.100.1", "203.0.113.9"]);
   });
@@ -59,7 +52,6 @@ describe("the host names on a machine's connections", () => {
       address: "198.51.100.1",
       host: "downloads.example.com",
     });
-    // The read it was handed is untouched, and the address is not asked about twice.
     expect(machines[0].network.connections[0].host).toBeNull();
     await withHostNames(machines);
     expect(asked).toEqual(["198.51.100.1"]);

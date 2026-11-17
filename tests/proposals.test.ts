@@ -4,25 +4,11 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { type Proposal, pipelineValue } from "@/lib/proposals";
 
-/**
- * The Proposals page's one write route (collector#77). Two halves, the way the card's security section has them:
- *
- * - the route parses every field itself, so markup with a link, a 101-character title, a status outside the five, an
- *   amount past ten million, a currency that is not three letters and a date that is not a real day are all refused
- *   before anything is stored;
- * - the guard (collector#69) refuses a write from another site, while the page's own click and a shell are answered.
- *
- * COLLECTOR_CONFIG is read once, at import time (`lib/server/paths.ts`), so the temp folder is set before the route
- * loads and `proposals.json` lands there — never in the repo, which is public (AGENTS.md, Dangers; the same shape as
- * tests/projects-save.test.ts). Every test starts from no file, so each one stands on its own.
- */
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-proposals-"));
 const envBefore = process.env.COLLECTOR_CONFIG;
 process.env.COLLECTOR_CONFIG = path.join(dir, "config.json");
-/** The file the route writes, and the one an unset COLLECTOR_CONFIG would have written. */
 const FILE = path.join(dir, "proposals.json");
 const REPO_FILE = path.join(process.cwd(), "proposals.json");
-/** size:mtime, or "missing": a file that never existed and one left alone read the same twice (tests/projects-save). */
 const stamp = (p: string) => {
   try {
     const s = fs.statSync(p);
@@ -55,7 +41,6 @@ afterAll(() => {
 });
 
 const HOST = "127.0.0.1:4000";
-/** The page's own click: this origin, JSON, the way components/pages.tsx sends it. */
 const PAGE = { host: HOST, "sec-fetch-site": "same-origin", "content-type": "application/json" };
 
 const post = (body: unknown, headers: Record<string, string> = PAGE) =>
@@ -67,9 +52,7 @@ const del = (id: string, headers: Record<string, string> = PAGE) =>
 const read = () => GET(new Request(`http://${HOST}/api/proposals`, { headers: { host: HOST } }));
 
 const stored = (): Proposal[] => JSON.parse(fs.readFileSync(FILE, "utf8"));
-/** How many proposals the file holds (0 when it was never written). */
 const count = () => (fs.existsSync(FILE) ? stored().length : 0);
-/** One stored proposal, through the route: its id, for the edit and the delete below. */
 const one = async (over: Record<string, unknown> = {}) => {
   const r = await post({ ...valid, ...over });
   expect(r.status, JSON.stringify(over)).toBe(200);
@@ -142,7 +125,6 @@ describe("what the route refuses before it stores anything (collector#77)", () =
 
 describe("adding, editing and deleting (collector#77)", () => {
   it("stores a proposal the page sends, and the file holds what the route returned", async () => {
-    // The repo's own proposals.json (gitignored, and real clients if it exists) is never written: its stamp stays put.
     const repoBefore = stamp(REPO_FILE);
     const r = await post({ ...valid, client: "  Acme Corp  ", currency: "usd", notes: "  the site, not the app  " });
     expect(r.status).toBe(200);
@@ -153,7 +135,6 @@ describe("adding, editing and deleting (collector#77)", () => {
     expect(p.currency).toBe("USD");
     expect(p.notes).toBe("the site, not the app");
     expect(p.id).toBeTruthy();
-    // The file on disk is what the route answered, entry for entry.
     expect(stored()).toEqual(body.proposals);
     expect(stamp(REPO_FILE)).toBe(repoBefore);
   });
@@ -189,7 +170,6 @@ describe("adding, editing and deleting (collector#77)", () => {
     await one({ title: "new", sent_at: "2026-11-05" });
     const body = await (await read()).json();
     expect(body.proposals.map((p: Proposal) => p.title)).toEqual(["new", "old", "unsent"]);
-    // The file is in that same order, not in the order they arrived.
     expect(stored().map((p) => p.title)).toEqual(["new", "old", "unsent"]);
   });
 
@@ -214,7 +194,6 @@ describe("adding, editing and deleting (collector#77)", () => {
 });
 
 describe("a proposals.json the route cannot read whole is never written over (PR #79 review)", () => {
-  /** Every write the page can send: add, edit and delete, each refused by name and leaving the file as it was. */
   const everyWrite = async (id: string) => {
     for (const r of [await post(valid), await put({ ...valid, id }), await del(id)]) {
       expect(r.status).toBe(409);
@@ -225,12 +204,10 @@ describe("a proposals.json the route cannot read whole is never written over (PR
   it("refuses every write while the file does not parse, and leaves it byte for byte", async () => {
     const { id } = await one();
     await one({ title: "second" });
-    // One stray comma, typed by hand: the file is still the only copy of both rows.
     const broken = fs.readFileSync(FILE, "utf8").replace(/}\s*\]\s*$/, "},\n]\n");
     fs.writeFileSync(FILE, broken);
     await everyWrite(id);
     expect(fs.readFileSync(FILE, "utf8")).toBe(broken);
-    // The page is told why, instead of a list that looks empty.
     const body = await (await read()).json();
     expect(body.proposals).toEqual([]);
     expect(body.why).toContain(FILE);

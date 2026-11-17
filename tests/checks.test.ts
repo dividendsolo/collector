@@ -2,11 +2,6 @@ import { describe, expect, it } from "vitest";
 import { type NetworkIn, securityChecks, worst } from "@/lib/checks";
 import { checkToasts, forgetFixed, visibleToasts } from "@/lib/toasts";
 
-/**
- * A machine's Security checks (James, 2026-11-06): one row per check, a dot each. Red is a real exposure and its toast
- * stays until fixed; amber is a weak setting and its toast can be dismissed; grey is a check that could not be read,
- * never green.
- */
 const levels = (machine: string, net: NetworkIn | null, mac: boolean) =>
   Object.fromEntries(securityChecks(machine, net, mac).map((c) => [c.label, [c.level, c.value]]));
 
@@ -176,8 +171,6 @@ describe("the check toasts", () => {
 });
 
 describe("a dismissed amber toast after its check was fixed (bug, 2026-11-06)", () => {
-  // Dismiss "Stealth mode is off", turn stealth on (the check goes green), turn it off again: the same value as the
-  // dismissal, so the toast stayed hidden for good. A fix must clear the dismissal, so the next break shows.
   const fw = (stealth: boolean) => ({ ...MAC_FW, stealth });
   const at = (stealth: boolean) => [
     { name: "mac", checks: securityChecks("mac", { firewall: fw(stealth), sockets: [], tailnet_acl: [] }, true) },

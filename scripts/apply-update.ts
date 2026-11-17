@@ -1,19 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Put a staged build in service (cards #41, #122): move the finished build the rebuild job staged beside the served
- * one into `.next`, then restart the job that serves the page, so open pages reload onto the new build.
- *
- *     bun scripts/apply-update.ts --dir /Users/me/code/collector --label com.james.collector
- *     bun scripts/apply-update.ts --restart "echo restarted"        # a test's stand-in for the restart
- *
- * `scripts/rebuild-if-stale.ts` runs this right after a staged build succeeds (no click since card #122), and it is
- * the same step from a shell. The restart is whole — the swap is in place first, so the page that comes back is the
- * new build. With nothing staged the run says so and stops: a second run changes nothing.
- *
- * The swap is `lib/rebuild.ts`'s `swapIn`: the served folder moves aside, the staged one takes its name, and the old
- * one is deleted, so the page is without a build for the time between two renames rather than for the length of a
- * build. The build that fails never gets here: the rebuild job stages it only after `next build` exited 0.
- */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,13 +9,9 @@ const say = (line: string) => console.log(`[update] ${line}`);
 const warn = (line: string) => console.error(`[update] ${line}`);
 
 const argv = process.argv.slice(2);
-/** The checkout the page serves: this script's own, which is the folder the serving plist points at. */
 const dir = path.resolve(option(argv, "dir") || path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
-/** How the page is restarted, whole, for serving that is not the launchd job of `CONTEXT.md`. */
 const restart = option(argv, "restart") || restartCommand(option(argv, "label"));
 
-/** How long the restart is given before the script gives up on it (repo standard S2): the swap is already in
- * place, so a restart that hangs is logged rather than waited on forever. */
 const RESTART_TIMEOUT_MS = 60_000;
 
 const staged = stagedSide(dir);

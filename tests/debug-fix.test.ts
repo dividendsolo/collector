@@ -16,11 +16,6 @@ import {
 
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * James, 2026-11-11: a failed cron row's "Debug and fix" button opens a new pi session in a new tmux pane, split beside his own, so it
- * never touches a session already at work. The session debugs the failure, writes a failing test first (TDD), fixes
- * it, ships it, reruns the job, and proves it with the test and the job's next run. The row then leaves on its own.
- */
 const job = {
   id: "b07ecfc6da04",
   name: "cve-watch",
@@ -96,8 +91,6 @@ describe("openDebugSession", () => {
     expect(calls[2]).toEqual(["tmux", "set", "-p", "-t", "%7", "@collector_step", "starting"]);
   });
 
-  // James, 2026-11-12: "name the window in the TMUX session so it's very easy to see which one it's actually working
-  // on ... I want it at the top." Every pane read "π - james": pi sets the pane title, so the name is our own tag.
   it("names the pane in its top border, with the job, the machine and the step", async () => {
     const calls: string[][] = [];
     await openDebugSession({ machine: "ezio", ssh: "div@ezio", local: false }, job, async (cmd) => {
@@ -123,7 +116,6 @@ describe("openDebugSession", () => {
   });
 });
 
-// James, 2026-11-11: the button "should show ... what it's currently doing".
 describe("the button's step", () => {
   it("asks the session to write each step on its own pane", () => {
     const p = debugPrompt({ machine: "ezio", ssh: "div@ezio", local: false }, job);
@@ -137,8 +129,6 @@ describe("the button's step", () => {
     });
   });
 
-  // James, 2026-11-12: "I clicked debug and fix, and it still says debug and fix." Collector runs under launchd with
-  // no locale, and there tmux prints each tab in a -F format as "_", so the pane line never split and no fix was open.
   it("reads the open fix pane when tmux runs with no locale", async () => {
     const tmuxNoLocale = async (cmd: string[]) => {
       const format = cmd[cmd.indexOf("-F") + 1].replaceAll("\t", "_");
@@ -159,8 +149,6 @@ describe("the button's step", () => {
   });
 });
 
-// James, 2026-11-11: "just make it a static list". The session sets each step with its exact command, and the page
-// shows only those words.
 describe("the fixed list of steps", () => {
   it("is the six steps, then done or stuck", () => {
     expect(FIX_STEPS).toEqual([
@@ -188,10 +176,6 @@ describe("the fixed list of steps", () => {
   });
 });
 
-// James, 2026-11-11: the Lead Watch session started on MiniMax and hit its 429. Collector's PATH has no
-// /opt/homebrew/bin, so pi could not reach Claude Code and took the first model with a key. The pane starts from a
-// login shell (James's own PATH) and names its model. Then: "just statically assign it to Claude every time because
-// we want to use Opus 5.5 on these" — no fallback to Kimi or MiniMax.
 describe("the pane's pi", () => {
   it("starts in a login shell, always on Claude Opus 5.5", () => {
     const a = tmuxArgs("/Users/me", "fix it");
@@ -201,16 +185,11 @@ describe("the pane's pi", () => {
     expect(cmd.at(-1)).toBe("fix it");
   });
 
-  // The bug James hit on the live Collector, 2026-11-11: "my debug and fix button isn't doing anything". Collector
-  // runs under launchd with a bare PATH; a login zsh does not read ~/.zshrc, which is where ~/.local/bin (pi) is
-  // added, so the pane printed "command not found: pi" and closed at once. The dev server worked only because it
-  // started from a terminal. The pane's command finds pi from the bare environment launchd gives Collector.
   it("finds pi from launchd's bare environment", async () => {
     const fs = await import("node:fs");
     const os = await import("node:os");
     const path = await import("node:path");
     const { spawnSync } = await import("node:child_process");
-    // A home whose pi sits where pi's installer puts it, ~/.local/bin, and a PATH with only the system folders.
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-home-"));
     fs.mkdirSync(path.join(home, ".local/bin"), { recursive: true });
     fs.writeFileSync(path.join(home, ".local/bin/pi"), '#!/bin/sh\necho "pi ran: $*"\n', { mode: 0o755 });
@@ -224,9 +203,6 @@ describe("the pane's pi", () => {
   });
 });
 
-// James, 2026-11-11: "add the same debug and fix ... to the foreman started five times in 60 seconds", "remove the
-// acknowledge ones in the cron jobs that are red ... we need to fix them", and an Acknowledge on a vendor incident:
-// "there's nothing we can do about that".
 describe("which rows get which button", () => {
   const base = {
     github: {},
@@ -289,8 +265,6 @@ describe("the work script loop's prompt", () => {
   });
 });
 
-// James, 2026-11-11: "add a button that says triage when there is 1 card to triage in priority tasks". It opens a
-// session beside his own that triages that one card with him, the way Debug and fix opens one for a failed job.
 describe("the Triage button", () => {
   it("rides on the one-card triage row only", () => {
     expect(triageRow([{ lane: "needs-triage", repo: "dividendsolo/omarchy4mac", number: 45 }])?.triage).toEqual({
@@ -314,10 +288,6 @@ describe("the Triage button", () => {
     expect(p).not.toContain("@collector_step");
   });
 
-  // James, 2026-11-13: the session must hold the triage skill. It is `disable-model-invocation`, so pi never picks it
-  // by itself and only its own command loads it. pi reads the skill's name up to the first space of the whole
-  // message (`_expandSkillCommand`), so the request starts on the same line as the command: a first line of bare
-  // "/skill:triage" expands to nothing, and the skill is silently skipped.
   it("starts with the triage skill's own command, so pi loads the skill", () => {
     const p = triagePrompt({ repo: "dividendsolo/omarchy4mac", number: 45 });
     const first = p.split("\n")[0];
@@ -338,7 +308,6 @@ describe("the Triage button", () => {
   });
 });
 
-// James, 2026-11-11: when the loop row is gone by the time he clicks, the refusal says it plainly.
 describe("the loop row's refusal", () => {
   it("says the loop stopped and there is nothing to fix", async () => {
     const { LOOP_GONE } = await import("@/lib/server/debug-fix");
@@ -348,8 +317,6 @@ describe("the loop row's refusal", () => {
   });
 });
 
-// James, 2026-11-11: "let's get a button for working the p0's as well (open in tmux like the debug one)", and he
-// picked "Unblock". The card waits on James; the session gets it moving and brings him only what needs him.
 describe("the Unblock button", () => {
   const p0 = { lane: "needs-info", priority: "P0", repo: "dividendsolo/zero-phase", number: 497, title: "t", url: "u" };
   it("rides on every P0 row", () => {
@@ -375,8 +342,6 @@ describe("the Unblock button", () => {
     });
   });
 
-  // The 500 James hit (2026-11-11): the board names a card's repo without its owner ("zero-phase"), so the button
-  // must take owner/repo from the card's URL.
   it("takes owner/repo from the card's URL, the way the board gives it", () => {
     const board = {
       lane: "needs-info",

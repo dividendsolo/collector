@@ -13,8 +13,6 @@ import type {
 import { useApi } from "./data";
 import { Icon, PanelHead, Pill, SkelRows } from "./ui";
 
-/** One "Accessible to" badge: its colour, its word, and the card it opens on hover: a one-line definition, then who
- * can connect, what keeps others out, how an attacker gets in, and this port (James, 2026-11-06). */
 interface Badge {
   cls: string;
   text: string;
@@ -23,9 +21,6 @@ interface Badge {
   facts: [string, string][];
 }
 
-/** Who can connect to a port, one badge per group: red for the internet, blue for a port the firewall opens on
- * purpose (Firewalled), amber for the local network, green for the tailnet, grey for the machine alone. A port on
- * every address carries the tailnet as a badge of its own. */
 function accessibleTo(
   s: NetworkSocket,
   machine: string,
@@ -147,8 +142,6 @@ function accessibleTo(
   ];
 }
 
-/** The networks a machine is on, as the facts of the tooltip on its name: kept off the page itself, so a screenshot
- * or a screen share does not carry the machine's addresses (James, 2026-11-06). */
 function networkFacts(n: MachineNetworks | undefined): string | undefined {
   if (!n) return undefined;
   const facts: [string, string][] = [];
@@ -158,8 +151,6 @@ function networkFacts(n: MachineNetworks | undefined): string | undefined {
   return facts.length ? JSON.stringify(facts) : undefined;
 }
 
-/** The Sent or Received cell. `ss` counts each socket's own bytes; a Mac's nettop counts the process's, the same on
- * each of its connections, so that total shows once, on the process's first row, labelled as the process total. */
 function BytesCell({ c, n, first }: { c: NetworkConnection; n: number | null; first: boolean }) {
   if (c.bytes_scope !== "process") return <td className="num mono">{bytes(n)}</td>;
   if (!first)
@@ -176,7 +167,6 @@ function BytesCell({ c, n, first }: { c: NetworkConnection; n: number | null; fi
   );
 }
 
-/** One connection going out: where it goes, what owns it, and how much has crossed it. */
 function ConnectionRow({ c, first }: { c: NetworkConnection; first: boolean }) {
   return (
     <tr className={c.inbound ? "net-in" : undefined}>
@@ -192,7 +182,6 @@ function ConnectionRow({ c, first }: { c: NetworkConnection; first: boolean }) {
             {c.pid ? <span className="sub"> pid {c.pid}</span> : null}
           </>
         ) : (
-          // `ss -p` shows the user's own processes without sudo, so another user's connection keeps no name.
           <span className="sub" title="Another user's process: ss shows yours without sudo">
             —
           </span>
@@ -205,7 +194,6 @@ function ConnectionRow({ c, first }: { c: NetworkConnection; first: boolean }) {
   );
 }
 
-/** For each connection, whether it is the first of its process in the list: the row a process total shows on. */
 function firstOfProcess(connections: NetworkConnection[]): boolean[] {
   const seen = new Set<string>();
   return connections.map((c) => {
@@ -216,9 +204,6 @@ function firstOfProcess(connections: NetworkConnection[]): boolean[] {
   });
 }
 
-/** One row of the page: the ports one process listens on with the same reach, so a process with five ports is one
- * row, not five. A row with no process name (another user's, which ss shows without one) groups with the others
- * that have none and the same reach. */
 interface PortGroup {
   key: string;
   ports: number[];
@@ -253,8 +238,6 @@ function groupPorts(sockets: NetworkSocket[]): PortGroup[] {
   return [...groups.values()];
 }
 
-/** The row's ports. When every port has the same protocols, the Protocol column says them once; when they differ (a
- * TCP port and a UDP one), each port carries its own, so no port is read with the wrong protocol. */
 function portsText(g: PortGroup): { ports: string; protos: string } {
   const sets = [...g.byPort.values()].map((p) => [...p].sort().join("/"));
   if (sets.every((x) => x === sets[0])) return { ports: g.ports.join(", "), protos: sets[0] || "" };
@@ -264,7 +247,6 @@ function portsText(g: PortGroup): { ports: string; protos: string } {
   };
 }
 
-/** How long a process has run, in the largest two units: "3 days 15 h", "2 h 5 min", "4 min". */
 function runFor(s: number | null | undefined): string | null {
   if (s == null) return null;
   const d = Math.floor(s / 86400);
@@ -275,7 +257,6 @@ function runFor(s: number | null | undefined): string | null {
   return `${m} min`;
 }
 
-/** The tooltip's labelled facts for a process, one per line. What it is goes above them as the tooltip's text. */
 function processFacts(info: ProcessInfo | null | undefined): string | undefined {
   if (!info) return undefined;
   const facts: [string, string | null][] = [
@@ -302,7 +283,6 @@ function SocketRow({
   nets: MachineNetworks | undefined;
   peers?: Record<string, string>;
 }) {
-  // The badge card names this row's ports, all of them: the row may hold several (ControlCenter's 5000 and 7000).
   const badges = accessibleTo(g.first, machine, fw, nets, g.ports.join(", "), peers);
   const { ports, protos } = portsText(g);
   return (
@@ -340,7 +320,6 @@ function SocketRow({
             {g.pids.length ? <span className="sub"> pid {g.pids.join(", ")}</span> : null}
           </>
         ) : (
-          // `ss -p` shows the user's own processes without sudo, so a root socket keeps its address and no name.
           <span className="sub" title="Another user's process: ss shows yours without sudo">
             —
           </span>
@@ -350,8 +329,6 @@ function SocketRow({
   );
 }
 
-/** The five columns at the same widths in every machine's table, so "Accessible to" lines up from one panel to the
- * next whatever a machine's longest port list is (James, 2026-11-06). The port list wraps inside its own column. */
 const NetCols = () => (
   <colgroup>
     <col style={{ width: "26%" }} />
@@ -362,11 +339,8 @@ const NetCols = () => (
   </colgroup>
 );
 
-/** A dot's colour for a check, the page's own tokens. */
 const DOT: Record<string, string> = { green: "ok", amber: "warn", red: "bad", grey: "unread" };
 
-/** The machine's Security checks (James, 2026-11-06): one row per check with its dot, its label and its value; on
- * hover, a card with what it means and the fix, in the dot's colour. */
 function Checks({ checks }: { checks: Check[] }) {
   return (
     <ul className="net-checks">
@@ -390,7 +364,6 @@ function Checks({ checks }: { checks: Check[] }) {
   );
 }
 
-/** What a machine's verdict line says, by its worst check. */
 const VERDICT: Record<string, string> = {
   green: "Every check passes.",
   red: "A check needs a fix.",
@@ -398,9 +371,6 @@ const VERDICT: Record<string, string> = {
   grey: "Some checks could not be read.",
 };
 
-/** One machine's summary at the top of the page (James, 2026-11-06): its name, its shield in the colour of its worst
- * check (red if any is red, else amber if any is amber, else green), its operating system at the right, and its
- * Security checks, each with a dot and a card on hover. The ports are in the machine's own panel below. */
 function MachineSummary({ m }: { m: MachineNetwork }) {
   const checks = securityChecks(m.name, m.network, m.network?.firewall?.tool === "macOS firewall");
   const verdict = worst(checks);
@@ -425,8 +395,6 @@ function MachineSummary({ m }: { m: MachineNetwork }) {
   );
 }
 
-/** One machine's block: what it is sending out, then every port it listens on, with who can connect to each, the
- * most exposed first. */
 function Machine({ m }: { m: MachineNetwork }) {
   const sockets = m.network?.sockets || [];
   const connections = m.network?.connections || [];
@@ -532,10 +500,6 @@ function Machine({ m }: { m: MachineNetwork }) {
   );
 }
 
-/** The Network page (collector#65, collector#66): what each machine listens on and who can reach it, and what it is
- * connected out to. Read only: nothing here blocks, opens or closes a port, and no port is scanned from outside. A
- * port open to the internet is also an error row in Needs attention on the Dashboard; nothing about a connection is
- * (collector#75). */
 export function NetworkPage() {
   const { data } = useApi<{ at: number; machines: MachineNetwork[] }>("/api/network", 15_000);
   const machines = data?.machines || [];

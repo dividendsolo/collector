@@ -929,3 +929,37 @@ the repo root of a worktree:
 ~/.local/share/agent-stack/current/vps/scripts/actions-lock.py lock
 ```
 
+
+## No comments in code (collector#179)
+
+The repo holds no comments, by the global rule "No comments in code" (dotfiles AGENTS.md, James, 2026-11-16). The
+checker is agent-stack's `tools/no-comments`, copied in by its `install.py` and never edited here: a fix lands in
+agent-stack and the install copies it out again (`tools/no-comments/README.md`). `bin/no-comments` runs it over every
+tracked file; `bun run lint` ends with it and `ci.yml` runs it right after the bun setup. `bun tools/no-comments/strip.ts
+.` removes comments. Biome leaves `tools/no-comments/` alone, since its formatting is agent-stack's.
+
+`.no-comments-ignore` lists `AGENTS.md` only until the session rewrites that file without the two
+`nextjs-agent-rules` marker lines (builders cannot write AGENTS.md); the entry goes in the same change.
+`next.config.ts` sets `agentRules: false`, so `next dev` no longer adds that marked block back.
+
+What the removed comments held that an operator needs is here:
+
+- `ci.yml` has no trigger but `workflow_dispatch`: agent-stack's `vps/scripts/ci-merge.py` starts it on the PR branch
+  right before the merge and merges only when it passes (James, 2026-11-09). A push runs nothing (Actions minutes). The
+  repo is public, so it runs on GitHub's runners, not Jog.
+- `launchd/com.example.collector.plist` serves a build: run `bun run build` first, and set `WorkingDirectory` and the
+  bun path to the checkout. `launchd/com.example.collector-rebuild.plist` is the rebuild job: set both paths, and
+  `--label` to the serving job's label.
+- `bun scripts/rebuild-if-stale.ts [--dir <checkout>] [--label <launchd label>] [--check] [--restart "<command>"]` and
+  `bun scripts/apply-update.ts [--dir <checkout>] [--label <launchd label>] [--restart "<command>"]`: `--dir` defaults
+  to the script's own checkout, and `--restart` replaces the launchd restart (tests use `echo restarted`). Their
+  ceilings: `bun install` 5 min, `next build` 15 min, the swap and restart 2 min, the restart alone 1 min.
+- `scripts/build-stamp.ts` runs as `postbuild`; in a folder with no git it writes no stamp and the build still
+  passes. `bun run check:config [path]` checks `config.json`, or `COLLECTOR_CONFIG` when set.
+- The rebuild job's build (`COLLECTOR_DIST_DIR` set) type-checks with `tsconfig.rebuild.json`, which leaves out the
+  served `.next/types`: those come from an older commit and can name a route that is gone (every rebuild failed on
+  2026-11-09).
+- `vitest.no-skip.ts` fails a run with a skipped or todo test, a skip inside a test included; a run filtered with `-t`
+  is not a skip. Changing it is James's call.
+- A write of `.first-seen.json` or `.vendors-seen.json` to a read-only folder fails quietly: the ages and the saved
+  vendor read are lost on restart, nothing more.

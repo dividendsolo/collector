@@ -3,8 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AiPlan } from "@/components/ai";
 
-// James, 2026-11-11: "looks like the blur toggle doesn't do anything anymore". The eye blurs `.money`; since the
-// Nous top-up became a usage bar (b1bb5aa), its "$0.00 of $25 left" printed as plain text, so nothing blurred.
 describe("AI usage blur", () => {
   it("blurs the dollar amounts in a window's left text", () => {
     const html = renderToStaticMarkup(

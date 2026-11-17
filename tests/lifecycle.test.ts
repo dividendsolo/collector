@@ -10,7 +10,6 @@ import {
   termLine,
 } from "@/lib/server/lifecycle";
 
-// `ps -Ao pid,ppid,etime,command` as macOS prints it, cut down. 85632 is the server itself.
 const PS = `  PID  PPID     ELAPSED COMMAND
     1     0 12-03:04:05 /sbin/launchd
 85631     1       19:41 /Users/james/.bun/bin/bun run start

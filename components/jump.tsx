@@ -6,7 +6,6 @@ import { jumpTargetOf, withoutJump } from "@/lib/jump";
 const WAIT_MS = 8000;
 const STEP_MS = 100;
 
-/** Glide to the element and flash it once. False while the page has not drawn it yet. */
 function glide(id: string): boolean {
   const el = document.getElementById(id);
   if (!el) return false;
@@ -18,9 +17,6 @@ function glide(id: string): boolean {
   return true;
 }
 
-/** Mounted once in the Shell: every `?to=<id>` in the address (a toast's link) opens its page, waits for the element
- * (a page may still be reading its data), then glides to it. Two frames after it appears, so the Shell's jump to the
- * top of a new page runs first and the glide starts from there. */
 export function useJump() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;

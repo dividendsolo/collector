@@ -2,10 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/**
- * James, 2026-11-16: Current work and Waiting on you list every card, so the page scrolls past hundreds of rows.
- * Each panel holds about 15 rows and scrolls the rest inside itself, with the column heads kept in view.
- */
 const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
 const src = (f: string) => readFileSync(path.join(process.cwd(), "components", f), "utf8");
 

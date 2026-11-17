@@ -2,12 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-/**
- * The rebuild job builds into `.next-rebuild` while the page serves `.next`. Its type check must not read the served
- * build's generated types: those were made from an older commit and can name a route that is gone since. On
- * 2026-11-09 the served `.next/types/validator.ts` still named `app/api/network/seen/route.ts` (removed in #76), every
- * rebuild failed on it, and the old build was never replaced.
- */
 const ROOT = process.cwd();
 
 async function configWith(dist: string | undefined) {

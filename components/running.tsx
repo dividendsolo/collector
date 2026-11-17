@@ -48,8 +48,6 @@ export const ModelCell = ({ model, provider }: { model?: string; provider?: stri
     <Dash />
   );
 
-/** Running now: which agent or script works on which card, longest first. A build is amber after 30 minutes, red
- * after an hour. The lab droid's own run has its own colour and its own card. */
 export function RunningNow() {
   const running = useRunning();
   return (
@@ -130,10 +128,6 @@ const LANE_PILL: Record<string, string> = {
   "changes-requested": "warning",
 };
 
-/** The age cell of a live run: amber after 30 minutes of a build, red after an hour. A build only: a review, a
- * verify and the lab droid's runs (up to two hours by design) never turn amber or red. A Claude Code or Codex
- * session waits on the person, so it reads `interactive` — `tmux` when it runs inside tmux (#37) — instead of a
- * length that looks like a stuck run (#29). */
 const RunTime = ({ r }: { r: Run }) => (
   <td
     className={`num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}`}
@@ -145,13 +139,9 @@ const RunTime = ({ r }: { r: Run }) => (
 function StateCell({ row }: { row: WorkRow }) {
   const { state, board } = useLive();
   const stale: Staleness = staleness(state);
-  // The `working` statuses are a setting (collector#53): a card there with no run behind it is a claim the page's
-  // read disagrees with, so its row shows how old the data is.
   const shown = cardState(row, stale, board?.tickets?.working);
   const hold = row.card?.lane === "scheduled" ? row.card.hold : null;
-  // A blocked card names the cards it waits on, where a scheduled card names its date (James, 2026-11-04).
   const blockers = row.card?.lane === BLOCKED ? (row.card?.blockers ?? []) : [];
-  // Hovering the badge or the date says why it waits (collector#50): the reason its `Not before:` line gives.
   const tip = holdTip(hold);
   const deck = row.onDeck ?? [];
   return (
@@ -167,7 +157,6 @@ function StateCell({ row }: { row: WorkRow }) {
           agent
         </span>
       ) : (
-        // Hovering the scheduled badge says why the card waits, the same words its date shows on hover.
         <span data-tip={tip?.text} data-tip-title={tip?.title} tabIndex={tip ? 0 : undefined}>
           <Pill
             cls={
@@ -221,9 +210,6 @@ function StateCell({ row }: { row: WorkRow }) {
   );
 }
 
-/** Current work: every open card that is not waiting on James, with the live agent or script on it when one runs,
- * and the cards closed in the last hour. Live runs first, then review and merge, closed, ready-for-agent, and
- * scheduled (the cards whose blocker is being worked on first, then ten, then "Show all"). */
 export function CurrentWork() {
   const { state, board } = useLive();
   const [all, setAll] = useState(false);

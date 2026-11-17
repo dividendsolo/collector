@@ -28,29 +28,17 @@ from datetime import datetime, timedelta, timezone
 HOME = os.path.expanduser("~")
 HERMES = os.path.join(HOME, ".hermes")
 CONFIG = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
-# launchd jobs whose label starts with one of these show in the table (macOS only).
 LAUNCHD_PREFIXES = tuple(CONFIG.get("launchd_prefixes") or ())
-# launchd exit codes that mean success for one job: {label: {code: text}}.
 OK_EXITS = CONFIG.get("ok_exits") or {}
 WORK = CONFIG.get("work_script") or {}
-# The work script's own log; each start writes "=== tick <local time> ===". Optional.
 WORK_LOG = os.path.expanduser(WORK["log"]) if WORK.get("log") else None
 WORK_SCRIPT = WORK.get("name") or "work script"
-# Where the work script says what it does on each card now: one JSON file per card with repo, card, step,
-# since, and pid. Optional; without it a work-script row is named after its worktree (build, review).
 WORK_STEPS = os.path.expanduser(WORK["steps"]) if WORK.get("steps") else None
-# Docker label prefix the verify tool puts on its containers (<prefix>.run, <prefix>.commit). Optional.
 VERIFY_LABEL = CONFIG.get("verify_label")
-# The folder that holds the repos whose card worktrees the verify runs are matched to.
 REPOS = os.path.expanduser(CONFIG.get("repos_dir") or "~/code")
-# The foreman's scratch dir. One `host-broken-<repo>` marker (one line: the failing gate step and the base
-# SHA) sits here while this machine cannot pass that repo's checks on its base branch (agent-stack#151).
 FOREMAN = os.path.join(HERMES, "foreman")
 HOST_BROKEN = "host-broken-"
-# pull-deploy's state file (agent-stack vps/scripts/pull-deploy.py): the Kamal apps this machine deploys itself.
 PULL_DEPLOY_STATE = os.path.join(HERMES, "cron", "output", "pull-deploy", "state.json")
-# The lab droid (agent-stack#111): a headless Claude Code run under its own Linux user on ezio, working in its own
-# home rather than a card worktree. Nothing else in the panel would show it, so its user is what marks it.
 DROID_USER = "lab"
 DROID_CARD = 111
 
@@ -80,7 +68,6 @@ def run_counts(db, now):
     counts = {}
     try:
         con = open_db(db)
-        # claimed_at is ISO with mixed offsets, so filter loosely in SQL and exactly here
         rows = con.execute("select job_id, claimed_at, status from executions where claimed_at >= ?",
                            ((since - timedelta(hours=14)).strftime("%Y-%m-%d"),))
         for job_id, claimed, status in rows:
@@ -179,7 +166,6 @@ def hermes_jobs(now):
                 "runs_1h": h,
                 "runs_24h": day,
                 "fails_24h": fails,
-                # The job page shows the rest.
                 "profile": profile,
                 "schedule_raw": (j.get("schedule") or {}).get("expr") or (j.get("schedule") or {}).get("display"),
                 "prompt": (j.get("prompt") or "")[:20000],
@@ -256,13 +242,8 @@ def launchd_jobs():
     return jobs
 
 
-# Plain cron and systemd timers: what most machines are scheduled with when they are not on Hermes. Read only,
-# and a machine that has neither (a Mac, a container) returns no rows rather than an error.
-
-# A cron field's three-letter names: jan..dec, sun..sat (7 is Sunday as well as 0).
 CRON_MONTHS = {n: i + 1 for i, n in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
 CRON_DAYS = {n: i for i, n in enumerate("sun mon tue wed thu fri sat".split())}
-# crontab's @-shortcuts, as the five fields they stand for. @reboot runs at boot: it has no next run.
 CRON_MACROS = {
     "@yearly": "0 0 1 1 *",
     "@annually": "0 0 1 1 *",
@@ -333,7 +314,6 @@ def cron_next(expr, now):
         day = start + timedelta(days=i)
         if day.month not in months:
             continue
-        # Vixie cron: with both day fields set, either may match; with one of them *, the other decides.
         dow = (day.weekday() + 1) % 7
         if every_day and every_dow:
             pass
@@ -393,7 +373,6 @@ def parse_crontab(text, now):
             continue
         jobs.append({
             "scheduler": "cron",
-            # The line itself, hashed: a crontab has no ids, and an edit to the line is a new job.
             "id": "cron-" + hashlib.sha1(line.encode()).hexdigest()[:12],
             "name": command[:60],
             "schedule": schedule,
@@ -410,7 +389,6 @@ def parse_crontab(text, now):
             "runs_1h": None,
             "runs_24h": None,
             "fails_24h": None,
-            # cron keeps no run history: the row says so rather than reading as a failure.
             "history": False,
             "command": command,
             "runs": [],
@@ -486,7 +464,6 @@ def parse_timers(listed, timers_show, services_show, now):
         block, service_block = timers.get(unit, ""), services.get(service, "")
         active = show_value(block, "ActiveState")
         specs = [s.strip() for s in re.findall(r"OnCalendar=([^;]*)", block) if s.strip()]
-        # A service that never ran carries no exit timestamp: its last result is unknown, not "ok".
         ran = show_value(service_block, "ExecMainExitTimestamp")
         jobs.append({
             "scheduler": "systemd",
@@ -495,7 +472,6 @@ def parse_timers(listed, timers_show, services_show, now):
             "schedule": " ; ".join(specs),
             "schedule_raw": " ; ".join(specs),
             "state": active,
-            # A timer that is not active will not run again: it reads as paused, like a paused Hermes job.
             "enabled": active != "inactive",
             "script": service,
             "agent": False,
@@ -563,11 +539,6 @@ def process_lines(out):
             yield parts[0], parts[1], parts[2]
 
 
-# Claude Code's own helper processes, which are no session at all (collector#34): the background daemon, the terminal
-# host behind a background session, and the idle standbys the daemon keeps warm. Claude Code spawns each of them with
-# the helper's own argv0, so its marker reads without a dash in the process's own name — `claude daemon run ...`,
-# `claude bg-pty-host ...`, `claude bg-spare ...`, the argv0 strings claude 2.1.303 sets. The flags are the same
-# markers where the program is named by its real path instead.
 CLAUDE_HELPERS = ("daemon", "bg-pty-host", "bg-spare")
 CLAUDE_HELPER_FLAGS = ("--bg-pty-host", "--bg-spare", "--daemon-worker")
 
@@ -594,19 +565,13 @@ def tool_of(command):
             return None
         if name in ("claude", "codex", "pi"):
             return name
-        # codex's own binary, named after its Rust target: codex-x86_64-unknown-linux-musl, codex-aarch64-apple-darwin
         if name.startswith("codex-") and any(target in name for target in ("linux", "darwin", "windows", "musl", "gnu")):
             return "codex"
     return None
 
 
-# The tool's own name, which is what the row shows (card #29): James knows "Claude Code" and "Codex" — "claude" is
-# the name of a binary, not of a profile he has. The keys stay the tools' own (`claude`, `codex`) for the session
-# files read under them.
 TOOL_NAMES = {"claude": "Claude Code", "codex": "Codex", "pi": "Pi"}
 
-# The provider a Pi session names, in the words James knows: Pi's `claude-code` provider is his Claude subscription,
-# reached through a headless `claude -p` that Pi starts under itself (2026-11-04).
 PI_PROVIDERS = {"claude-code": "Claude subscription"}
 
 
@@ -672,12 +637,10 @@ def git_facts(directory):
     except (OSError, subprocess.SubprocessError):
         return (None, None)
     lines = out.stdout.splitlines() if out.returncode == 0 else []
-    branch = lines[0].strip() if lines and lines[0].strip() != "HEAD" else None  # detached: no branch, no card
+    branch = lines[0].strip() if lines and lines[0].strip() != "HEAD" else None
     return (branch, lines[1].strip() if len(lines) > 1 else None)
 
 
-# lsof lives in /usr/sbin on macOS, and launchd starts Collector with a PATH that leaves /usr/sbin out, so a bare
-# `lsof` is not found there: every session lost its folder, so its repo, card and model (2026-11-04).
 LSOF = next((p for p in ("/usr/sbin/lsof", "/usr/bin/lsof") if os.path.exists(p)), "lsof")
 
 
@@ -785,10 +748,6 @@ def tool_model(tool, cwd, home=HOME):
     return claude_model(cwd, home) if tool == "claude" else codex_model(cwd, home)
 
 
-# The program tmux runs as a server or as the client that started one. Inside tmux the pane's shell is the server's
-# child and the session sits under that, so a session is in tmux when this name is anywhere above it (collector#37).
-# tmux starts its server with the argv0 of the client that first needed one (`tmux new-session -A -s Work`), and names
-# itself `tmux: server` in its own title on some versions, so the name is the first token's basename read as either.
 def is_tmux(command):
     """True when one `ps` line is tmux itself, server or client. A pid the read holds no line for is not tmux."""
     name = os.path.basename(command.split(None, 1)[0]) if (command or "").strip() else ""
@@ -902,13 +861,9 @@ def agent_model(profile, worktree):
     return {"model": model, "provider": provider}
 
 
-# Programs whose own argument is the thing they run: `bun start`, `next start`, `node next-server`, `python3 serve.py`.
 RUNNERS = {"bun", "node", "deno", "next", "ruby", "npx", "pnpm", "yarn"}
-# Sub-commands that only name the program again: `bun run dev` runs `dev`.
 SUBCOMMANDS = {"run", "exec", "x"}
-# Wrappers that stand in front of the program: `env A=1 bun start`, `timeout 2h bun start`, `script -c bun start`.
 WRAPPERS = {"env", "sudo", "nice", "ionice", "nohup", "setsid", "stdbuf", "command", "exec", "script"}
-# A shell holding the command as its own argument (`bash -lc 'cd <worktree> && bun start'`): the program is inside it.
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
 
 
@@ -917,7 +872,6 @@ def program_name(command, depth=0):
     and flags are dropped, a shell's own argument is read for the program inside it, and an interpreter or runner is
     named with the script under it. The ports it listens on are their own cell, so they are not here."""
     text = re.sub(r"^\s*cd\s+\S+\s*(?:&&|;|\|\|)\s*", "", command or "")
-    # In a chain, the command still running is the last one: `cd <worktree> && bun start`.
     tokens = text.split("&&")[-1].split()
     i = 0
     while i < len(tokens):
@@ -925,7 +879,7 @@ def program_name(command, depth=0):
         if token.startswith("-") or "=" in token or token in WRAPPERS:
             i += 1
         elif os.path.basename(token) == "timeout":
-            i += 2  # `timeout 2h <program>`: the duration is not the program
+            i += 2
         else:
             break
     if i >= len(tokens):
@@ -938,7 +892,7 @@ def program_name(command, depth=0):
         return program_name(" ".join(tokens[flag + 1:]), depth + 1)
     if name in RUNNERS or re.fullmatch(r"python[\d.]*", name):
         rest = tokens[i + 1: i + 3]
-        if name.startswith("python") and rest and rest[0] == "-m":  # `python3 -m http.server` runs http.server
+        if name.startswith("python") and rest and rest[0] == "-m":
             rest = tokens[i + 2: i + 3]
         if rest and rest[0] in SUBCOMMANDS:
             rest = rest[1:]
@@ -954,7 +908,6 @@ def listen_ports():
         ss = read_command(["ss", "-ltnpH"])
         ports = {}
         for line in (ss or "").splitlines():
-            # LISTEN 0 511 127.0.0.1:4123 0.0.0.0:* users:(("bun",pid=1701,fd=22))
             fields, owner = line.split(), re.search(r"pid=(\d+)", line)
             port = fields[3].rsplit(":", 1)[-1] if len(fields) > 3 else ""
             if owner and port.isdigit():
@@ -963,7 +916,6 @@ def listen_ports():
     lsof = read_command([LSOF, "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn"])
     ports, pid = {}, None
     for line in (lsof or "").splitlines():
-        # lsof prints `p<pid>` once, then one `n<address>` line per socket that pid listens on.
         if re.match(r"p\d+$", line):
             pid = line[1:]
             continue
@@ -973,28 +925,13 @@ def listen_ports():
     return ports
 
 
-# The Network section (collector#65): every listening TCP and UDP socket on this machine, and who can connect to
-# it. Read only, no sudo, nothing installed anywhere, and no port ever scanned from outside — this is what each
-# machine says it listens on. `ss -tulnp` on Linux, `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -nP -iUDP` on macOS (a
-# Mac has no ss); both read through `read_command`, so a machine without the tool reads empty. The firewall is not
-# read: a port the machine listens on for the internet can still be blocked by ufw or the macOS firewall.
-# The two sshd settings that should not be on: password logins, and root's.
 SSHD_DIRECTIVES = ("passwordauthentication", "permitrootlogin")
 SSHD_CONFIG = "/etc/ssh/sshd_config"
-# The addresses the two tools print for a socket bound on every address of the machine.
 WILDCARD_ADDRESSES = ("*", "0.0.0.0", "::", "0:0:0:0:0:0:0:0")
-# Tailscale's own ranges: the addresses a machine is reached on inside its tailnet.
 TAILNET_RANGES = (ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("fd7a:115c:a1e0::/48"))
-# The private ranges, an address only the machines on the same local network can reach: RFC 1918, IPv6's unique
-# local range, and the link-local ranges. Every other address is one anyone on the internet may reach.
 PRIVATE_RANGES = tuple(ipaddress.ip_network(n) for n in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "fc00::/7", "fe80::/10"))
-# Interfaces that are not a network other machines are on: loopback, the tailnet's tunnel (its addresses are read
-# by range), and the bridges Docker, VMs and the like make inside the machine.
 VIRTUAL_INTERFACES = re.compile(r"^(lo|tailscale|utun|docker|br-|veth|virbr|vmnet|bridge|awdl|llw|anpi|ap\d|gif|stf)")
-# Who can connect to a socket, the most exposed first: anyone on the internet, the internet through a port the
-# firewall opens on purpose, the machines on this machine's local network, the machines on its tailnet, this machine
-# alone.
 REACH_RANK = {"internet": 0, "firewalled": 1, "lan": 2, "tailnet": 3, "machine": 4}
 
 
@@ -1006,7 +943,6 @@ def is_private(ip):
     return any(ip.version == net.version and ip in net for net in PRIVATE_RANGES)
 
 
-# The two address tools by their own paths, the way LSOF is: launchd and a bare `ssh host` give a short PATH.
 IP = next((p for p in ("/usr/sbin/ip", "/sbin/ip", "/usr/bin/ip", "/bin/ip") if os.path.exists(p)), "ip")
 IFCONFIG = next((p for p in ("/sbin/ifconfig", "/usr/sbin/ifconfig") if os.path.exists(p)), "ifconfig")
 
@@ -1132,7 +1068,6 @@ def parse_ss(text):
         address, port = split_address(fields[4])
         if port is None:
             continue
-        # One row per socket: ss prints one line per socket, with its owner (the first) when it has one.
         owner = re.search(r'\("([^"]*)",pid=(\d+)', line)
         out.append({"proto": proto, "address": address, "port": port,
                     "process": owner.group(1) if owner else None, "pid": owner.group(2) if owner else None})
@@ -1149,12 +1084,12 @@ def parse_lsof(text):
     for line in (text or "").splitlines():
         fields = line.split()
         if len(fields) < 3 or not fields[1].isdigit():
-            continue  # the header, and anything that is not a socket row
+            continue
         proto = next((i for i, word in enumerate(fields) if word.lower() in ("tcp", "udp")), None)
         if proto is None or proto + 1 >= len(fields):
             continue
         if "->" in fields[proto + 1]:
-            continue  # a connected socket (`local->remote`, which `-iUDP` lists too), not a listening one
+            continue
         address, port = split_address(fields[proto + 1])
         if port is None:
             continue
@@ -1168,8 +1103,6 @@ def listen_sockets():
     `lsof -nP -iUDP` where there is no ss (a Mac, and any other Unix). [] when the machine has no tool to read —
     the section then reads empty, the way every other read here does without its tool."""
     if platform.system() == "Linux":
-        # `sudo -n` never asks for a password: where it needs one it fails at once, and plain `ss` still reads every
-        # socket, only without another user's process names.
         return parse_ss(read_command(["sudo", "-n", "ss", "-tulnp"]) or read_command(["ss", "-tulnp"]) or "")
     return parse_lsof(read_command([LSOF, "-nP", "-iTCP", "-sTCP:LISTEN"]) or "") + parse_lsof(
         read_command([LSOF, "-nP", "-iUDP"]) or ""
@@ -1182,9 +1115,6 @@ def sshd_read():
     root, so a read that fails falls back to the config file itself — read only, nothing changed."""
     if platform.system() != "Linux":
         return None
-    # The effective settings, drop-ins included: `sudo -n` (never asks for a password), then plain `sshd -T` (root
-    # only, so it usually fails). The config file is the last resort, and the page names it: it misses a drop-in
-    # that overrides it (ezio, 2026-11-06: the main file said yes, sshd_config.d/00-hardening.conf said no).
     for cmd in (["sudo", "-n", "sshd", "-T"], ["sshd", "-T"]):
         text = read_command(cmd)
         if text:
@@ -1210,9 +1140,6 @@ def sshd_flags(text):
     return {name: on.get(name) == "yes" for name in SSHD_DIRECTIVES}
 
 
-# What a program that listens on a port is, in one line, for the tooltip on its name (collector#65). Matched on the
-# program's file name (the last part of its path), lower case. A program not named here shows its facts alone: how
-# long it has run, what started it, its user and its path — never a guess.
 KNOWN_PROGRAMS = {
     "controlcenter": "macOS Control Center. Its ports 5000 and 7000 are the AirPlay Receiver: other Apple devices on "
                      "the network can send audio, video or a screen mirror to this Mac.",
@@ -1268,9 +1195,6 @@ def ps_details(text, args=None):
         except ValueError:
             secs = None
         out[parts[0]] = {"ppid": parts[1], "user": parts[2], "seconds": secs, "path": parts[4].strip()}
-    # Linux's `comm` is the short name, cut to 15 letters (`next-server (v1`). `args` holds the full command: the name
-    # is taken from it only when it continues the cut one — a renamed process (`next-server (v16.4.2)`) or a program
-    # whose own path ends in a longer name — so an interpreter (`python3` running Hermes) never replaces the name.
     for line in (args or "").splitlines():
         parts = line.split(None, 1)
         if len(parts) != 2 or parts[0] not in out:
@@ -1298,8 +1222,6 @@ def process_info(pid, details):
     if not d:
         return None
     name = file_name(d["path"])
-    # Linux keeps only 15 letters of a program's name in `comm`, and Next renames its server `next-server (v16.4.2)`:
-    # the known-program match reads the name up to its first ` (`.
     known = KNOWN_PROGRAMS.get((name or "").lower()) or KNOWN_PROGRAMS.get((name or "").split(" (", 1)[0].lower())
     parent = details.get(d["ppid"])
     started_by = file_name(parent["path"]) if parent else None
@@ -1309,11 +1231,6 @@ def process_info(pid, details):
             "started_by": started_by, "user": d["user"], "path": d.get("command") or d["path"]}
 
 
-# The firewall (collector#65): ufw on Linux. A port bound on every address is only as open as the firewall lets it be,
-# so a port the firewall blocks from the internet is not marked open to the internet. Read with `sudo -n ufw status
-# verbose` (ufw needs root; `-n` fails at once rather than ask for a password), and read only. A machine with no ufw,
-# or no sudo without a password, reads `None`: its ports keep the reach their address gives them, and the page says
-# the firewall was not read.
 UFW_RULE = re.compile(
     r"^(?P<to>.+?)\s+(?P<action>ALLOW|DENY|REJECT|LIMIT)(?:\s+(?P<dir>IN|OUT|FWD))?\s+(?P<frm>.+?)\s*$")
 
@@ -1361,8 +1278,6 @@ def parse_ufw(text):
 
 
 SOCKETFILTERFW = "/usr/libexec/ApplicationFirewall/socketfilterfw"
-# Programs that run whatever script they are given: allowing one to accept connections allows every dev server it
-# ever runs, so the Mac's Security checks flag them on the firewall's allow list.
 INTERPRETERS = re.compile(r"^(node|bun|deno|python[\d.]*|python\.app|ruby|perl|php|java)$", re.I)
 
 
@@ -1513,15 +1428,11 @@ def apply_firewall(row, fw, networks):
     interface is open (`Anywhere on tailscale0`), else nothing but the machine itself. A row an allow rule opens on a
     firewall that denies by default is `firewalled`. Marks `firewall`: "allows" when the firewall lets the internet in,
     "blocks" when it does not, None when no firewall was read."""
-    # Only ufw decides ports: the Mac's firewall allows or blocks programs, so it leaves every port as its address says.
     if fw is None or fw.get("tool") != "ufw" or row["reach"] not in ("internet", "lan"):
         row["firewall"] = None
         return row
     if firewall_lets_in(fw, row["proto"], row["port"]):
         row["firewall"] = "allows"
-        # An active firewall that denies by default and opens this port with a rule of its own: open on purpose
-        # (Tailscale's 41641/udp). Still reachable from the internet, but a choice someone made, not a leftover, so it
-        # is `firewalled` rather than `internet` and raises no warning (James, 2026-11-06).
         if fw.get("active") and fw.get("incoming") != "allow" and row["reach"] == "internet":
             row["reach"] = "firewalled"
         return row
@@ -1607,14 +1518,8 @@ def network_read():
                            connections=connections_read(sockets=sockets, details=details))
 
 
-# What each machine sends out (collector#66): every established TCP connection with its process, its remote end, and
-# the bytes the OS counts for it — `ss -tnpi` on Linux carries them on each socket, and a Mac needs `lsof` for the
-# ends and `nettop` for the bytes, which a Mac counts per process. Read only, no sudo, nothing installed anywhere, and
-# no traffic content: who connects where, and how much. Nothing about a connection is kept or marked anywhere
-# (collector#75).
 NETTOP = "/usr/bin/nettop" if os.path.exists("/usr/bin/nettop") else "nettop"
 NETTOP_FIELDS = "bytes_in,bytes_out"
-# The info line `ss -i` prints under a socket holds these two counters.
 SS_INFO_FIELDS = ("bytes_sent", "bytes_received")
 
 
@@ -1638,7 +1543,6 @@ def parse_ss_established(text):
     out, last = [], None
     for line in (text or "").splitlines():
         if line[:1] in (" ", "\t"):
-            # The `-i` info line belongs to the socket above it (`cubic ... bytes_sent:1024 bytes_received:2048`).
             sent, received = ss_info_counters(line)
             if last is not None:
                 last["bytes_sent"], last["bytes_received"] = sent, received
@@ -1671,7 +1575,7 @@ def parse_lsof_established(text):
     for line in (text or "").splitlines():
         fields = line.split()
         if len(fields) < 3 or not fields[1].isdigit():
-            continue  # the header, and anything that is not a socket row
+            continue
         proto = next((i for i, word in enumerate(fields) if word.lower() in ("tcp", "udp")), None)
         if proto is None or proto + 1 >= len(fields) or "->" not in fields[proto + 1]:
             continue
@@ -1682,7 +1586,7 @@ def parse_lsof_established(text):
             continue
         key = (fields[proto].lower(), local_address, local_port, address, port, fields[1])
         if key in seen:
-            continue  # the same socket on another file descriptor
+            continue
         seen.add(key)
         out.append({"proto": fields[proto].lower(), "address": address, "port": port,
                     "local_address": local_address, "local_port": local_port,
@@ -1851,10 +1755,8 @@ def worktree_rows(out, steps=(), verifying=(), ports=None, children=None):
         row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script",
                                      "name": None, "seconds": -1, "command": "", "pids": []})
         row["pids"].append(pid)
-        # The longest-lived process of the worktree names its row: it is the one that started the run there.
         if seconds(etime) >= row["seconds"]:
             row.update(seconds=seconds(etime), command=line)
-        # `hermes -p <name> chat`, or the same argv inside a Python launcher: '-p', '<name>', 'chat'
         profile = re.search(r"(?:^|[\s'\"])-p'?,?\s+'?([\w.-]+)'?,?\s+'?chat\b", line)
         if profile:
             row.update(type="agent", name=profile.group(1))
@@ -1865,14 +1767,11 @@ def worktree_rows(out, steps=(), verifying=(), ports=None, children=None):
     for key, row in found.items():
         command, pids = row.pop("command", ""), row.pop("pids", [])
         if row["type"] == "agent":
-            rows.append(row)  # the agent's own row, whether or not the work script has a step file for the card
+            rows.append(row)
             continue
         if (key[0], key[2]) in stepped or key in verifying:
-            continue  # the work script's own step: running_agents writes that row from the step
-        # A process nothing is working for: not an agent, no step of the work script's own on the card, no verify run
-        # for its commit. It is never named after the work script (collector#32).
+            continue
         row.update(type="leftover", kind="leftover", name=program_name(command))
-        # The socket belongs to the process that listens, usually a child of the one the row is named after.
         listening = sorted({port for pid in descendants(pids, children) for port in ports.get(pid, [])})
         if listening:
             row["port"] = listening[0]
@@ -1886,7 +1785,6 @@ def running_agents():
     it is on now, the process left behind in a worktree nothing works on, and the lab droid on its own user. While a
     verify run is going on for the card's commit, the row shows that verify and its own time."""
     out = read_command(["ps", "-axo", "pid=,etime=,command="]) or ""
-    # The droid is not this user's worktree, so it is read on its own with its user in front.
     droid_out = read_command(["ps", "-axo", "user=,pid=,etime=,command="]) or ""
     links = parent_links()
     droid_pids, droid = lab_droid(droid_out)
@@ -1899,7 +1797,7 @@ def running_agents():
     for st in steps:
         rows = [k for k in found if (k[0], k[2]) == (st["repo"], st["card"])]
         if any(found[k]["type"] == "agent" for k in rows):
-            continue  # the agent's own row says what happens
+            continue
         for k in rows:
             del found[k]
         found[(st["repo"], st["step"], st["card"])] = {
@@ -1910,7 +1808,6 @@ def running_agents():
         if not key:
             continue
         row = found.setdefault(key, {"repo": key[0], "kind": key[1], "card": key[2], "type": "script", "name": WORK_SCRIPT})
-        # The newest verify for the card wins; the sort puts it last.
         row.update(kind="verify", feature=feature, seconds=secs)
     return ([found[k] for k in sorted(found)] + tool_sessions(out, skip={pid for pid, _ in droid_pids},
                                                              parents=parent_pids(links)) + droid)
@@ -2092,10 +1989,6 @@ def tailnet_reasons(jobs, state):
     return jobs
 
 
-# The Hermes gateway: the launchd job the waiting crew (agent-stack#261) runs on. `hermes gateway run` under this
-# label supervises the Hermes cron jobs, so a gateway that is not running, or a cron ticker that has not moved in ten
-# minutes, is a crew that stopped silently. The ticker writes the epoch second of its last successful tick to this
-# file on every tick.
 HERMES_GATEWAY_LABEL = "ai.hermes.gateway"
 GATEWAY_TICKER = ".hermes/cron/ticker_last_success"
 GATEWAY_TICKER_STALE = 600
@@ -2115,8 +2008,6 @@ def launchctl_pid(label):
         key, _, value = line.partition("=")
         if key.strip().strip('"') == "PID":
             found = value.strip().strip(";").strip('"')
-            # A job launchd has loaded but not started reports no PID, and some versions report 0 or `-` for one:
-            # all three mean nothing runs.
             return "" if found in ("", "0", "-") else found
     return ""
 
@@ -2149,15 +2040,8 @@ def hermes_gateway(now, home=HOME, pid=launchctl_pid):
     }
 
 
-# The Briefs folder (collector#64): every brief a cron job emails is kept here too, as one Markdown file with front
-# matter (agent-stack#286; the terms are in GLOSSARY.md), and this is where Collector's Briefs page reads them. The
-# folder's rows ride the machine snapshot, read every 10 seconds; one brief's body is read on its own when it opens,
-# since the folder only ever grows. Read only, and nothing here writes to the machine.
 BRIEFS_DIR = os.path.join(HERMES, "briefs")
-# The front matter's keys. `resend_id` is the writer's own business, so it is not read.
 BRIEF_KEYS = ("brief", "subject", "sent_at")
-# How much of a file the snapshot reads for the front matter, which is a few short lines, and the most of one brief's
-# body the page is handed.
 BRIEF_HEAD = 4096
 BRIEF_MAX_BODY = 2_000_000
 
@@ -2241,18 +2125,9 @@ def brief_file(name, directory=BRIEFS_DIR, limit=BRIEF_MAX_BODY):
     return {"file": name, **{key: meta.get(key) for key in BRIEF_KEYS}, "body": body.strip()}
 
 
-# The agents and jobs Collector watches (collector#54): the Hermes jobs, the launchd jobs, `crontab -l`'s lines,
-# the systemd timers, the Hermes gateway and its ticker, and the Claude Code and Codex sessions are read with no
-# setting at all — they are the list. `watch` in config.json adds a user's own: one entry names one thing and the
-# signal that says how it is doing, and how long that signal may be quiet. The server sends each machine only the
-# entries that name it (lib/server/machines.ts), since a process, a launchd label and a file each belong to one
-# machine and reading another machine's entry here would invent an idle row for it.
 WATCH = CONFIG.get("watch") or []
-# How long a log or a heartbeat file may go unwritten before the watch reads as idle, when the entry does not say.
 WATCH_IDLE_S = 900
-# The signals one entry may carry, in the order a row reads them when it carries more than one.
 WATCH_SIGNALS = ("process", "session", "launchd", "log", "heartbeat")
-# A `session` watch names the coding tool itself.
 WATCH_TOOLS = ("claude", "codex")
 
 
@@ -2390,10 +2265,7 @@ def watch_row(entry, now, ps_out="", jobs=None, self_pid=None):
         else:
             row.update(state="ok", detail=f"last run exit {code or '0'}")
         return row
-    # A log or a heartbeat file: how long ago it was written says both the state and the words.
     limit = entry.get("idle_after", WATCH_IDLE_S)
-    # A limit that is not a positive number of seconds ("900", 0, true) would raise in the age comparison and take
-    # the machine's whole read down with it, so this one row says the value instead.
     if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not limit > 0:
         row.update(state="unknown", detail=f"idle_after must be a positive number of seconds, not {json.dumps(limit)}")
         return row
@@ -2434,18 +2306,9 @@ def watch_rows(now, entries=None, ps_out=None, jobs=None, self_pid=None):
             for e in entries]
 
 
-# Job notices (collector#82): a job appends one JSON line per piece of good news — a new directory listing, say — to
-# a file under this folder, and the page shows each line as one toast and one Needs attention row until it is
-# acknowledged. `{"at": ..., "key": ..., "level": "info", "text": ..., "href": ...}` is the line; `key` is what an
-# acknowledgement names, so one listing acknowledged on the page stays acknowledged while its line is in the file.
 NOTICES = os.path.join(".hermes", "notices")
-# How far back a notice is news. An older line is the job's own record of a listing it already found.
 NOTICE_KEEP_S = 21 * 86400
-# The newest bytes of each file: a notices file is appended to forever, and its newest lines are what is new.
 NOTICE_TAIL = 64 * 1024
-# Only a web address is a link. A line's `href` comes from outside data — the directory listing's own URL — and the
-# page puts it in an `<a href>` on an origin whose own routes restart the server and write config.json, so a scheme
-# that runs script there is not a link (collector#82). The news still shows; it just shows without one.
 NOTICE_SCHEMES = ("http://", "https://")
 
 
@@ -2490,8 +2353,6 @@ def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
 
 
 def main():
-    # One brief's body, on demand: the same script over the same ssh, asked for one file instead of the whole machine
-    # (`python3 - '<config>' brief '<file>'`), so a brief opens without the snapshot carrying every brief's Markdown.
     if len(sys.argv) > 2 and sys.argv[2] == "brief":
         print(json.dumps(brief_file(sys.argv[3] if len(sys.argv) > 3 else "")))
         return

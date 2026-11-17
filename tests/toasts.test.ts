@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { githubToasts, internetPortCount, networkToasts, serviceToasts, sortToasts, sshToasts } from "@/lib/toasts";
 
-/**
- * The toasts (collector#67). James, 2026-11-06: "a little toast notification that will pop up if one of our services
- * is yellow or red. And then we can just acknowledge it, like dismiss that way, somebody doesn't have to scroll down
- * while they're working on things to see those stats." The same day he added the red Network rows (a machine with
- * ports open to the internet gets a toast too) and dropped Dismiss: "we want that toast to be there until
- * everything's resolved."
- */
 const svc = (status: string, error: string | null = null) => ({
   name: "Situation",
   url: "https://situation.example.com",
@@ -109,7 +102,6 @@ describe("the Network count in the sidebar", () => {
   });
 });
 
-// James, 2026-11-11: "remove the alert sound on the dashboard, don't need it". The red toast is the alert, silently.
 describe("the alert sound", () => {
   it("is gone: no page code makes a sound", async () => {
     const fs = await import("node:fs");
@@ -134,9 +126,6 @@ describe("the stack", () => {
 });
 
 describe("the page change that scrolls to the top (collector#67 bug)", () => {
-  // James, 2026-11-06: the toast's link opened the Network page but did not scroll to the port. Repro (headless
-  // Chrome, scrollY per frame): the page reached the row, then glided back to 0. The Shell scrolled to the top on
-  // every change of the hash, and the Network page taking `?to=<id>` off the address is a change of the hash.
   it("is the same page with or without a query, so taking the query off scrolls nothing", async () => {
     const { pageOf } = await import("@/components/app");
     expect(pageOf("#/network?to=ports%3Avps%3Ainternet")).toBe(pageOf("#/network"));
@@ -146,8 +135,6 @@ describe("the page change that scrolls to the top (collector#67 bug)", () => {
 });
 
 describe("githubToasts", () => {
-  // James, 2026-11-06, after the REST limit hit 0 and only the APIs page said so: "that should be a notification in
-  // the toast."
   const at = (s: number) => `t${s}`;
   const limit = (core: number, graphql = 0) => ({
     core: { used: core, limit: 5000, reset: 100 },

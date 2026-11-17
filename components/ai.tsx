@@ -37,7 +37,6 @@ const Left = ({ a }: { a: any }) =>
     <span className="sub">—</span>
   );
 
-/** One provider: its usage windows as GitHub-limit style bars, a balance, or a note. */
 export function AiPlan({ a }: { a: any }) {
   return (
     <div className="plan">
@@ -53,8 +52,6 @@ export function AiPlan({ a }: { a: any }) {
       </div>
       {a.windows?.length || (a.kind === "usage" && !a.note) ? (
         <>
-          {/* The Nous row's four limits sit in one row at desktop and two by two below it (card #131); every
-              other provider keeps the shared auto-fit grid. */}
           <div className={`stats${a.provider === "nous" ? " four" : ""}`}>
             {(a.windows || []).map((w: any) => (
               <div className="stat" key={w.label}>
@@ -73,8 +70,6 @@ export function AiPlan({ a }: { a: any }) {
                     ) : null}
                   </small>
                 </span>
-                {/* A bar keeps its provider's color at any usage (James, 2026-11-09): a low plan is the
-                    notifications' job, not the panel's. */}
                 <div className={`bar ${a.provider}`}>
                   <span style={{ width: `${Math.min(100, w.used)}%` }} />
                 </div>
@@ -94,7 +89,7 @@ export function AiPlan({ a }: { a: any }) {
               </div>
             ) : null}
           </div>
-          {/* What a limit used up means: waits for the reset, or goes on the top-up (card #131). */}
+          {}
           {a.kind === "usage" && a.windows?.length && a.detail ? (
             <div className="note sub">
               <BlurText text={a.detail} />

@@ -11,6 +11,7 @@
       "!**/.next",
       "!**/node_modules",
       "!**/.artifacts",
+      "!tools/no-comments",
       "!next-env.d.ts",
       "!**/*.md",
       "!config.example.json",

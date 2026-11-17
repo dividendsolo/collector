@@ -19,7 +19,6 @@ export const SVC_LABEL: Record<string, [string, string]> = {
   down: ["failed", "Down"],
 };
 
-/** Service health: checked when the page loads, then once a minute. A new check refreshes Needs attention. */
 export function useServices(): Svc[] | null {
   const { data } = useApi<Svc[]>("/api/services");
   return data ?? null;
@@ -34,7 +33,6 @@ export function ServicesWatcher() {
   return null;
 }
 
-/** Down first, then slow, then online; slowest first inside each. */
 export const sortServices = (svc: Svc[]) => {
   const order: Record<string, number> = { down: 0, slow: 1, online: 2 };
   return [...svc].sort((a, b) => order[a.status] - order[b.status] || b.ms - a.ms);
@@ -78,7 +76,6 @@ export function ServiceRows({ list }: { list: Svc[] }) {
   );
 }
 
-/** The Dashboard's Service health panel: the summary line and the five worst services. */
 export function ServiceHealthPanel({ svc }: { svc: Svc[] | null }) {
   const sorted = svc ? sortServices(svc) : null;
   const up = svc ? svc.filter((x) => x.status !== "down").length : 0;
@@ -93,7 +90,7 @@ export function ServiceHealthPanel({ svc }: { svc: Svc[] | null }) {
         </a>
       </PanelHead>
       <div className="spend-total" id="health-total">
-        {/* With no services the list below says so; the summary stays empty rather than say it twice. */}
+        {}
         {svc?.length && slowest ? (
           <>
             <span className="value">

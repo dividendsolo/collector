@@ -19,26 +19,18 @@ const SSH = [
   "-o",
   "ControlPersist=300",
 ];
-/** The settings collect.py needs on each machine; the rest stays on the server. */
 const REMOTE_KEYS = ["launchd_prefixes", "ok_exits", "work_script", "watch", "verify_label", "repos_dir"] as const;
 
 export const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-/** The watch entries that live on this machine (collector#54): one that names a machine is read there alone, and one
- * that names none on `here` — the machine Collector runs on — since a process, a launchd label and a file each
- * belong to one machine, and another machine's entry read here would invent an idle row for it. */
 export function watchFor(watch: unknown, machine: string, here: string): Watch[] {
-  // A mistyped setting is collect.py's to say, once, on the machine Collector runs on (collector#57): a `watch` that
-  // is not a list goes there as it is, and so does an entry that is not an object, since neither names a machine.
   if (watch == null) return [];
   if (!Array.isArray(watch)) return machine === here ? (watch as Watch[]) : [];
   return watch.filter((w) => ((w && typeof w === "object" && w.machine) || here) === machine);
 }
 
-/** One machine's snapshot from collect.py: run here, or sent over SSH (`ssh host python3 -`), so nothing is installed there. */
 export async function collect(machine: Machine, cfg: Config, brief?: string) {
   const remote = JSON.stringify(Object.fromEntries(REMOTE_KEYS.filter((k) => k in cfg).map((k) => [k, cfg[k]])));
-  // One brief's body, instead of the whole machine: the same script, one more argument (collector#64).
   const extra = brief ? ["brief", shellQuote(brief)] : [];
   if (!machine.ssh) return run(["python3", COLLECT, remote, ...(brief ? ["brief", brief] : [])]);
   return run([...SSH, machine.ssh, "python3", "-", shellQuote(remote), ...extra], {
@@ -53,8 +45,6 @@ export interface GithubLimit {
   actions?: ActionsUsage;
 }
 
-/** GitHub Actions this month: used minutes (all Actions SKUs) against the minutes the plan includes, and the
- * dollars billed for them (0 until the included minutes run out, then every extra minute is billed). */
 export interface ActionsUsage {
   error?: string | null;
   used?: number;
@@ -63,9 +53,6 @@ export interface ActionsUsage {
   reset?: number;
 }
 
-/** The dollars a billing usage report bills for Actions: netAmount (gross less discounts) summed over its Actions
- * items, rounded to cents. The report covers one month (GitHub's default is the current one), so this is the
- * month's Actions bill. */
 export function actionsBilled(sum: any): number {
   const net = (sum?.usageItems || [])
     .filter((x: any) => String(x.product ?? "").toLowerCase() === "actions")
@@ -73,10 +60,8 @@ export function actionsBilled(sum: any): number {
   return Math.round(net * 100) / 100;
 }
 
-// Minutes a month each GitHub plan includes for private repos (docs.github.com, "GitHub Actions billing").
 const PLAN_MINUTES: Record<string, number> = { free: 2000, pro: 3000, team: 3000, enterprise: 50000 };
 
-/** The signed-in gh account's Actions minutes, from the billing usage summary. Read every 5 minutes. */
 const actionsUsage = swr<ActionsUsage>("actions-usage", 5 * 60_000, async () => {
   const [user, err] = await run(["gh", "api", "user"], { timeout: 10 });
   if (!user) return { error: err };
@@ -110,15 +95,8 @@ export interface Snapshot {
   jog: JogUsage;
 }
 
-/** How often the server reads every machine. A machine read is stale once it is older than this. */
 export const READ_SECONDS = 10;
 
-/**
- * This read's machines, each stamped with `read_at` (the time of its last good read). A machine whose read failed
- * keeps its last good read, with `stale: true` and the error, instead of coming back empty: an empty machine has no
- * runs, so every card it was building read `no run` (card #41) while the page said nothing about a failed read.
- * A machine with no good read yet comes back as it is, empty with its error.
- */
 export function mergeMachines(prev: any[] | undefined, next: any[], at: number): any[] {
   return next.map((m) => {
     if (!m.error) return { ...m, read_at: at, stale: false };
@@ -127,24 +105,17 @@ export function mergeMachines(prev: any[] | undefined, next: any[], at: number):
   });
 }
 
-/** Every machine plus the GitHub API limit and Jog's runner minutes, read every 10 seconds. A stale snapshot is
- * served while a new one is read. */
 export const snapshot = swr<Snapshot>("snapshot", READ_SECONDS * 1000, async (): Promise<Snapshot> => {
   const cfg = config();
   const targets = cfg.machines?.length ? cfg.machines : [{ name: "this machine" }];
-  // A watch entry that names no machine is read where Collector runs: the machine whose entry needs no ssh, else
-  // the first one listed (collector#54).
   const here = targets.find((t) => !t.ssh)?.name ?? targets[0].name;
   const [limit, jog, ...results] = await Promise.all([
     githubLimit(),
     jogUsage(),
     ...targets.map((t) => collect(t, { ...cfg, watch: watchFor(cfg.watch, t.name, here) })),
   ]);
-  // `local`: collect.py ran on this machine, so a button here can act on it (Start Tailscale).
   const read = targets.map((t, i) => ({ ...(results[i][0] || {}), name: t.name, local: !t.ssh, error: results[i][1] }));
   const at = Math.floor(Date.now() / 1000);
-  // The host name of what each machine is connected out to, from reverse DNS (collector#66): the Going out table on
-  // the Network page shows it. Once per read, from the same read every other page uses.
   const named = await withHostNames(read);
   return { at, machines: mergeMachines(snapshot.peek()?.machines, named, at), github: limit, jog };
 });

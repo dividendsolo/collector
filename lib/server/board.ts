@@ -6,7 +6,6 @@ import { run } from "./run";
 import { once } from "./store";
 import { type Comment, pickReason, type Reason } from "./text";
 
-/** One open ticket on the board (or in a label repo), in the shape the Waiting and Work panels use. */
 export interface Row {
   repo: string;
   number: number;
@@ -17,36 +16,27 @@ export interface Row {
   created: string;
   labels: string[];
   hold?: Hold | null;
-  /** A `blocked` card's open "blocked by" cards (James, 2026-11-04), read by fillBlockers. */
   blockers?: Blocker[];
 }
 
-/** One card a `blocked` card waits on: `analytics#8` and its issue URL. */
 export interface Blocker {
   ref: string;
   url: string;
 }
 
-/** Why a card waits: the cards in its `Waiting on:` line, the date in its `Not before:` line, and the reason that
- * line gives for the date (`(why: ...)`), which the page shows on hover. */
 export interface Hold {
   after: { ref: string; url: string }[];
   from: string | null;
   why: string | null;
-  /** The status the `Not before:` line moves the card to (`-> ready-for-agent`). */
   to?: string | null;
 }
 
 const WAITING_ON = /Waiting on:\**([^\n]*)/i;
-/** The whole `Not before:` line: the date and its reason are both read from it, and only from it. */
 const NOT_BEFORE_LINE = /Not before:[^\n]*/i;
 const NOT_BEFORE = /Not before:\**\s*(\d{4}-\d{2}-\d{2})/i;
-/** The reason on that line: its first parenthesis, `(why: ...)` or a bare `(James, 2026-10-29: ...)`, up to the first
- * closing paren (a reason holding one is cut there). The `why:` label is dropped. */
 const NOT_BEFORE_TO = /->\s*\**\s*([a-z][a-z-]*)/i;
 const NOT_BEFORE_WHY = /\((?:why:)?\s*([^)\n]*)\)/i;
 
-/** The hold of a card from its body. `url` is the card's own issue URL, for the owner and repo of a bare `#n`. */
 export function parseHold(body: string | null | undefined, url: string): Hold | null {
   if (!body) return null;
   const [, owner, repo] = url.match(/github\.com\/([^/]+)\/([^/]+)\//) || [];
@@ -69,12 +59,9 @@ export function parseHold(body: string | null | undefined, url: string): Hold | 
 
 export const TICKET_TYPES = ["bug", "enhancement", "tech-debt", "security"];
 const ISSUE = "number title url body createdAt state repository{name} labels(first:30){nodes{name}}";
-// Page sizes keep one read at 1 GraphQL point: 1 + 55 label lists + 1 + 40 label lists = 97 requests (under 100).
 const ITEMS_PAGE = 55;
 const SEARCH_PAGE = 40;
 
-/** The board read: open items with their Status and Priority, plus open issues in the label repos. Only the
- * connections that still have pages are asked for. */
 export function boardQuery(items: boolean, search: boolean): string {
   const vars = [items && "$p:ID!,$c:String", search && "$q:String!,$s:String"].filter(Boolean).join(",");
   return `query(${vars}){ rateLimit{cost remaining resetAt}${
@@ -93,16 +80,12 @@ export function boardQuery(items: boolean, search: boolean): string {
 
 const short = (r: string) => r.split("/").pop() as string;
 
-/** The label repos to read: the list `status repos` prints, its one home, so a repo added there shows here with no
- * edit (James, 2026-11-10: Collector showed 21 needs-triage cards to status's 24, missing darndest and pageroast).
- * `config.json`'s `board.label_repos` is the fallback when status cannot answer. */
 export function labelReposFrom(board: Board, fromStatus: string[] | null): string[] {
   return fromStatus?.length ? fromStatus : board.label_repos || [];
 }
 
 let statusRepos: { at: number; repos: string[] | null } = { at: 0, repos: null };
 
-/** `status repos --json`, read at most once a minute; null when status is missing or fails. */
 async function readStatusRepos(): Promise<string[] | null> {
   if (Date.now() - statusRepos.at < 60_000) return statusRepos.repos;
   const [repos] = await run<string[]>([expandHome("~/.local/bin/status"), "repos", "--json"], { timeout: 15 });
@@ -110,15 +93,12 @@ async function readStatusRepos(): Promise<string[] | null> {
   return statusRepos.repos;
 }
 
-/** The board settings with the label repos from status. */
 async function boardWithRepos(board: Board): Promise<Board> {
   return { ...board, label_repos: labelReposFrom(board, await readStatusRepos()) };
 }
 
-/** The lane slugs a label repo can carry: every lane the board knows and every lane in tickets.all. */
 export const laneSet = (board: Board, all: string[] = []) => new Set([...Object.keys(board.lanes), ...all]);
 
-/** Rows from one answer of boardQuery. Board items in a label repo are skipped: the label is the truth there. */
 export function parseBoard(data: any, board: Board, lanes: Set<string>) {
   const byOption = new Map(
     Object.entries(board.lanes)
@@ -131,7 +111,7 @@ export function parseBoard(data: any, board: Board, lanes: Set<string>) {
   const items = data?.node?.items;
   for (const n of items?.nodes || []) {
     const c = n?.content;
-    if (!c?.number || c.state !== "OPEN" || labelRepos.has(c.repository.name)) continue; // a draft, a PR, or closed
+    if (!c?.number || c.state !== "OPEN" || labelRepos.has(c.repository.name)) continue;
     const lane = byOption.get(n.status?.optionId);
     if (!lane) continue;
     rows.push({
@@ -182,7 +162,6 @@ export interface Diff {
   changed: Row[];
 }
 
-/** What changed between two reads, by ticket URL: new and gone tickets, lane moves, and title, priority, or label edits. */
 export function diffBoard(prev: Row[], next: Row[]): Diff {
   const before = new Map(prev.map((r) => [r.url, r]));
   const after = new Set(next.map((r) => r.url));
@@ -202,9 +181,6 @@ export function diffBoard(prev: Row[], next: Row[]): Diff {
   return d;
 }
 
-/** GitHub now and then answers one of the two lists with nothing and no error (seen 2026-10-22: the Board's
- * items 0 of 30, then 30 three seconds later; the label-repo search 0, then 21 ten seconds later). An empty list
- * right after a read that had cards from it is that glitch, not every card of that list leaving in seconds. */
 export function looksLikeEmptyGlitch(
   read: { itemNodes: number; searchNodes: number },
   prev: Row[] | null,
@@ -236,7 +212,7 @@ interface Stats {
   last_ms: number;
   last_at: number;
   remaining: number | null;
-  costs: [number, number][]; // [time ms, points], the last hour
+  costs: [number, number][];
 }
 
 interface BoardState {
@@ -277,14 +253,13 @@ async function gql(query: string, vars: Record<string, string>) {
   return run(args, { timeout: 30 });
 }
 
-/** One full read of the board: page 1 of both lists in one query, then only the lists that have more. */
 async function readBoard(
   board: Board,
   all: string[],
 ): Promise<{ rows: Row[]; cost: number; remaining: number | null; itemNodes: number; searchNodes: number }> {
   const lanes = laneSet(board, all);
   const q = (board.label_repos || []).map((r) => `repo:${r}`).join(" ");
-  let items: string | null | undefined = null; // undefined: done
+  let items: string | null | undefined = null;
   let search: string | null | undefined = q ? null : undefined;
   const rows: Row[] = [];
   let cost = 0;
@@ -315,7 +290,6 @@ async function readBoard(
   return { rows, cost, remaining, itemNodes, searchNodes };
 }
 
-/** No board in config.json: the old way, one tickets command per lane ("{lane}" in "command"). */
 async function readCommand(cmd: string[], lanes: string[]): Promise<Row[]> {
   const out = await Promise.all(
     lanes.map(async (slug) => {
@@ -342,15 +316,12 @@ async function readCommand(cmd: string[], lanes: string[]): Promise<Row[]> {
 }
 
 const tickets = () => config().tickets || {};
-/** The card statuses Collector reads here (collector#53): the waiting set is what the Waiting on you panel holds,
- * and the ticket view carries all three for the Card flow page. */
 const statuses = () => statusSets(config());
 const lanesOf = () => {
   const t = tickets();
   return [...new Set([...(t.all || []), ...statuses().waiting, ...(t.count || [])])];
 };
 
-/** Read the board once; on a change, push the new view to every open page. */
 export async function poll(reason = "timer"): Promise<void> {
   if (S.busy) return;
   S.busy = true;
@@ -361,8 +332,6 @@ export async function poll(reason = "timer"): Promise<void> {
     let rows: Row[];
     if (cfg.board?.project_id) {
       let r = await readBoard(cfg.board, cfg.tickets?.all || []);
-      // The glitch clears in seconds. A list still empty on the third read is real: the last Board card left
-      // (dotfiles#1, 2026-10-23), and keeping the old read froze Current work for over an hour.
       for (let tries = 1; tries < 3 && looksLikeEmptyGlitch(r, S.rows, cfg.board); tries++) {
         S.stats.cost += r.cost;
         r = await readBoard(cfg.board, cfg.tickets?.all || []);
@@ -380,7 +349,6 @@ export async function poll(reason = "timer"): Promise<void> {
     S.stats.last_ms = Date.now() - start;
     S.stats.last_at = Date.now();
     S.stats.costs = S.stats.costs.filter(([t]) => Date.now() - t < 3600_000);
-    // A blocked card keeps the blockers it was last read with, so a fresh read never draws it without them.
     for (const r of rows) if (r.lane === BLOCKED) r.blockers = blockerCache.get(r.url)?.blockers;
     const prev = S.rows;
     S.rows = rows;
@@ -411,12 +379,9 @@ function emit() {
   S.events.emit("board", view());
 }
 
-// ---- Reasons: the comment that moved a waiting ticket, on a slower cache (ten minutes per ticket and lane).
-
 const REASON_SECONDS = 600;
 const reasonKey = (r: Row) => `${r.url}|${r.lane}`;
 
-/** Ten issues per GraphQL query (still 1 point): comments and label events for each. */
 export function reasonQuery(rows: Row[]): string {
   const parts = rows.map((r, i) => {
     const m = r.url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
@@ -462,14 +427,10 @@ async function fillReasons() {
   }
 }
 
-// ---- Blockers: the cards a `blocked` card waits on, through GitHub's native "blocked by" link (James, 2026-11-04).
-// Only blocked cards are read, ten to a query (1 point), and each answer is kept a minute.
-
 const BLOCKED = "blocked";
 const BLOCKER_SECONDS = 60;
 const blockerCache = new Map<string, { at: number; blockers: Blocker[] }>();
 
-/** Ten issues per GraphQL query: the "blocked by" cards of each. */
 export function blockerQuery(rows: Pick<Row, "url">[]): string {
   const parts = rows.map((r, i) => {
     const m = r.url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
@@ -480,8 +441,6 @@ export function blockerQuery(rows: Pick<Row, "url">[]): string {
   return `query{ ${parts.join("\n")} }`;
 }
 
-/** The cards one answer says still hold the card: the open ones. When every one is closed, the card waits for the
- * last one's code to deploy (housekeeping releases it then), so the closed ones show instead of nothing. */
 export function blockersOf(issue: any): Blocker[] {
   const nodes: any[] = issue?.blockedBy?.nodes || [];
   const all = nodes
@@ -521,22 +480,14 @@ async function fillBlockers() {
   }
 }
 
-// ---- Cards that left the board: kept an hour so Current work shows them closed.
-
 export const CLOSED_SECONDS = 3600;
 
-/** Remember the work cards that left the board in this read; forget the ones back on it or older than an hour. */
 export function keepClosed(closed: Map<string, { row: Row; at: number }>, d: Diff, waiting: string[], now: number) {
   for (const r of d.removed) if (!waiting.includes(r.lane)) closed.set(r.url, { row: r, at: now });
   for (const r of d.added) closed.delete(r.url);
   for (const [url, c] of closed) if (now - c.at > CLOSED_SECONDS * 1000) closed.delete(url);
 }
 
-// ---- The views the page uses.
-
-/** The Waiting on you view: every ticket in the waiting set (called `each` here, as this view always has), with the
- * reason the comment that moved it there gives, one row per `count` lane, and `working`/`done` for the Card flow
- * page (collector#53). */
 export function ticketsView() {
   const t = tickets();
   const s = statuses();
@@ -567,8 +518,6 @@ export function ticketsView() {
   };
 }
 
-/** The Work page's open cards: the `all` lanes, less the statuses that mean done (collector#53) — a done card is
- * not open work — in the shape the page uses. */
 export function workCards(rows: Row[], lanes: string[], done: string[]) {
   const known = new Set(lanesOf());
   return rows
@@ -627,8 +576,6 @@ export function boardStats() {
   };
 }
 
-// ---- The poller: every 10 seconds while a page is open, every minute when none has been for two minutes.
-
 const intervalSeconds = () => {
   const base = config().board?.interval || 10;
   const idle = S.clients === 0 && Date.now() - S.lastClientAt > 120_000;
@@ -637,7 +584,6 @@ const intervalSeconds = () => {
 
 export function startBoard() {
   if (S.timer) return;
-  // Start to start: a read takes about 1.7 s, so the next one waits only the rest of the interval.
   const loop = async () => {
     const t0 = Date.now();
     await poll();
@@ -646,14 +592,12 @@ export function startBoard() {
   S.timer = setTimeout(loop, 0);
 }
 
-/** Subscribe one page to board changes. Returns the unsubscribe. */
 export function subscribe(fn: (v: ReturnType<typeof view>) => void): () => void {
   startBoard();
   S.clients++;
   S.lastClientAt = Date.now();
   S.events.on("board", fn);
   if (S.rows !== null || S.error) fn(view());
-  // A page that opens after an idle spell gets a fresh read now, not at the next minute tick.
   if (Date.now() - S.at > (config().board?.interval || 10) * 1000) void poll("page opened");
   return () => {
     S.clients--;
@@ -662,7 +606,6 @@ export function subscribe(fn: (v: ReturnType<typeof view>) => void): () => void 
   };
 }
 
-/** Wait (up to `ms`) for the first read, for the plain JSON routes. */
 export async function ready(ms = 30_000) {
   startBoard();
   const t0 = Date.now();

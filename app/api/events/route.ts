@@ -4,7 +4,6 @@ import { openStream } from "@/lib/server/lifecycle";
 
 export const dynamic = "force-dynamic";
 
-/** Server-sent events: the board view on connect, then on every change the 10-second board read sees. */
 export function GET(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;
@@ -28,8 +27,6 @@ export function GET(req: Request) {
           ctrl.close();
         } catch {}
       };
-      // A SIGTERM ends this stream too, or `next start` waits on it with its port already shut (card #41). It says so
-      // first: the rebuild job restarts the server with no click (card #122), and the page marks the restart from this.
       const unlist = openStream(() => {
         send("event: restarting\ndata: {}\n\n");
         end();

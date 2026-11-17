@@ -4,11 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/**
- * collect.py's host-broken reader on a machine (James, 2026-11-11: "It's not a great error. It doesn't give me a
- * lot of detail"). The row named only the step and a SHA. The reader now adds the first error line of the foreman's
- * base-gate log beside the marker, run through the real Python with the files pageroast left on ezio.
- */
 const read = (files: Record<string, string>) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-host-broken-"));
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);

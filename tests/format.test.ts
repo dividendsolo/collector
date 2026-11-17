@@ -48,7 +48,6 @@ describe("format", () => {
     expect(bytes(60_000_000)).toBe("60 MB");
     expect(bytes(2_500_000)).toBe("2.5 MB");
     expect(bytes(1_200_000_000)).toBe("1.2 GB");
-    // Nothing counted, and a tool that gave a number we cannot read: a dash, never "null B".
     expect(bytes(null)).toBe("—");
     expect(bytes(undefined)).toBe("—");
     expect(bytes(Number.NaN)).toBe("—");
@@ -71,11 +70,9 @@ describe("format", () => {
     expect(lastResult({ last_status: "ok" })).toBe("ok");
     expect(lastResult({ history: true, last_status: null })).toBe("—");
     expect(lastResult({ history: false })).toBe("no history");
-    // A plain crontab line is green, and its row says it kept no history: not a failure.
     expect(historyless({ history: false })).toBe(true);
     expect(historyless({ history: true })).toBe(false);
     expect(historyless({})).toBe(false);
-    // A plain crontab line, as collect.py reports it, is green and never reads as a failure.
     const plain: { enabled: boolean; history: boolean; last_status: null } = {
       enabled: true,
       history: false,
@@ -96,10 +93,6 @@ describe("format", () => {
 });
 
 describe("runLabel", () => {
-  // A run on a card, a Claude Code session in a plain checkout, and a Codex session in the home folder — the three
-  // rows collect.py reports (card #21), each named the way collect.py names the tool (card #29). The project page's
-  // "Agent now" fact and the Agents page pills all print this, so a session with no card must name the tool and
-  // never read "#null".
   const onCard = run({ name: "collector-builder", kind: "build", card: 21, repo: "collector" });
   const inCheckout = run({ repo: "collector" });
   const inHome = run({ name: "Codex" });
@@ -116,7 +109,6 @@ describe("runLabel", () => {
     expect(runLabel(run({ name: "Claude Code", kind: "review", card: 7 }))).toBe("#7 reviewing");
   });
   it("reads as the project page's Agent now fact with a card-less session among the runs", () => {
-    // The fact's own expression, character for character as projects.tsx writes it.
     const fact = (agents: WorkRun[]) => (agents.length ? agents.map(runLabel).join(", ") : "—");
     expect(fact([onCard, inCheckout])).toBe("#21 building, Claude Code session");
     expect(fact([])).toBe("—");
@@ -124,9 +116,6 @@ describe("runLabel", () => {
 });
 
 describe("runDoing", () => {
-  /** James, 2026-10-25 (card #32): "Foreman should never show building. Foreman's never building, it's doing
-   * something other than that." Its step files say `building` while the card is out with a builder, so the work
-   * script's own row says where the card is instead; `building` and `reviewing` stay the agent's own words. */
   const workStep = (kind: string): WorkRun =>
     run({ type: "script", name: "foreman.py", kind, card: 32, repo: "collector" });
 
