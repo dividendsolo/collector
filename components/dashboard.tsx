@@ -5,6 +5,7 @@ import { ago, fetchedText } from "@/lib/format";
 import { jumpHref } from "@/lib/jump";
 import { briefsRow, fullRepo, p0Rows, priorityOrder, TRIAGE_LANE, transitionNames, triageRow } from "@/lib/priority";
 import { waitingList } from "@/lib/statuses";
+import { transitionName, transitionOut } from "@/lib/view-transition";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
 import { useBriefs } from "./briefs";
@@ -568,14 +569,14 @@ export function Waiting() {
             ) : shown.length || (current === "all" && counts.length) ? (
               <>
                 {shown.map((t: any) => (
-                  <tr key={t.url}>
+                  <tr key={t.url} style={{ viewTransitionName: transitionName("wait", fullRepo(t), t.number) }}>
                     <td>
                       {/* A needs-triage card's badge starts its own triage session; the other lanes keep the
                           check that hands the card to the agents (James, 2026-11-13). */}
                       {t.lane === TRIAGE_LANE ? (
                         <TriagePill t={t} />
                       ) : (
-                        <ReleasePill t={t} done={() => setGone((g) => new Set(g).add(t.url))} />
+                        <ReleasePill t={t} done={() => transitionOut(() => setGone((g) => new Set(g).add(t.url)))} />
                       )}
                     </td>
                     <td>

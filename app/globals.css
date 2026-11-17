@@ -1012,6 +1012,38 @@
       opacity: 0;
     }
   }
+  ::view-transition-group(*) {
+    animation-duration: 200ms;
+    animation-timing-function: var(--ease-out);
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+  #waiting-panel .wrap.scroll {
+    view-transition-name: waiting-rows;
+    view-transition-group: contain;
+  }
+  #waiting-panel thead {
+    view-transition-name: waiting-head;
+    position: relative;
+    z-index: 2;
+  }
+  ::view-transition-group(waiting-rows) {
+    overflow: clip;
+  }
+  ::view-transition-group(waiting-head) {
+    z-index: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) {
+      animation: none;
+    }
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation-duration: 200ms;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .spinner {
       animation-duration: 1.6s;
