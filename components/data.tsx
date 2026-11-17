@@ -28,8 +28,7 @@ export const useLive = () => useContext(LiveContext) as Live;
 
 /** Reload on a new build with a short fade instead of a redraw in one frame (James, 2026-11-06: "it just redraws the
  * whole page, like in one instant"): the page fades out, reloads, and the new page fades in (`body.fade-in`). */
-function softReload() {
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return location.reload();
+export function softReload() {
   sessionStorage.setItem("collector.fade-in", "1");
   document.body.classList.add("fade-out");
   setTimeout(() => location.reload(), 160);
