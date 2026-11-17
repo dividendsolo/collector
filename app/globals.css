@@ -69,6 +69,10 @@
     --mono: "Source Code Pro", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --radius: 6px;
     --sidebar: 48px;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --duration-hover: 0.15s;
+    --duration-enter: 0.18s;
     color-scheme: dark;
     --topbar: oklch(0.19 0.0025 var(--hue) / 0.85);
   }
@@ -568,7 +572,7 @@
     user-select: none;
   }
   .money {
-    transition: filter 0.15s ease;
+    transition: filter var(--duration-hover) ease;
   }
   .blur-toggle {
     display: inline-grid;
@@ -731,8 +735,8 @@
     text-align: center;
     box-shadow: 0 1px 2px oklch(0 0 0 / 0.3);
     transition:
-      opacity 0.18s ease,
-      border-color 0.18s ease;
+      opacity var(--duration-hover) ease,
+      border-color var(--duration-hover) ease;
   }
   .flow-box .flow-label {
     display: flex;
@@ -781,7 +785,7 @@
     text-align: left;
     box-shadow: 0 10px 24px oklch(0 0 0 / 0.45);
     pointer-events: none;
-    animation: flow-tip-in 0.12s ease;
+    animation: flow-tip-in var(--duration-enter) var(--ease-out);
   }
   .flow-tip.tone-go {
     --tip-bg: var(--green-bg);
@@ -823,7 +827,7 @@
     stroke: var(--flow-tone);
     stroke-width: 1.2;
     opacity: 0.45;
-    transition: opacity 0.18s ease;
+    transition: opacity var(--duration-hover) ease;
   }
   .flow-edge.main .flow-line {
     stroke-width: 1.6;
@@ -966,13 +970,13 @@
   }
   body.fade-out {
     opacity: 0;
-    transition: opacity 0.15s ease-out;
+    transition: opacity 0.15s var(--ease-out);
   }
   html.fading-in body {
     opacity: 0;
   }
   body.fade-in {
-    animation: page-in 0.25s ease-out;
+    animation: page-in 0.25s var(--ease-out);
   }
   @keyframes page-in {
     from {
@@ -1531,7 +1535,7 @@
     color: var(--faint);
     vertical-align: -1px;
     opacity: 0;
-    transition: opacity 0.12s ease;
+    transition: opacity var(--duration-hover) ease;
   }
   table.fit tr.row:hover .chev {
     opacity: 1;
@@ -2035,7 +2039,7 @@
     border: 1px solid var(--line-2);
     border-radius: var(--radius);
     box-shadow: 0 8px 24px oklch(0 0 0 / 0.4);
-    animation: toast-in 0.18s ease-out;
+    animation: toast-in var(--duration-enter) var(--ease-out);
   }
   .toast.error {
     border-color: var(--red-line);
