@@ -23,9 +23,8 @@ describe("a tap shows the app's own feedback, not the browser's highlight box", 
   });
 
   it("gives every tappable link and row a press state beside its hover state", () => {
-    const missing = preludes.flatMap((list) =>
-      list.filter(needsPressTwin).filter((s) => !list.includes(s.replace(":hover", ":active"))),
-    );
+    const selectors = new Set(preludes.flat());
+    const missing = [...selectors].filter(needsPressTwin).filter((s) => !selectors.has(s.replace(":hover", ":active")));
     expect(missing).toEqual([]);
   });
 });
