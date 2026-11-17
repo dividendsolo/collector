@@ -43,6 +43,7 @@ export interface GithubLimit {
   graphql?: { used: number; limit: number; reset: number };
   core?: { used: number; limit: number; reset: number };
   actions?: ActionsUsage;
+  refused?: number | null;
 }
 
 export interface ActionsUsage {
@@ -79,13 +80,24 @@ const actionsUsage = swr<ActionsUsage>("actions-usage", 5 * 60_000, async () => 
   };
 });
 
+export const isRateLimited = (error: string | null | undefined) => /rate limit|RATE_LIMITED/i.test(error ?? "");
+
+const graphqlProbe = swr<{ refused: number | null }>("graphql-probe", 60_000, async () => {
+  const [, err] = await run(["gh", "api", "graphql", "-f", "query={ viewer { login } }"], { timeout: 10, attempts: 1 });
+  return { refused: isRateLimited(err) ? Math.floor(Date.now() / 1000) : null };
+});
+
 export async function githubLimit(): Promise<GithubLimit> {
-  const [data, err] = await run(["gh", "api", "rate_limit"], { timeout: 10 });
-  if (!data) return { error: err };
+  const [[data, err], probe] = await Promise.all([
+    run(["gh", "api", "rate_limit"], { timeout: 10 }),
+    graphqlProbe.get().catch(() => ({ refused: null })),
+  ]);
+  const refused = probe.refused;
+  if (!data) return { error: err, refused };
   const r = data.resources;
   const pick = (k: string) => ({ used: r[k].used, limit: r[k].limit, reset: r[k].reset });
   const actions = await actionsUsage.get().catch((e) => ({ error: String(e) }));
-  return { graphql: pick("graphql"), core: pick("core"), actions };
+  return { graphql: pick("graphql"), core: pick("core"), actions, refused };
 }
 
 export interface Snapshot {

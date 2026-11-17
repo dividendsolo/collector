@@ -6,7 +6,9 @@ const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8")
 const src = (f: string) => readFileSync(path.join(process.cwd(), "components", f), "utf8");
 
 const rule = (selector: string) => {
-  const at = css.indexOf(`${selector} {`);
+  const whole = new RegExp(`(^|[}\\n])\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{`);
+  const found = whole.exec(css);
+  const at = found ? found.index + found[0].length - selector.length - 2 : -1;
   expect(at, `${selector} has a rule`).toBeGreaterThan(-1);
   return css.slice(at, css.indexOf("}", at));
 };

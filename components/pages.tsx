@@ -195,33 +195,58 @@ function GithubLimit() {
           <Icon name="alert" />
           <span>{g.error}</span>
         </div>
+        <GraphqlLimit g={g} />
         {jog}
       </div>
     );
   return (
     <div className="stats">
-      {(["graphql", "core"] as const).map((k) => {
-        const x = g[k];
-        const reset = new Date(x.reset * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        const pct = Math.round((x.used / x.limit) * 100);
-        return (
-          <div className="stat" key={k}>
-            <span className="label">{k === "graphql" ? "GraphQL (board reads)" : "REST"}</span>
-            <span className="value">
-              {x.used.toLocaleString()}{" "}
-              <small>
-                of {x.limit.toLocaleString()} used · resets {reset}
-              </small>
-            </span>
-            <div className={`bar ${pct > 90 ? "low" : ""}`}>
-              <span style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        );
-      })}
+      <GraphqlLimit g={g} />
+      <LimitStat label="REST" x={g.core} />
       <ActionsMinutes a={g.actions} />
       {jog}
     </div>
+  );
+}
+
+function LimitStat({ label, x }: { label: string; x?: { used: number; limit: number; reset: number } }) {
+  if (!x) return null;
+  const reset = new Date(x.reset * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const pct = Math.min(100, Math.round((x.used / x.limit) * 100));
+  return (
+    <div className="stat">
+      <span className="label">{label}</span>
+      <span className="value">
+        {x.used.toLocaleString()}{" "}
+        <small>
+          of {x.limit.toLocaleString()} used · resets {reset}
+        </small>
+      </span>
+      <div className={`bar ${x.used >= x.limit * 0.9 ? "low" : ""}`}>
+        <span style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export function GraphqlLimit({ g }: { g?: any }) {
+  if (!g) return null;
+  const refused =
+    g.refused &&
+    new Date(g.refused * 1000).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  return (
+    <>
+      {refused ? (
+        <div className="alert error">
+          <Icon name="alert" />
+          <span>GitHub is refusing calls · last refused {refused}</span>
+        </div>
+      ) : null}
+      <LimitStat label="GraphQL (board reads)" x={g.graphql} />
+    </>
   );
 }
 

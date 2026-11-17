@@ -25,8 +25,7 @@ export interface Live {
 const LiveContext = createContext<Live | null>(null);
 export const useLive = () => useContext(LiveContext) as Live;
 
-function softReload() {
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return location.reload();
+export function softReload() {
   sessionStorage.setItem("collector.fade-in", "1");
   document.body.classList.add("fade-out");
   setTimeout(() => location.reload(), 160);

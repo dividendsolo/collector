@@ -226,7 +226,7 @@ describe("the brief's bar stays in reach (James, 2026-11-10)", () => {
     expect(at).toBeGreaterThan(-1);
     const rule = block.slice(at, block.indexOf("}", at));
     expect(rule).toMatch(/position:\s*sticky/);
-    expect(rule).toMatch(/top:\s*48px/);
+    expect(rule).toMatch(/top:\s*calc\(48px \+ env\(safe-area-inset-top, 0px\)\)/);
   });
 
   it("lets the open brief's panel overflow, so the sticky head can stick", () => {

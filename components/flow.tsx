@@ -43,6 +43,7 @@ import {
   pulseBegins,
   tipAbove,
   tipAlign,
+  tipWarm,
   trailLit,
 } from "@/lib/flow";
 import { isAgentStack, otherStatuses, STATUS_GROUPS, STATUS_PILL, type StatusSets } from "@/lib/statuses";
@@ -70,6 +71,7 @@ const useHighlight = () => useContext(FlowHighlight);
 function StatusBox({ data }: NodeProps<StatusNode>) {
   const { status } = data;
   const { hover, trail } = useHighlight();
+  const above = tipAbove(status.y);
   const lit = !trail || trail.nodes.includes(status.id);
   const visits = trail?.visits[status.id] ?? 0;
   const dimmed = nodeDimmed(status.id, hover) || !lit;
@@ -91,11 +93,11 @@ function StatusBox({ data }: NodeProps<StatusNode>) {
       ) : null}
       <NodeToolbar
         isVisible={hover === status.id}
-        position={tipAbove(status.y) ? Position.Top : Position.Bottom}
+        position={above ? Position.Top : Position.Bottom}
         align={tipAlign(status.x)}
         offset={8}
       >
-        <div className={`flow-tip tone-${status.tone}`} data-tip={status.id}>
+        <div className={`flow-tip tone-${status.tone}`} data-tip={status.id} data-side={above ? "top" : "bottom"}>
           {status.tip}
         </div>
       </NodeToolbar>
@@ -199,6 +201,8 @@ export function Drawing({
   const still = useReducedMotion();
   const narrow = useMedia(NARROW);
   const scroller = useRef<HTMLDivElement>(null);
+  const left = useRef(0);
+  const [warm, setWarm] = useState(false);
   const [ownHover, setOwnHover] = useState<string | null>(null);
   const controlled = hoverNode !== undefined;
   const hover = (controlled ? hoverNode : ownHover) ?? null;
@@ -275,8 +279,17 @@ export function Drawing({
     [],
   );
 
-  const enter = useCallback((_: unknown, n: Node) => setHover(n.id), [setHover]);
-  const leave = useCallback(() => setHover(null), [setHover]);
+  const enter = useCallback(
+    (_: unknown, n: Node) => {
+      setWarm(tipWarm(performance.now(), left.current));
+      setHover(n.id);
+    },
+    [setHover],
+  );
+  const leave = useCallback(() => {
+    left.current = performance.now();
+    setHover(null);
+  }, [setHover]);
   const tap = useCallback(
     (_: unknown, n: Node) => {
       if (n.type !== "status") return;
@@ -284,10 +297,10 @@ export function Drawing({
       requestAnimationFrame(() =>
         document
           .querySelector(`[data-tip="${CSS.escape(n.id)}"]`)
-          ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }),
+          ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: still ? "auto" : "smooth" }),
       );
     },
-    [setHover],
+    [setHover, still],
   );
   const highlight = useMemo<Highlight>(() => ({ hover, setHover, still, trail }), [hover, setHover, still, trail]);
 
@@ -307,7 +320,11 @@ export function Drawing({
 
   return (
     <div ref={scroller} className={`flow-scroll${narrow ? " narrow" : ""}`}>
-      <div className="flow-canvas" style={{ ["--flow-node-h" as string]: `${NODE_H}px`, ...size } as CSSProperties}>
+      <div
+        className="flow-canvas"
+        data-warm={warm || undefined}
+        style={{ ["--flow-node-h" as string]: `${NODE_H}px`, ...size } as CSSProperties}
+      >
         <FlowHighlight.Provider value={highlight}>
           <ReactFlowProvider>
             <ReactFlow

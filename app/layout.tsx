@@ -1,8 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "@xyflow/react/dist/style.css";
 
 export const metadata: Metadata = { title: "Collector" };
+
+export const viewport: Viewport = {
+  themeColor: "#131415",
+  colorScheme: "dark",
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

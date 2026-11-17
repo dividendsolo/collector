@@ -23,6 +23,17 @@ export function priorityOrder<T extends { group?: PriorityGroup }>(rows: T[]): T
     .map((x) => x.r);
 }
 
+export function transitionNames(rows: { ack?: { key: string }; text?: string }[]): string[] {
+  const used = new Set<string>();
+  return rows.map((r) => {
+    const base = `alert-${String(r.ack?.key ?? r.text ?? "").replace(/[^A-Za-z0-9_-]/g, "_")}`;
+    let name = base;
+    for (let n = 1; used.has(name); n++) name = `${base}-${n}`;
+    used.add(name);
+    return name;
+  });
+}
+
 export function fullRepo(t: { repo?: string | null; url?: string | null }): string {
   const m = String(t.url ?? "").match(/github\.com\/([^/]+\/[^/]+)\/issues\//);
   return m ? m[1] : String(t.repo ?? "");

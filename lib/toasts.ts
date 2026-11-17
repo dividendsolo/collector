@@ -128,6 +128,18 @@ export function checkToasts(machines: { name: string; checks: Check[] }[]): Toas
   return out;
 }
 
+export type Shown = Toast & { leaving: boolean };
+
+export function withLeaving(prev: Shown[], next: Toast[]): Shown[] {
+  const out: Shown[] = next.map((t) => ({ ...t, leaving: false }));
+  prev.forEach((p, i) => {
+    if (out.some((t) => t.key === p.key)) return;
+    const before = i === 0 ? -1 : out.findIndex((t) => t.key === prev[i - 1].key);
+    out.splice(before + 1, 0, { ...p, leaving: true });
+  });
+  return out;
+}
+
 export function visibleToasts(all: Toast[], dismissed: Record<string, string>): Toast[] {
   return all.filter((t) => !(t.dismissible && dismissed[t.key] === t.state));
 }
