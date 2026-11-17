@@ -163,6 +163,8 @@
     flex-direction: column;
     gap: 2px;
     padding: 0 8px 16px;
+    padding-left: calc(8px + env(safe-area-inset-left, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     overflow: hidden;
     border-right: 1px solid var(--line);
     background: var(--bg);
@@ -921,8 +923,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    height: 48px;
+    height: calc(48px + env(safe-area-inset-top, 0px));
     padding: 0 24px;
+    padding-top: env(safe-area-inset-top, 0px);
     border-bottom: 1px solid var(--line);
     background: var(--topbar);
     backdrop-filter: blur(8px);
@@ -2036,8 +2039,8 @@
      On a phone they span the width. */
   .toasts {
     position: fixed;
-    right: 16px;
-    bottom: 16px;
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     z-index: 30;
     display: grid;
     gap: 8px;
@@ -2387,7 +2390,7 @@
   }
   .brief-panel > .panel-head {
     position: sticky;
-    top: 48px;
+    top: calc(48px + env(safe-area-inset-top, 0px));
     z-index: 1;
     background: var(--panel);
     border-radius: var(--radius) var(--radius) 0 0;
