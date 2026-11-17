@@ -130,6 +130,12 @@
     font: 13px / 1.5 var(--sans);
     -webkit-font-smoothing: antialiased;
   }
+  button,
+  a,
+  [role="button"],
+  tr.row {
+    touch-action: manipulation;
+  }
   svg.i {
     width: 14px;
     height: 14px;
