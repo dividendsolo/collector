@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import { statusSets, WAITING_CHECK_LABEL } from "../statuses";
+import { boardLimitWait, isRateLimit, limitText } from "./board-limit";
 import { type Board, config } from "./config";
+import { githubLimit } from "./machines";
 import { expandHome } from "./paths";
 import { run } from "./run";
 import { once } from "./store";
@@ -227,6 +229,7 @@ interface BoardState {
   lastClientAt: number;
   stats: Stats;
   closed: Map<string, { row: Row; at: number }>;
+  pausedUntil: number;
 }
 
 const S = once<BoardState>("board", () => {
@@ -244,6 +247,7 @@ const S = once<BoardState>("board", () => {
     lastClientAt: 0,
     stats: { polls: 0, cost: 0, since: Date.now(), last_ms: 0, last_at: 0, remaining: null, costs: [] },
     closed: new Map(),
+    pausedUntil: 0,
   };
 });
 
@@ -324,6 +328,10 @@ const lanesOf = () => {
 
 export async function poll(reason = "timer"): Promise<void> {
   if (S.busy) return;
+  if (S.pausedUntil > Date.now()) {
+    S.error = limitText(S.at, S.pausedUntil);
+    return;
+  }
   S.busy = true;
   const start = Date.now();
   const base = config();
@@ -355,6 +363,7 @@ export async function poll(reason = "timer"): Promise<void> {
     S.at = Date.now();
     const hadError = S.error;
     S.error = null;
+    S.pausedUntil = 0;
     const d = diffBoard(prev || [], rows);
     keepClosed(S.closed, d, statuses().waiting, Date.now());
     if (prev === null || !isEmpty(d) || hadError) {
@@ -367,8 +376,16 @@ export async function poll(reason = "timer"): Promise<void> {
     void fillReasons();
     void fillBlockers();
   } catch (e) {
-    S.error = String((e as Error).message).slice(0, 300);
-    console.log(`[board] read failed: ${S.error}`);
+    const message = String((e as Error).message).slice(0, 300);
+    if (isRateLimit(message)) {
+      const limit = await githubLimit().catch(() => ({}) as Awaited<ReturnType<typeof githubLimit>>);
+      S.pausedUntil = boardLimitWait({ reset: limit.graphql?.reset });
+      S.error = limitText(S.at, S.pausedUntil);
+      console.log(`[board] read failed: ${message}; no read until ${new Date(S.pausedUntil).toISOString()}`);
+    } else {
+      S.error = message;
+      console.log(`[board] read failed: ${S.error}`);
+    }
     emit();
   } finally {
     S.busy = false;
@@ -571,6 +588,7 @@ export function boardStats() {
     costs: undefined,
     cost_last_hour: hour,
     clients: S.clients,
+    paused_until: S.pausedUntil,
     interval_s: intervalSeconds(),
     rows: S.rows?.length ?? null,
   };
