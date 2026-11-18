@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * James, 2026-11-11, on a Supabase incident row that read "25 s ago": "I'm hoping it's not time ago since it showed on
- * the board, that's useless". A row's age is when the thing itself happened: the vendor's own open time for an
- * incident, the failed run's time for a job. Collector's first sight of a row is only the fallback.
- */
 const base = { github: {}, services: [], domains: [], ticketsError: null, x: null, ai: [] } as any;
 const at = (iso: string) => Date.parse(iso) / 1000;
 

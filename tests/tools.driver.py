@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import collect  # noqa: E402  (the app's own reader, imported once the repo root is on the path)
+import collect
 
 
 def facts_of(case):
@@ -59,6 +59,9 @@ def main():
             ports=case.get("ports", {}),
             children=case.get("children", {}),
         )
+    elif fn == "steps":
+        out = list(collect.step_rows({tuple(r["key"]): r["row"] for r in case.get("found", [])}, case["steps"],
+                                     case["now"]).values())
     elif fn == "sessions":
         out = collect.tool_sessions(case["ps"], skip=set(case.get("skip", [])), parents=case.get("parents", {}))
     elif fn == "droid":

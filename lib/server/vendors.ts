@@ -14,39 +14,27 @@ const DATADOG_IMPACT: Record<string, string> = {
   major_outage: "critical",
 };
 
-/** An incident the vendor has not updated in this many days is stale: still open, but no longer news. MongoDB
- * Atlas left a me-central-1 notice open from 2026-09-03 and never touched it again, and the row read "major" for
- * a week on an incident in regions we do not use (card #46). */
 export const STALE_DAYS = 7;
 
 export interface Incident {
   name: string;
   impact: string;
   url: string;
-  /** The day the vendor opened it and the day it last said anything about it, when its feed says. */
   opened?: string;
   updated?: string;
-  /** No update in STALE_DAYS days. A stale incident is named in the row but never sets the vendor's state. */
   stale?: boolean;
-  /** The regions the incident names (`us-east-1`), else the components it names ("Issues"). */
   where?: string[];
 }
 
-/** Cloud regions named in a status page's own text: AWS/Azure style (`us-east-1`, `me-central-1`, `us-gov-west-1`)
- * and Google style (`europe-west1`, `us-central1`). A status page writes a few of these; prose that only looks
- * like one is rare. */
 const REGION =
   /\b[a-z]{2,}(?:-[a-z0-9]+){1,2}-\d{1,2}\b|\b(?:us|europe|asia|australia|northamerica|southamerica|me|africa)-[a-z]+\d{1,2}\b/gi;
 
-/** The cloud regions a status page names in free text, lowercased and deduped. */
 export function regionsIn(text: string): string[] {
   const seen = new Set<string>();
   for (const m of String(text || "").matchAll(REGION)) seen.add(m[0].toLowerCase());
   return [...seen];
 }
 
-/** What an incident names: the regions in its own text when it names any, else its components. Four at most, so a
- * vendor row stays readable; the rest are counted. */
 function places(regions: string[], components: (string | undefined)[]): string[] | undefined {
   const named = regions.length ? regions : components.filter((c): c is string => !!c);
   const seen = new Set<string>();
@@ -62,27 +50,20 @@ function places(regions: string[], components: (string | undefined)[]): string[]
   return out.length > 4 ? [...out.slice(0, 4), `+${out.length - 4} more`] : out;
 }
 
-/** A time the feed gave, or undefined: a date the feed wrote badly never becomes the row's date. */
 function iso(t: unknown): string | undefined {
   if (typeof t === "number") return Number.isFinite(t) ? new Date(t).toISOString() : undefined;
   const s = typeof t === "string" ? t : "";
   return Number.isNaN(Date.parse(s)) ? undefined : s;
 }
 
-/** An update's text without the HTML a status page writes in it. */
 const plain = (s: unknown) => String(s ?? "").replace(/<[^>]*>/g, " ");
 
-/** Open incidents from one status feed, by its shape, or null for a shape this does not know. Statuspage, Datadog
- * status pages, Better Stack, Stripe's /current, X's developer status API, Google Cloud's incidents.json.
- * `now` is the moment the age is measured from, so a test can pin it. */
 export function readFeed(d: any, url: string, now = Date.now()): Incident[] | null {
   const found = readShape(d, url);
   if (found === null) return null;
-  // Fresh first: a stale incident sits below the live ones, never above them (card #46).
   return found.map((i) => stamp(i, now)).sort((a, b) => Number(!!a.stale) - Number(!!b.stale));
 }
 
-/** Ages one incident from the vendor's own dates. A feed that gives no date leaves it unstamped, not guessed. */
 function stamp(i: Incident, now: number): Incident {
   const t = Date.parse(i.updated || i.opened || "");
   return Number.isNaN(t) ? i : { ...i, stale: (now - t) / 86_400_000 >= STALE_DAYS };
@@ -90,7 +71,6 @@ function stamp(i: Incident, now: number): Incident {
 
 function readShape(d: any, url: string): Incident[] | null {
   if (Array.isArray(d)) {
-    // Google Cloud's incidents.json: every recent incident; open ones have no end
     return d
       .filter((i) => i && typeof i === "object" && "begin" in i && !i.end)
       .map((i) => {
@@ -122,8 +102,6 @@ function readShape(d: any, url: string): Incident[] | null {
         return {
           name: i.name,
           impact: i.impact || "none",
-          // A feed's own `shortlink` is outside data and lands in an `<a href>`: only a web address is a link, else the
-          // vendor's own status page (collector#84).
           url: webUrl(i.shortlink) || url,
           opened: iso(i.created_at),
           updated: iso(i.updated_at),
@@ -200,16 +178,13 @@ export interface VendorRow {
   url: string;
   state: string;
   incidents: Incident[];
-  /** How much we depend on it, from config.json's `vendors[].criticality` (collector#78). */
   criticality?: string;
 }
 
-/** One vendor's status page: "feed" when set, else the first known feed path that reads. No feed: a link only. */
 async function vendor(v: Vendor): Promise<VendorRow> {
   const url = v.url.replace(/\/+$/, "");
   const row: VendorRow = { name: v.name, url, state: "no feed", incidents: [], criticality: v.criticality };
   if (v.probe) {
-    // no status page: one GET of an API that answers without a key
     const c = await check({ name: v.name, url: v.probe });
     row.state = c.status === "online" ? "ok" : c.status === "slow" ? "minor" : "major";
     if (c.status !== "online")
@@ -234,8 +209,6 @@ async function vendor(v: Vendor): Promise<VendorRow> {
     }
     if (found !== null) {
       row.incidents = found;
-      // The headline state is the worst incident of the week. A stale one is still listed, with its age, but it is
-      // not what a vendor is doing today — and a vendor whose only open incident is stale is not "major" (card #46).
       const fresh = found.filter((i) => !i.stale);
       row.state = ["ok", "minor", "major", "critical"][Math.max(0, ...fresh.map((i) => IMPACT[i.impact] ?? 0))];
       break;
@@ -244,8 +217,6 @@ async function vendor(v: Vendor): Promise<VendorRow> {
   return row;
 }
 
-/** Where the last vendor read lives: beside config.json, gitignored, so a restart shows the incidents at once
- * instead of popping the row in when the status pages answer (James, 2026-11-11). */
 const VENDORS_SEEN = () => process.env.COLLECTOR_VENDORS_SEEN || path.join(ROOT, ".vendors-seen.json");
 
 type VendorRead = { at: number; vendors: VendorRow[] };
@@ -253,9 +224,7 @@ type VendorRead = { at: number; vendors: VendorRow[] };
 export function saveVendors(read: VendorRead) {
   try {
     fs.writeFileSync(VENDORS_SEEN(), `${JSON.stringify(read)}\n`);
-  } catch {
-    // A read-only folder loses the saved read on restart, nothing more.
-  }
+  } catch {}
 }
 
 function savedVendors(): VendorRead | undefined {
@@ -278,9 +247,6 @@ const cache = swr<VendorRead>(
   savedVendors,
 );
 
-/** Every vendor in config.json "vendors", checked every five minutes. The dashboard reads it here: the last read at
- * once (the saved one after a restart), and a stale one starts a fresh read in the background, so an incident the
- * vendor resolved leaves Priority tasks within five minutes (it stayed until a restart before, 2026-11-11). */
 export const lastVendors = () => {
   vendors().catch(() => {});
   return cache.peek()?.vendors ?? [];

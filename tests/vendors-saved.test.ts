@@ -3,15 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-/**
- * James, 2026-11-11: "the call for the incidents takes longer than the other calls in the priority panel, is there a
- * better way to wait for it other than just filling in everything and then popping a new row on the top??" He picked
- * the saved read: the last vendor read is kept on disk, so the incident row is there from the first second after a
- * restart, and a fresh read replaces it in the background.
- *
- * And the bug found with it: the dashboard read the vendors through `lastVendors()`, which never asked for a fresh
- * read, so an incident stayed on Priority tasks after the vendor resolved it until a restart or a Vendors page visit.
- */
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vendors-seen-"));
 const file = path.join(dir, "vendors.json");
 process.env.COLLECTOR_VENDORS_SEEN = file;

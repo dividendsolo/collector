@@ -1,5 +1,3 @@
-/** The prose of a comment, one sentence at a time: no headings, quotes, tables, code, or Markdown marks. Log paths
- * and run records (a "$" or 3+ slashes) are skipped. */
 export function sentences(body: string): string[] {
   const keep: string[] = [];
   for (const line of body.replace(/\r/g, "").split("\n")) {
@@ -30,14 +28,8 @@ export interface Reason {
   at: string;
 }
 
-/** Why a ticket sits in its lane: the Ask lane posted for the current stay (shown as "kind: ask"), else the comment
- * that moved it there (the newest one up to when the lane label went on,
- * else the newest that reads like a reason, else the newest), cut to one sentence. */
-/** The Ask `lane set` posts before it moves a card into a James lane (agent-stack#139): "**Ask (kind):** text". */
 const ASK = /\*\*Ask \(([a-z]+)\):\*\*\s*([^\n]+)/;
 
-/** That Ask as one line, `kind: text`, or null for a comment that is not one. The waiting list's reason and a
- * journey step's reason are the same line (collector#146). */
 export function askOf(body: string): string | null {
   const [, kind, text] = body.match(ASK) ?? [];
   if (!kind) return null;
@@ -45,8 +37,6 @@ export function askOf(body: string): string | null {
   return line.slice(0, 220) + (line.length > 220 ? "…" : "");
 }
 
-/** The claim the foreman posts when a lane takes a card: `<!-- foreman:claim role=build host=ezio run=... -->`, in
- * the card's own comment. Its role and host say what took the card and which machine it was (collector#146). */
 const CLAIM = /foreman:claim[^>]*?\brole=([\w-]+)[^>]*?\bhost=([\w.-]+)/;
 
 export function claimOf(body: string): { role: string; host: string } | null {
@@ -54,9 +44,6 @@ export function claimOf(body: string): { role: string; host: string } | null {
   return role && host ? { role, host } : null;
 }
 
-/** A comment's own first line of prose, whole: what a journey step shows for the move it explains ("Released by
- * hand (James, 2026-11-13): both blockers are live."). Null for a comment with no prose at all (a bare claim
- * marker). A long sentence stays long: it is the comment's own, and the card's row is one line of it either way. */
 export function headline(body: string): string | null {
   const line = sentences(body)[0];
   if (!line) return null;
@@ -66,10 +53,6 @@ export function headline(body: string): string | null {
 export function pickReason(comments: Comment[], labeledAt: string[]): Reason | null {
   const moved = labeledAt[labeledAt.length - 1];
   const asks = comments.filter((c) => ASK.test(c.body));
-  // A new Ask posted while the card already waits beats the one that moved it in (collector#142): a `--ask` on a card
-  // already in the lane posts no label event, so the newest Ask from the start of the current stay to now is read
-  // first, and the cut at the move no longer drops it. No Ask in this stay keeps the old pick: the newest Ask posted
-  // up to the move, the one that moved it in.
   const inStay = moved ? asks.filter((c) => c.createdAt >= moved) : asks;
   const beforeMove = moved ? asks.filter((c) => c.createdAt <= moved) : [];
   const ask = inStay[inStay.length - 1] ?? beforeMove[beforeMove.length - 1];
@@ -92,8 +75,6 @@ export function pickReason(comments: Comment[], labeledAt: string[]): Reason | n
 
 const CARD_SECTION = /^#+\s*(what|problem|bug|goal|why|summary)\b/i;
 
-/** What a card is for: its Agent Brief Summary line, else the first sentences of its What / Problem section, else of
- * the body; about 320 characters. */
 export function cardText(body: string): string {
   const lines = (body || "").replace(/\r/g, "").split("\n");
   const head = lines.findIndex((l) => CARD_SECTION.test(l.trim()));

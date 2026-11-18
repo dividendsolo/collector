@@ -7,35 +7,20 @@ import { useApi } from "./data";
 import { Markdown } from "./markdown";
 import { Count, Icon, PanelHead, SkelRows } from "./ui";
 
-/**
- * The Briefs page (collector#64): the reports the cron jobs wrote for James, the way his email inbox works. The
- * files live on the machines (`collect.py` reads the folder on each one); which of them he has read and archived
- * lives on this machine, so both survive a browser reset. The terms are in GLOSSARY.md: the Inbox is every brief
- * that is not Archived, oldest first; a Read one stays in the Inbox, dimmed, until he archives it.
- */
-
 interface BriefsData {
   at: number;
   inbox: Brief[];
   archived: Brief[];
-  /** One plain line when a machine (or the state file) could not be read. */
   why?: string;
 }
 
-/** A brief's own page: the whole file, its front matter as the row above it. */
 interface BriefData {
   brief?: Brief & { body: string };
   why?: string;
 }
 
-/** `/api/briefs` once a minute: the same snapshot every other page reads, split into the two lists. */
 export const useBriefs = () => useApi<BriefsData>("/api/briefs");
 
-/**
- * The date a brief reads by: the day it went out in the viewer's own time zone, the same day their mail app shows.
- * Not UTC: a brief sent in the evening in New York fell on the next UTC day (James, 2026-11-11). `timeZone` is for
- * tests; the page leaves it out, so the browser's zone is used.
- */
 export const briefDay = (sent_at: string | null | undefined, timeZone?: string) => {
   const at = sent_at ? new Date(sent_at) : null;
   return at && !Number.isNaN(at.getTime())
@@ -44,8 +29,6 @@ export const briefDay = (sent_at: string | null | undefined, timeZone?: string) 
 };
 const day = (sent_at: string | null | undefined) => briefDay(sent_at);
 
-/** One click's write (Read on open, or Archive). Its answer is the whole view, handed to the shared `/api/briefs`
- * read so the sidebar count and the Inbox change on the click rather than at the next minute's refresh. */
 export async function postBrief(machine: string, file: string, change: { read?: boolean; archived?: boolean }) {
   const r = await fetch("/api/briefs", {
     method: "POST",
@@ -60,8 +43,6 @@ export async function postBrief(machine: string, file: string, change: { read?: 
 
 type KeyLike = { key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; target?: unknown };
 
-/** An open brief's keys (James, 2026-11-10): E archives, Esc goes back to the Inbox. A key with a modifier, or one typed
- * in a field, is left to the page. */
 export function briefKey(e: KeyLike): "archive" | "inbox" | null {
   if (e.metaKey || e.ctrlKey || e.altKey) return null;
   const tag = (e.target as { tagName?: string } | undefined)?.tagName;
@@ -71,7 +52,6 @@ export function briefKey(e: KeyLike): "archive" | "inbox" | null {
   return null;
 }
 
-/** Archive, then back to the Inbox: a brief done with is a brief left (James, 2026-11-10). A refused write stays put. */
 export async function archiveBrief(machine: string, file: string) {
   const r = await postBrief(machine, file, { archived: true });
   if (r.ok) location.hash = "#/briefs";
@@ -80,7 +60,6 @@ export async function archiveBrief(machine: string, file: string) {
 
 const href = (b: Brief) => `#/briefs/${encodeURIComponent(b.machine)}/${encodeURIComponent(b.file)}`;
 
-/** One row: bold says Unread, a click anywhere opens the brief, and how far down the Inbox it sits is the order itself. */
 export const BriefRow = ({ b }: { b: Brief }) => (
   <tr
     className={`row ${b.read ? "read" : "unread"}`}
@@ -163,15 +142,23 @@ export function BriefsPage() {
   );
 }
 
-/** One brief, read whole: opening it is what makes it Read, and the Archive button sits at its top (the Acknowledge
- * toggle's own button on Needs attention). There is no unarchive in this pass. */
+const SKEL_LINES = ["h", "l", "l", "m", "", "l", "l", "s", "", "m", "l", "l", "m"];
+const BriefSkel = () => (
+  <div className="brief-skel" role="status" aria-busy="true" aria-label="Loading the brief">
+    {SKEL_LINES.map((w, i) => (w ? <span className={`skel ${w}`} key={i} /> : <span className="gap" key={i} />))}
+  </div>
+);
+
 export function BriefPage({ machine, file }: { machine: string; file: string }) {
   const query = `/api/brief?machine=${encodeURIComponent(machine)}&file=${encodeURIComponent(file)}`;
   const { data } = useApi<BriefData>(query);
+  const list = useBriefs().data;
+  const listed = [...(list?.inbox || []), ...(list?.archived || [])].find(
+    (b) => b.machine === machine && b.file === file,
+  );
   const brief = data?.brief;
+  const head = brief || listed;
   const [archived, setArchived] = useState(false);
-  // Opening a brief makes it Read (GLOSSARY.md). Once: the read state lands on this machine, and the next read of the
-  // brief carries it.
   useEffect(() => {
     if (!brief || brief.read) return;
     void postBrief(machine, file, { read: true });
@@ -194,8 +181,8 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
   return (
     <div className="page">
       <section className="panel briefs-panel brief-panel">
-        <PanelHead icon="inbox" title={brief?.brief || "Brief"}>
-          <span className="sub">{brief ? `${brief.machine} · ${day(brief.sent_at)}` : ""}</span>
+        <PanelHead icon="inbox" title={head?.brief || "Brief"}>
+          <span className="sub">{head ? `${head.machine} · ${day(head.sent_at)}` : ""}</span>
           <div className="tools">
             <a className="btn ghost back" href="#/briefs" title="Back to the inbox (Esc)">
               <Icon name="back" />
@@ -211,7 +198,7 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
             {data.why}
           </p>
         ) : null}
-        {brief?.body ? <Markdown text={brief.body} /> : null}
+        {brief?.body ? <Markdown text={brief.body} /> : data ? null : <BriefSkel />}
       </section>
     </div>
   );

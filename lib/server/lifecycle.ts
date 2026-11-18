@@ -1,28 +1,11 @@
-/**
- * The server's own record of when it starts and why it stops (card #41).
- *
- * `collector.log` had no time of its own on a start or a stop, so a restart could only be dated from the `[board]`
- * lines around it and launchd's log. Every start now writes one stamped `[server] start` line, and a SIGTERM writes
- * one stamped `[server] SIGTERM` line with the processes that started in the seconds before it, which is the
- * nearest thing to a sender a signal leaves behind (macOS records no sender for a plain `kill`).
- *
- * The SIGTERM handler also ends every open event stream. `next start` answers a SIGTERM by closing its port and
- * waiting for the connections still open, and a page's `/api/events` stream never finishes on its own: on
- * 2026-10-29 the server sat for ten minutes with its port shut and one open page attached, every new request
- * refused, the open page frozen on its last machine snapshot ("no run" for builds that were running), until a
- * reload closed the stream and the process finally exited.
- */
 import { execFileSync } from "node:child_process";
 import type { Side } from "../update";
 import { once } from "./store";
 
-/** How far back the SIGTERM line looks for the process that may have sent it. */
 export const RECENT_SECONDS = 15;
 
-/** The closers of the open `/api/events` streams, one per open page. */
 const streams = () => once("event-streams", () => new Set<() => void>());
 
-/** Register one open event stream's closer. Returns the unregister, for a stream that ends by itself. */
 export function openStream(close: () => void): () => void {
   const all = streams();
   all.add(close);
@@ -33,7 +16,6 @@ export function openStream(close: () => void): () => void {
 
 export const openStreams = () => streams().size;
 
-/** End every open event stream. Returns how many there were. */
 export function closeStreams(): number {
   const all = [...streams()];
   streams().clear();
@@ -45,7 +27,6 @@ export function closeStreams(): number {
   return all.length;
 }
 
-/** ps's ELAPSED column (`[[dd-]hh:]mm:ss`) in seconds, null when it is not one. */
 export function etimeSeconds(etime: string): number | null {
   const m = /^(?:(\d+)-)?(?:(\d+):)?(?:(\d+):)?(\d+)$/.exec(etime.trim());
   if (!m) return null;
@@ -54,16 +35,12 @@ export function etimeSeconds(etime: string): number | null {
   return Number(d ?? 0) * 86400 + Number(h ?? 0) * 3600 + Number(min ?? 0) * 60 + Number(s);
 }
 
-/** A command line with anything shaped like a credential masked: the log must never hold a key (AGENTS.md), and
- * another process's arguments can (`curl -H "Authorization: Bearer ..."`). */
 export const redact = (command: string) =>
   command
     .replace(/\b(bearer\s+|basic\s+)[^\s'"&]+/gi, "$1***")
     .replace(/((?:token|key|secret|password|passwd|auth)[\w-]*[=:]\s*)(?!bearer\b|basic\b|\*\*\*)[^\s'"&]+/gi, "$1***")
     .replace(/\b(?:sk|pk|rk|ghp|gho|ghs|github_pat|xox[a-z])[-_][\w-]{8,}/g, "***");
 
-/** The processes in `ps -Ao pid,ppid,etime,command` output that started in the last `within` seconds, one line
- * each, never `self` nor its own children (the ps that printed the table, its `gh` and `ssh` reads). */
 export function recentProcesses(ps: string, { self, within = RECENT_SECONDS }: { self: number; within?: number }) {
   const out: string[] = [];
   for (const line of ps.split("\n").slice(1)) {
@@ -89,7 +66,6 @@ export function termLine(at: Date, pid: number, ppid: number, ended: number, rec
   return recent.length ? `${head}\n${recent.map((l) => `[server]   ${l}`).join("\n")}` : `${head} nothing`;
 }
 
-/** The process table, or nothing when ps cannot run (it must never stop the shutdown). */
 function processTable(): string {
   try {
     return execFileSync("ps", ["-Ao", "pid,ppid,etime,command"], { encoding: "utf8", timeout: 2000 });
@@ -98,14 +74,8 @@ function processTable(): string {
   }
 }
 
-/** How long a SIGTERM waits for Next's own shutdown before the process exits by itself. */
 export const EXIT_GRACE_MS = 2000;
 
-/** At boot: write the start line, and on SIGTERM log, end the streams and exit. Ours runs first
- * (`prependListener`): Next's own SIGTERM handler closes the port and exits once the last connection is gone, but an
- * open page in a foreground tab asks `/api/version` every two seconds over a kept-alive connection, so that never
- * happens (a headless page kept a SIGTERMed server answering for over a minute, 2026-10-29). The exit after
- * EXIT_GRACE_MS is the deadline; 143 is the code a SIGTERM leaves. Once per process. */
 export function watchLifecycle(build: Side, log: (line: string) => void = console.log) {
   once("lifecycle", () => {
     log(startLine(new Date(), process.pid, process.ppid, build));

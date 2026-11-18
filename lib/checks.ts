@@ -1,19 +1,5 @@
-/**
- * A machine's Security checks (collector#65, James 2026-11-06: "a little rubric that we can just say, like, hey,
- * everything's good to go here"). One row per check, each with a dot: green is good, amber is a weak setting worth
- * fixing, red is a real exposure, grey is a check that could not be read (never green: an unread check proves
- * nothing). Each check carries a card for its tooltip: what it is, why it matters, and the fix.
- *
- * Red raises a toast that stays until the check is green; amber raises one the user may dismiss.
- *
- * Pure: it reads the Network section collect.py sent for the machine.
- */
-
 export type Level = "green" | "amber" | "red" | "grey";
 
-/** Why a known program's firewalled port is safe to leave open, by the program's name (James, 2026-11-06: "explain
- * why it's okay that that one port is open"). A firewalled port with no entry here gets no reason: opened on purpose
- * is not the same as safe, and the card says so. */
 export const WHY_OPEN: Record<string, string> = {
   tailscaled:
     "Tailscale (WireGuard) uses this port to connect your devices to each other directly. It answers only packets " +
@@ -22,10 +8,8 @@ export const WHY_OPEN: Record<string, string> = {
 };
 
 export interface Check {
-  /** Stable per machine and check: the toast's key. */
   id: string;
   label: string;
-  /** What the toast says when the check is not green: the problem in one plain sentence. */
   problem?: string;
   value: string;
   level: Level;
@@ -62,12 +46,8 @@ export interface NetworkIn {
 
 const base = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
 
-/** A program macOS itself ships: under /System, /usr or /sbin (not /usr/local, where Homebrew and installers put
- * theirs). Everything else on the allow list is an app you installed and allowed. */
 const isSystem = (p: string) => /^\/(System|usr|sbin|bin)\//.test(p) && !p.startsWith("/usr/local/");
 
-/** A program's readable name: the app bundle's name without ".app" (Brave Browser, not "Brave Browser" the binary
- * inside it), a system extension by its bundle id's last word (tailscale, protonvpn), else the file's own name. */
 function appName(p: string): string {
   const ext = p.match(/\/([^/]+)\.systemextension$/);
   if (ext) {
@@ -83,20 +63,17 @@ function appName(p: string): string {
   return apps.length ? apps[apps.length - 1] : base(p);
 }
 
-/** The names, once each, in alphabetical order, so the list is easy to scan. */
 const names = (apps: { path: string }[]) =>
   [...new Set(apps.map((a) => appName(a.path)))]
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
     .join(", ");
 const unique = <T>(xs: T[]) => xs.filter((x, i) => xs.findIndex((y) => JSON.stringify(y) === JSON.stringify(x)) === i);
 
-/** The checks for one machine, in reading order. `mac` is true for a Mac (the firewall reads apps, not ports). */
 export function securityChecks(machine: string, net: NetworkIn | null | undefined, mac: boolean): Check[] {
   const out: Check[] = [];
   const fw = net?.firewall ?? null;
   const id = (k: string) => `check:${machine}:${k}`;
 
-  // The firewall itself.
   if (!fw)
     out.push({
       id: id("firewall"),
@@ -134,7 +111,6 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
           ],
     });
 
-  // What comes in when nothing says otherwise.
   if (fw?.active && !mac)
     out.push({
       id: id("incoming"),
@@ -213,7 +189,6 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
     });
   }
 
-  // SSH.
   if (net?.ssh?.source) {
     const real = net.ssh.source === "sshd -T";
     const on: string[] = [];
@@ -234,7 +209,6 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
     });
   }
 
-  // The tailnet.
   if (net?.tailnet_acl !== undefined) {
     const acl = net.tailnet_acl;
     const from = acl ? unique(acl.flatMap((r) => r.from).map((ip) => ip.split("/")[0])) : null;
@@ -253,7 +227,6 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
     });
   }
 
-  // The internet.
   const ports = net?.sockets || [];
   const open = unique(ports.filter((s) => s.reach === "internet").map((s) => `${s.proto} ${s.port}`));
   const walledRows = ports.filter((s) => s.reach === "firewalled");
@@ -284,7 +257,6 @@ export function securityChecks(machine: string, net: NetworkIn | null | undefine
   return out;
 }
 
-/** The worst level among a machine's checks, for its summary dot: red over amber over grey over green. */
 export function worst(checks: Check[]): Level {
   for (const l of ["red", "amber", "grey"] as const) if (checks.some((c) => c.level === l)) return l;
   return "green";

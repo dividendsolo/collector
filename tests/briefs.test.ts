@@ -5,20 +5,6 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { archived, type Brief, inbox, isBriefFile, keyOf } from "@/lib/briefs";
 
-/**
- * The Briefs page (collector#64). Three halves:
- *
- * - the read on the machine: `collect.py`'s own folder reader, driven through `tests/briefs.driver.py`, so the
- *   reading a machine does is tested against the real Python and the writer's own file names;
- * - the rules the page shows: the Inbox is every brief that is not Archived, oldest first, and the sidebar's count is
- *   that list's length;
- * - this machine's state: opening a brief makes it Read, Archive files it out of the Inbox, and both live in
- *   `briefs.json` beside `config.json` — a browser reset and a Collector restart both leave them there.
- *
- * COLLECTOR_CONFIG is read once, at import time (`lib/server/paths.ts`), so the temp folder is set before the route
- * loads (the same shape as tests/proposals.test.ts) and neither `briefs.json` nor anything else lands in the repo.
- * The machines are mocked: a brief's file is read on another machine over ssh, which no test does.
- */
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-briefs-"));
 const envBefore = process.env.COLLECTOR_CONFIG;
 process.env.COLLECTOR_CONFIG = path.join(dir, "config.json");
@@ -29,7 +15,6 @@ fs.writeFileSync(
   JSON.stringify({ machines: [{ name: "altair" }, { name: "ezio", ssh: "ezio" }] }),
 );
 
-/** What the mocked machine read answers, per test. */
 const fake = vi.hoisted(() => ({
   machines: [] as any[],
   brief: null as any,
@@ -69,7 +54,6 @@ afterAll(() => {
 });
 
 const HOST = "127.0.0.1:4000";
-/** The page's own click: this origin, JSON, the way components/briefs.tsx sends it. */
 const PAGE = { host: HOST, "sec-fetch-site": "same-origin", "content-type": "application/json" };
 
 const get = (url: string, headers: Record<string, string> = { host: HOST }) => list(new Request(url, { headers }));
@@ -84,13 +68,11 @@ const post = (body: unknown, headers: Record<string, string> = PAGE) =>
 
 const state = () => JSON.parse(fs.readFileSync(STATE, "utf8"));
 
-/** A brief's file name as the writer makes it: `<UTC stamp>-<slug>-<6 hex>.md`. */
 const file = (stamp: string, slug: string, hex = "ab12cd") => `${stamp}-${slug}-${hex}.md`;
 const LEAD = file("2026-11-08T141717Z", "lead-watch");
 const ILLYISM = file("2026-11-08T030102Z", "illyism-watch", "ffeedd");
 const LAB = file("2026-11-07T113141Z", "lab-droid", "001122");
 
-/** One machine's rows as `collect.py` answers them: oldest first, the writer's own names. */
 const on = (name: string, ...files: string[]) => ({
   name,
   briefs: files.map((f) => ({
@@ -113,14 +95,13 @@ const rows = async () => {
 };
 
 describe("collect.py's brief folder read (collector#64)", () => {
-  /** One case against the real reader, through the driver the way `tests/watch.driver.py` drives its own. */
   const read = (spec: unknown) =>
     JSON.parse(
       execFileSync("python3", [path.join(process.cwd(), "tests", "briefs.driver.py")], {
         cwd: process.cwd(),
         input: JSON.stringify(spec),
         encoding: "utf8",
-        timeout: 10_000, // a reader that hangs (a FIFO in the folder) fails the test instead of hanging the run
+        timeout: 10_000,
       }),
     ) as { rows: any[]; one: any; missing: any };
 
@@ -239,7 +220,6 @@ describe("an Inbox of briefs on two machines (collector#64)", () => {
     const body = await rows();
     expect(body.inbox).toEqual([]);
     expect(body.archived).toEqual([]);
-    // One plain line, naming the machine: an empty Inbox on a machine nothing read would be a lie.
     expect(body.why).toBe("ezio could not be read: ssh: connect to host ezio port 22: Connection refused");
   });
 });
@@ -248,7 +228,6 @@ describe("opening a brief makes it Read (collector#64)", () => {
   it("reads it on the click, keeps it in the Inbox, and the state is on this machine", async () => {
     fake.machines = [on("ezio", ILLYISM, LEAD)];
     expect((await post({ machine: "ezio", file: LEAD, read: true })).status).toBe(200);
-    // The file beside config.json holds it, so a browser reset and a Collector restart both leave it read.
     expect(state()).toEqual({ read: [keyOf({ machine: "ezio", file: LEAD })], archived: [] });
     const body = await rows();
     expect(body.inbox.map((b) => b.file)).toEqual([ILLYISM, LEAD]);
@@ -277,12 +256,11 @@ describe("Archive takes a brief out of the Inbox (collector#64)", () => {
     await post({ machine: "ezio", file: LAB, archived: true });
     const body = await rows();
     expect(body.inbox.map((b) => b.file)).toEqual([ILLYISM, LEAD]);
-    expect(body.archived.map((b) => b.file)).toEqual([LAB]); // and newest first: a second, older one lands under it
+    expect(body.archived.map((b) => b.file)).toEqual([LAB]);
     await post({ machine: "ezio", file: ILLYISM, archived: true });
     const after = await rows();
     expect(after.archived.map((b) => b.file)).toEqual([ILLYISM, LAB]);
     expect(after.inbox.map((b) => b.file)).toEqual([LEAD]);
-    // An archived brief still opens.
     fake.brief = { file: ILLYISM, brief: "Illyism Watch", subject: "x", sent_at: "y", body: "# Illyism Watch\n" };
     const opened = await (await open("ezio", ILLYISM)).json();
     expect(opened.brief).toMatchObject({ file: ILLYISM, archived: true, body: "# Illyism Watch\n" });
@@ -307,7 +285,7 @@ describe("opening one brief (collector#64)", () => {
     };
     await post({ machine: "ezio", file: LEAD, read: true });
     const body = await (await open("ezio", LEAD)).json();
-    expect(fake.asked).toEqual([LEAD]); // one file read, over the ssh the snapshot uses
+    expect(fake.asked).toEqual([LEAD]);
     expect(body.brief).toMatchObject({
       machine: "ezio",
       file: LEAD,
@@ -324,7 +302,7 @@ describe("opening one brief (collector#64)", () => {
     for (const file of ["../../etc/passwd", "/etc/passwd", ".hidden.md", "notes.txt", ""]) {
       expect((await open("ezio", file)).status, file).toBe(400);
     }
-    expect(fake.asked).toEqual([]); // nothing was read anywhere
+    expect(fake.asked).toEqual([]);
   });
 
   it("says the one line when the machine has no such brief", async () => {
@@ -344,7 +322,6 @@ describe("a Briefs state file the page cannot read (collector#64)", () => {
     expect(r.status).toBe(409);
     expect((await r.json()).why).toContain(STATE);
     expect(fs.readFileSync(STATE, "utf8")).toBe(broken);
-    // The briefs are still there — the file holds what he read, not what he read — with the one line that says why.
     const body = await rows();
     expect(body.inbox.map((b) => b.file)).toEqual([LEAD]);
     expect(body.inbox[0].read).toBe(false);
@@ -356,8 +333,6 @@ describe("a Briefs state file the page cannot read (collector#64)", () => {
     fake.machines = [on("ezio", LEAD)];
     const body = await rows();
     expect(body.inbox[0]).toMatchObject({ read: true });
-    // A key the page does not know is kept: its machine may simply not have answered this read, and a brief must not
-    // silently become unread because of it.
     await post({ machine: "ezio", file: ILLYISM, archived: true });
     expect(state()).toEqual({
       read: [keyOf({ machine: "ezio", file: LEAD }), "x"],
@@ -420,7 +395,6 @@ describe("the rules the page shows (collector#64)", () => {
     ];
     expect(inbox(briefs).map((b) => b.file)).toEqual([ILLYISM, LEAD]);
     expect(archived(briefs).map((b) => b.file)).toEqual([file("2026-11-09T030102Z", "illyism-watch", "aabbcc"), LAB]);
-    // The briefs a machine answered in some other order are sorted, not trusted.
     expect(inbox([at(LEAD), at(ILLYISM)]).map((b) => b.file)).toEqual([ILLYISM, LEAD]);
   });
 

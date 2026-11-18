@@ -4,9 +4,6 @@ import { describe, expect, it } from "vitest";
 import { AiPlan } from "@/components/ai";
 import { nousNote } from "@/lib/server/ai";
 
-// James, 2026-11-12: the Nous row showed "Balance —" while the Nous login was broken ("Invalid refresh
-// token"), so a signed-out provider looked like a missing number. A provider that could not be read
-// says why, and how to fix it.
 describe("an AI provider that could not be read", () => {
   const nous = { provider: "nous", profiles: 31, kind: "usage", note: "Nous signed out. Run: hermes auth add nous" };
 

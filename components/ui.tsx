@@ -35,7 +35,6 @@ export const Icon = ({ name, className = "i" }: { name: IconName; className?: st
   </svg>
 );
 
-/** The icon sprite, once per page. */
 export function Sprite() {
   return (
     <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
@@ -129,7 +128,6 @@ export function Sprite() {
         <path d="M12 3l7 3v5c0 4.5-2.9 7.9-7 10-4.1-2.1-7-5.5-7-10V6z" />
         <path d="m9 12 2 2 4-4.5" />
       </symbol>
-      {/* Interactive triage: the Lucide `split` arrow, one path that splits into two (collector#139). */}
       <symbol id="i-split" viewBox="0 0 24 24">
         <path d="M16 3h5v5" />
         <path d="M8 3H3v5" />
@@ -147,10 +145,8 @@ export function PanelHead({
   iconClass,
 }: {
   icon: IconName;
-  /** Left out on a page with one panel: the top bar already names the page (James, 2026-11-10). */
   title?: string;
   children?: ReactNode;
-  /** A class on the icon, for a panel whose icon carries a status colour (the Network page's machine summaries). */
   iconClass?: string;
 }) {
   return (
@@ -178,7 +174,6 @@ export const Count = ({
   </span>
 );
 
-/** Status pill with its dot: ok, failed, warning, agent, human, or plain. */
 export const Pill = ({ cls = "", dot = true, children }: { cls?: string; dot?: boolean; children: ReactNode }) => (
   <span className={`pill ${cls}`.trim()}>
     {dot && <span className="dot" />}
@@ -204,7 +199,6 @@ export const Ext = ({
 
 export const Dash = () => <span className="sub">—</span>;
 
-/** Skeleton rows: the shape of the rows to come, so nothing shifts when the data lands. */
 export const SkelRows = ({ n, cols }: { n: number; cols: number }) => (
   <>
     {Array.from({ length: n }, (_, i) => (
@@ -254,8 +248,6 @@ export const SkelPlans = () => (
   </>
 );
 
-// ---- Blur toggle for amounts: one switch for every eye button, remembered in this browser only.
-
 const blurSubs = new Set<() => void>();
 function readBlur() {
   try {
@@ -304,7 +296,6 @@ export function BlurToggle() {
 
 export const Money = ({ children }: { children: ReactNode }) => <span className="money">{children}</span>;
 
-/** A sentence whose dollar amounts blur with the eye button too. */
 export const BlurText = ({ text }: { text: string }) => (
   <>
     {moneyParts(text).map((p, i) =>

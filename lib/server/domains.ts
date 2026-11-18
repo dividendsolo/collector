@@ -22,7 +22,6 @@ export interface Domain {
   renew_source?: string | null;
 }
 
-/** Registrar and dates from an RDAP answer. Null when it has no expiry (whois decides). */
 export function parseRdap(j: any): Partial<Domain> | null {
   const events: Record<string, string> = {};
   for (const e of j?.events || []) events[e.eventAction] = (e.eventDate || "").slice(0, 10);
@@ -40,7 +39,6 @@ export function parseRdap(j: any): Partial<Domain> | null {
   return { registered: true, registrar, expires: events.expiration, since: events.registration || null };
 }
 
-/** The fallback for registries without RDAP (.io): the whois text. */
 export function parseWhois(text: string): Partial<Domain> {
   if (/^(no match|not found|domain not found|no data found)/im.test(text)) return { registered: false };
   const exp = text.match(
@@ -61,7 +59,7 @@ async function rdap(name: string) {
   try {
     return parseRdap(await getJson(`https://rdap.org/domain/${name}`, { Accept: "application/rdap+json" }, 15));
   } catch {
-    return null; // a 404 can mean "no RDAP for this TLD" (.io): whois decides
+    return null;
   }
 }
 
@@ -71,7 +69,6 @@ async function whois(name: string) {
   return parseWhois(r.stdout);
 }
 
-/** When the HTTPS certificate on the domain runs out (YYYY-MM-DD), or null. */
 function certExpiry(name: string): Promise<string | null> {
   return new Promise((resolve) => {
     const sock = tls.connect({ host: name, port: 443, servername: name, timeout: 8000 }, () => {
@@ -87,7 +84,6 @@ function certExpiry(name: string): Promise<string | null> {
   });
 }
 
-/** Whole days until a YYYY-MM-DD date (local midnight), counting today. */
 export function daysLeft(day: string | null | undefined, now = Date.now()): number | null {
   if (!day) return null;
   const [y, m, d] = day.split("-").map(Number);
@@ -96,7 +92,6 @@ export function daysLeft(day: string | null | undefined, now = Date.now()): numb
 
 const VERCEL_AUTH = path.join(HOME, "Library/Application Support/com.vercel.cli/auth.json");
 
-/** {domain: auto-renew} for domains bought through Vercel. Key: VERCEL_TOKEN, else the Vercel CLI's own login. */
 async function vercelRenew(): Promise<Record<string, boolean>> {
   let token = secret("VERCEL_TOKEN");
   if (!token) {
@@ -122,7 +117,6 @@ async function vercelRenew(): Promise<Record<string, boolean>> {
   return out;
 }
 
-/** {domain: auto-renew} from Cloudflare Registrar, with CLOUDFLARE_REGISTRAR_TOKEN. */
 async function cloudflareRenew(): Promise<{ renew: Record<string, boolean>; error: string | null }> {
   const token = secret("CLOUDFLARE_REGISTRAR_TOKEN");
   if (!token) return { renew: {}, error: null };
@@ -161,11 +155,11 @@ interface DomainState {
   cf_error: string | null;
 }
 
-const DOMAIN_TTL = 12 * 3600_000; // registry dates change once a year; twice a day is plenty
+const DOMAIN_TTL = 12 * 3600_000;
 
 const cache = swr<DomainState>(
   "domains",
-  (v) => (v.cf_error ? 60_000 : DOMAIN_TTL), // a key fixed on Cloudflare's side shows within a minute
+  (v) => (v.cf_error ? 60_000 : DOMAIN_TTL),
   async () => {
     const listed = config().domains || [];
     const [vercel, cf, rows] = await Promise.all([
@@ -182,7 +176,6 @@ const cache = swr<DomainState>(
   },
 );
 
-/** Every domain in config.json. Read every 12 hours, and at once when the list or .env changes. */
 export async function domains() {
   const key = `${(config().domains || []).join(",")}|${envStamp()}`;
   const d = await cache.get({ key });

@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const TIP = ".card-tip, [data-tip]";
 type Fact = [label: string, value: string];
 type Card = { title: string; text: string; url: string; facts?: Fact[]; tone?: string } | null;
 
-/** The labelled facts an element carries in data-tip-facts (JSON, [label, value] pairs), or none. */
 function factsOf(el: HTMLElement): Fact[] | undefined {
   if (!el.dataset.tipFacts) return undefined;
   try {
@@ -18,27 +17,25 @@ function factsOf(el: HTMLElement): Fact[] | undefined {
 }
 const cache = new Map<string, Promise<Card>>();
 
-/** Card tooltip: hover or focus a card number to see what the card is for (title + its Summary or What).
- * Any element with data-tip (a Projects row) shows that text instead, with data-tip-title above it; one that also
- * carries data-tip-facts shows those labelled facts under it, one per line (the Network page's process), and one
- * with data-tip-tone (red, amber, green, blue, grey) wears that colour's tint and edge, like the Card flow page's. */
 export function CardTip() {
   const tip = useRef<HTMLDivElement>(null);
   const [body, setBody] = useState<{ key: string; card?: Card; loading: boolean } | null>(null);
   const forKey = useRef<string | null>(null);
   const anchor = useRef<HTMLElement | null>(null);
 
+  useLayoutEffect(() => {
+    const el = anchor.current;
+    const t = tip.current;
+    if (!body || !el || !t) return;
+    const r = el.getBoundingClientRect();
+    t.style.left = "0px";
+    const w = t.offsetWidth;
+    const h = t.offsetHeight;
+    t.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+    t.style.top = `${r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6}px`;
+  }, [body]);
+
   useEffect(() => {
-    const place = () => {
-      const el = anchor.current;
-      const t = tip.current;
-      if (!el || !t) return;
-      const r = el.getBoundingClientRect();
-      const w = t.offsetWidth;
-      const h = t.offsetHeight;
-      t.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
-      t.style.top = `${r.bottom + 6 + h > innerHeight ? r.top - h - 6 : r.bottom + 6}px`;
-    };
     const show = async (el: HTMLElement) => {
       const key =
         el.dataset.tip || el.dataset.tipFacts
@@ -59,7 +56,6 @@ export function CardTip() {
           },
           loading: false,
         });
-        requestAnimationFrame(place);
         return;
       }
       if (!cache.has(key))
@@ -72,12 +68,10 @@ export function CardTip() {
             .catch(() => null),
         );
       setBody({ key, loading: true });
-      requestAnimationFrame(place);
       const c = await cache.get(key);
       if (forKey.current !== key) return;
-      if (!c) cache.delete(key); // try again on the next hover
+      if (!c) cache.delete(key);
       setBody({ key, card: c, loading: false });
-      requestAnimationFrame(place);
     };
     const hide = () => {
       forKey.current = null;
@@ -128,8 +122,8 @@ export function CardTip() {
           {body.card.text ? <span>{body.card.text}</span> : null}
           {body.card.facts?.length ? (
             <div className="tip-facts">
-              {body.card.facts.map(([label, value]) => (
-                <div key={label}>
+              {body.card.facts.map(([label, value], i) => (
+                <div key={`${i}-${label}`}>
                   <span className="tip-label">{label}:</span> <span className="tip-value">{value}</span>
                 </div>
               ))}

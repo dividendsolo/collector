@@ -4,8 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/** collect.py's Claude Code and Codex helpers, driven on fixtures: `tests/tools.driver.py` runs the real Python, so
- * the parsing under test here is the parsing a machine runs. */
 const ROOT = process.cwd();
 
 function drive<T>(probe: unknown): T {
@@ -17,11 +15,9 @@ function drive<T>(probe: unknown): T {
   return JSON.parse(out) as T;
 }
 
-/** A `ps -axo pid=,etime=,command=` list, one line per process. */
 const ps = (...lines: string[]) => lines.join("\n");
 const proc = (pid: number, etime: string, command: string) => `${pid} ${etime} ${command}`;
 
-/** One row collect.py prints for a tool session, as the page reads it. */
 interface Run {
   type: string;
   name: string;
@@ -30,11 +26,9 @@ interface Run {
   card: number | null;
   seconds: number;
   model?: string;
-  /** The session runs inside tmux (card #37): the page's Running for cell reads `tmux` instead of `interactive`. */
   tmux?: boolean;
 }
 
-/** A throwaway home holding the session files a tool writes locally. */
 function home(files: Record<string, string>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-tools-"));
   for (const [rel, body] of Object.entries(files)) {
@@ -131,11 +125,6 @@ describe("tool_rows", () => {
     ).toEqual([]);
   });
   it("shows no row for Claude Code's own helper processes", () => {
-    // James's Mac, 2026-10-26 (card #34): the panel showed about 12 Claude Code rows while 3 sessions ran. The rest
-    // were helpers — the background daemon, the terminal hosts behind a background session, and their idle standbys —
-    // every one of them a `claude` process, so every one of them a row. The command lines are the ones claude
-    // 2.1.303 spawns: the daemon and a standby under the argv0 the binary sets for itself ("claude daemon",
-    // "claude bg-spare"), the pty host in both the forms it takes, one of them with the daemon's own worker flag.
     const rows = drive<Run[]>({
       fn: "rows",
       ps: ps(
@@ -159,7 +148,6 @@ describe("tool_rows", () => {
         proc(3006, "00:12", "/Users/me/.local/bin/claude --bg-spare /tmp/claude/s2.sock"),
         proc(3007, "00:11", "claude bg-spare"),
         proc(3008, "00:10", "/Users/me/.local/bin/claude daemon run --daemon-worker"),
-        // The 3 sessions, one of them a prompt that happens to say the word the daemon is named after.
         proc(3101, "01:00", "/Users/me/.local/bin/claude"),
         proc(3102, "00:50", "/Users/me/.local/bin/claude --session-id 9e2b7c"),
         proc(3103, "00:40", "/Users/me/.local/bin/claude -p restart the daemon"),
@@ -179,9 +167,6 @@ describe("tool_rows", () => {
     ]);
   });
   it("shows every Claude Code session in one folder as its own row", () => {
-    // James's Mac, 2026-10-26 (card #34): the 3 sessions all ran in the home folder, so keying a row by its folder —
-    // which is how a Codex shim and its binary become one run — drew the 3 of them as 1. A claude process has no shim
-    // under it once its helpers are gone, so each one is a session of its own.
     const home = { cwd: "/Users/me", branch: null, root: null };
     const rows = drive<Run[]>({
       fn: "rows",
@@ -203,9 +188,6 @@ describe("tool_rows", () => {
     expect(rows.every((r) => r.name === "Claude Code" && r.repo === null && r.model === "claude-opus-5-5")).toBe(true);
   });
   it("marks a session that runs inside tmux, the pane's shell and the server among its ancestors", () => {
-    // James, 2026-10-29 (card #37): his tmux `Work` window read `interactive` like every other session, and the
-    // page said nothing about which one it was. Inside tmux the pane's shell is the server's child and the session
-    // sits under that, so the walk runs the parent pids of the same `ps` read up to the process whose program is tmux.
     const cwd = "/home/me/code/collector/.worktrees/build-21";
     expect(
       drive<Run[]>({
@@ -245,8 +227,6 @@ describe("tool_rows", () => {
 });
 
 describe("worktree_rows", () => {
-  /** One row collect.py prints for a process in a card worktree. A leftover carries the port it listens on when the
-   * machine (`ss` on Linux, `lsof` on a Mac) shows one. */
   interface WorktreeRow {
     repo: string;
     kind: string;
@@ -257,8 +237,6 @@ describe("worktree_rows", () => {
     port?: number;
   }
   const worktree = "/home/me/code/collector/.worktrees/build-25";
-  // What a builder's test server looks like in `ps`: the shell it was started from holds the worktree in its own
-  // command line, which is how this process was ever read as a card's work at all.
   const bunStart = proc(
     9001,
     "01:20:30",
@@ -266,8 +244,6 @@ describe("worktree_rows", () => {
   );
 
   it("shows a process left in a card worktree as a leftover, named after the program it runs", () => {
-    // James, 2026-10-25 (card #32): a leftover `bun start` in a build worktree read as `foreman.py | building` for
-    // three hours. Nothing is working that card: no agent, no step file, no verify run.
     expect(drive<WorktreeRow[]>({ fn: "worktrees", ps: ps(bunStart), ports: { 9001: [4123] } })).toEqual([
       { repo: "collector", kind: "leftover", card: 25, type: "leftover", name: "bun start", seconds: 4830, port: 4123 },
     ]);
@@ -287,9 +263,6 @@ describe("worktree_rows", () => {
     expect(rows.map((r) => r.type)).not.toContain("script");
   });
   it("names the row after the oldest process of the worktree, with the port the child under it listens on", () => {
-    // The shape a builder's test server leaves behind on a live machine: `script -a -q -e -c 'cd <worktree> && bun
-    // start'` keeps the worktree in its own command line, and the server it started holds the socket without the path
-    // in its own (Next renames that process `next-server (v16.4.2)`).
     const rows = drive<WorktreeRow[]>({
       fn: "worktrees",
       ps: ps(bunStart, proc(9003, "01:20:29", "next-server (v16.4.2)")),
@@ -358,7 +331,6 @@ describe("worktree_rows", () => {
 });
 
 describe("lab_droid", () => {
-  /** A `ps -axo user=,pid=,etime=,command=` list: one user column in front of the plain list. */
   const withUser = (...lines: string[]) => lines.join("\n");
   const owned = (user: string, pid: number, etime: string, command: string) => `${user} ${pid} ${etime} ${command}`;
 
@@ -440,8 +412,6 @@ describe("tool_sessions", () => {
 });
 
 describe("process_cwd", () => {
-  // macOS has no /proc, so collect.py asks lsof for the folder. This is real `lsof -a -p <pid> -d cwd -Fn` output,
-  // the shape taken from a run on ezio; /proc is hidden for the call so that is the branch under test.
   const lsof = "p4242\nn/home/me/code/collector/.worktrees/build-21\n";
 
   it("reads the folder out of lsof where there is no /proc", () => {
@@ -571,9 +541,6 @@ describe("pi_model", () => {
   });
 });
 
-/** The subscriptions panel shows one row per provider a profile can call (James, 2026-11-09: "I need to have a Mini
- * Max section in the panel"). MiniMax is never a profile's main provider, only its last fallback, so the reader takes
- * the fallback list from config.yaml as well. */
 describe("profile_fallbacks", () => {
   it("reads every fallback provider from a Hermes config.yaml, in order", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fallbacks-"));
@@ -597,5 +564,47 @@ describe("profile_fallbacks", () => {
     expect(drive<string[]>({ fn: "profile_fallbacks", path: file })).toEqual(["kimi-coding", "minimax"]);
     fs.writeFileSync(file, "model:\n  provider: nous\nfallback_providers: []\n");
     expect(drive<string[]>({ fn: "profile_fallbacks", path: file })).toEqual([]);
+  });
+});
+
+type StepRow = Record<string, unknown>;
+
+describe("a foreman run waiting on GitHub (collector#220)", () => {
+  const NOW = 1794933000;
+  const wait = { on: "GitHub", why: "rate limit", until: NOW + 480 };
+  const step = (extra: object = {}) => ({
+    repo: "collector",
+    card: 220,
+    step: "opening the PR",
+    since: NOW - 600,
+    pid: 1,
+    ...extra,
+  });
+  it("puts the step file's wait on the script's own row", () => {
+    expect(drive<StepRow[]>({ fn: "steps", steps: [step({ wait })], now: NOW })).toEqual([
+      { repo: "collector", kind: "opening the PR", card: 220, type: "script", name: "work script", seconds: 600, wait },
+    ]);
+  });
+  it("puts it on the agent's row when an agent works the card", () => {
+    const agent = {
+      repo: "collector",
+      kind: "build",
+      card: 220,
+      type: "agent",
+      name: "collector-builder",
+      seconds: 90,
+    };
+    expect(
+      drive<StepRow[]>({
+        fn: "steps",
+        found: [{ key: ["collector", "build", 220], row: agent }],
+        steps: [step({ wait })],
+        now: NOW,
+      }),
+    ).toEqual([{ ...agent, wait }]);
+  });
+  it("drops a wait whose retry time has passed, or one that names nothing", () => {
+    for (const w of [{ ...wait, until: NOW - 1 }, { until: NOW + 60 }, "GitHub"])
+      expect(drive<StepRow[]>({ fn: "steps", steps: [step({ wait: w })], now: NOW })[0]).not.toHaveProperty("wait");
   });
 });

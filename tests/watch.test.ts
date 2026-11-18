@@ -4,18 +4,6 @@ import { describe, expect, it } from "vitest";
 import { collect, watchFor } from "@/lib/server/machines";
 import { warnings } from "@/lib/server/warnings";
 
-/**
- * The agents and jobs Collector watches (collector#54). The Hermes jobs, the launchd jobs, the crontab lines, the
- * systemd timers, the Hermes gateway and its ticker, and the Claude Code and Codex sessions are read with no setting
- * at all; `config.json`'s `watch` adds a user's own. One entry names one thing and the signal that says how it is
- * doing — a process, a session, a launchd label and its last exit code, a log file's last line or age, or a
- * heartbeat file — and idle too long or failing shows in Needs attention, the same as our droids.
- *
- * The reading lives in collect.py, which runs on each machine (over ssh), so these fixtures go through the real
- * Python: `tests/watch.driver.py` writes the case's files into a throwaway home and hands one case to
- * `collect.watch_rows`, with a fixed `now` (Monday 2026-11-02, 12:00 in the machine's own zone) that a fixture
- * file's age is measured back from, so an age is the same on every machine and at every hour.
- */
 const ROOT = process.cwd();
 const NOW = "2026-11-02T12:00:00-05:00";
 
@@ -36,7 +24,6 @@ interface Case {
   self_pid?: number;
 }
 
-/** One watch read on fixtures: the real Python, so the reading under test is the reading a machine does. */
 function read(spec: Case): Row[] {
   return JSON.parse(
     execFileSync("python3", [path.join(ROOT, "tests", "watch.driver.py")], {
@@ -47,19 +34,14 @@ function read(spec: Case): Row[] {
   ) as Row[];
 }
 
-/** A `ps -axo pid=,etime=,command=` list, one line per process. */
 const ps = (...lines: string[]) => lines.join("\n");
 const proc = (pid: number, etime: string, command: string) => `${pid} ${etime} ${command}`;
 
-/** `launchctl list <label>` output: the job's own dictionary, one line per setting. launchd reports the raw wait
- * status, so a job that exited 1 shows 256 and the live Collector job, which a kickstart ends with SIGTERM (143),
- * shows 36608: the reader divides the code back out (see the live `com.james.collector` job). */
 const job = (...lines: string[]) => `{\n${lines.map((l) => `\t${l}`).join("\n")}\n};`;
 const FAILED = job('"LastExitStatus" = 256;', '"Label" = "com.example.report";');
 const WORKED = job('"LastExitStatus" = 0;', '"Label" = "com.example.report";');
 const UP = job('"LastExitStatus" = 0;', '"Label" = "com.example.report";', '"PID" = 1064;');
 
-/** One function of collect.py, on fixtures. */
 const DRIVER = `import inspect, json, os, sys
 sys.path.insert(0, os.getcwd())
 import collect
@@ -74,7 +56,6 @@ function call(fn: string, ...args: unknown[]): any {
 
 describe("collect.py's watch read", () => {
   it("reads a launchd job that exited 1 as failed, with the exit code", () => {
-    // The card's own case: a custom launchd job that exits 1 (collector#54).
     const rows = read({
       entries: [{ name: "Nightly backup", launchd: "com.example.report" }],
       launchd: { "com.example.report": { out: FAILED } },
@@ -110,7 +91,6 @@ describe("collect.py's watch read", () => {
       state: "failed",
       detail: "launchd has no com.example.gone on this machine",
     });
-    // A job launchd has loaded and never started carries no exit code: that is not a failure.
     const never = read({
       entries: [{ name: "Report", launchd: "com.example.report" }],
       launchd: { "com.example.report": { out: job('"Label" = "com.example.report";') } },
@@ -119,8 +99,6 @@ describe("collect.py's watch read", () => {
   });
 
   it("trusts an ok_exits entry: a non-zero exit the job's own setting calls success is not a failure", () => {
-    // The setting is written with the code a person means (3), and launchd reports 768 for it: the reader divides
-    // it back out before it looks the code up.
     const out = job('"LastExitStatus" = 768;');
     expect(
       read({
@@ -138,7 +116,6 @@ describe("collect.py's watch read", () => {
   });
 
   it("reads a heartbeat file older than its limit as idle, and one inside it as ok", () => {
-    // The card's other case: a heartbeat file older than its limit shows as idle (collector#54).
     const entries = [{ name: "The crew", heartbeat: "~/crew/beat", idle_after: 900 }];
     expect(read({ entries, files: { "crew/beat": { age_s: 7200 } } })[0]).toMatchObject({
       state: "idle",
@@ -185,7 +162,6 @@ describe("collect.py's watch read", () => {
       state: "ok",
       detail: "written 5 min ago",
     });
-    // A log entry with no fail_on has only its age to say, and a log nobody wrote is not a run that worked.
     expect(
       read({ entries: [{ name: "Sync", log: "~/sync.log" }], files: { "sync.log": { age_s: 300 } } })[0].state,
     ).toBe("ok");
@@ -207,7 +183,6 @@ describe("collect.py's watch read", () => {
   });
 
   it("is never the reader's own process, whose command line carries the watch entries themselves", () => {
-    // The entries reach collect.py as its own argument, so a watched name is in the reader's own command line.
     const entries = [{ name: "Backup agent", process: "backup-agent.py" }];
     const own = proc(4242, "00:01", `python3 /home/me/collector/collect.py {"watch":[{"process":"backup-agent.py"}]}`);
     expect(read({ entries, ps: ps(own), self_pid: 9 })[0].state).toBe("busy");
@@ -251,7 +226,6 @@ describe("collect.py's watch read", () => {
   });
 
   it("says an entry that is not an object rather than dropping it", () => {
-    // collector#57 kickback 2: `"watch": ["com.example.backup"]` showed nothing at all.
     expect(read({ entries: ["com.example.backup", null, 7] })).toEqual([
       {
         name: "watch",
@@ -265,7 +239,6 @@ describe("collect.py's watch read", () => {
   });
 
   it("says an idle_after that is not a positive number, and reads the rest of the machine", () => {
-    // collector#57 kickback 3: `"idle_after": "900"` raised a TypeError that took the machine's whole read down.
     const rows = read({
       entries: [
         { name: "Beat", heartbeat: "~/beat", idle_after: "900" },
@@ -352,8 +325,6 @@ describe("watchFor", () => {
   ];
 
   it("shows a machine only the entries that name it, and the ones that name no machine here", () => {
-    // A process, a launchd label and a file each belong to one machine: reading another machine's entry here would
-    // invent an idle row for it.
     expect(watchFor(entries, "vps", "altair").map((w) => w.name)).toEqual(["On the vps"]);
     expect(watchFor(entries, "altair", "altair").map((w) => w.name)).toEqual(["Here", "Also here"]);
   });
@@ -365,9 +336,6 @@ describe("watchFor", () => {
 });
 
 describe("a watch that is not a list, on the snapshot path", () => {
-  // collector#57 kickback 1: `watchFor` called `.filter` on whatever `watch` was, so `"watch": {"name": "x"}` threw
-  // inside the snapshot before collect.py ran, and no machine was read at all. Two machines here, as
-  // `snapshot` reads them: the setting goes to the machine Collector runs on as it is, so collect.py says it once.
   const targets = [{ name: "altair" }, { name: "ezio" }];
 
   it.each([[{ name: "x" }], ["x"]])("reads every machine and warns once about %j", async (watch) => {
@@ -380,7 +348,6 @@ describe("a watch that is not a list, on the snapshot path", () => {
       ["altair", null, true],
       ["ezio", null, true],
     ]);
-    // Only the watch rows: the rest of a real machine's read (its own jobs) is not this test's to pin.
     expect(warnings({ ...base, machines }).filter((w) => w.text.startsWith("watch on"))).toEqual([
       { group: "jobs", level: "warn", text: "watch on altair: config.json's watch is not a list of entries" },
     ]);

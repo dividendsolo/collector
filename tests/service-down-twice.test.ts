@@ -1,13 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Checked, confirmDown } from "@/lib/server/services";
 
-/**
- * James, 2026-11-11, on a screenshot of "Abide is down: HTTP 520" and "Dividend Solo is down: timed out": "this has
- * happened a few times today, can you investigate". Both sites were up: at 19:42 UTC four sites behind Cloudflare
- * failed in the same second from the Mac (Abide on ezio, Dividend Solo on Vercel), and ezio's proxy saw no request.
- * A one-check blip on the way out is not an outage. A site shows Down only when two checks in a row fail; the first
- * failure shows as Slow with its error, and every failure is still logged.
- */
 const row = (status: Checked["status"], error: string | null = null): Checked => ({
   name: "Abide",
   url: "https://abide.dividendsolo.com",

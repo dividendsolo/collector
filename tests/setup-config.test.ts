@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { CONFIG_KEYS, unknownConfigKeys } from "@/lib/server/config";
 import { warnings } from "@/lib/server/warnings";
 
-/** A file in the repo, read as text: these are the artifacts a new user copies or pastes. */
 const file = (p: string) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
 const sorted = (keys: readonly string[]) => [...keys].sort();
 
@@ -29,7 +28,6 @@ describe("config.example.json", () => {
 
 describe("README", () => {
   it("documents exactly the keys Collector reads in its Configure it table", () => {
-    // Row keys only: the table's one `.env` line (X_BEARER_TOKEN) is not a config.json key.
     const table = file("README.md").split("## Configure it")[1].split("\n## ")[0];
     const documented = [...table.matchAll(/^\| `([a-z_]+)`/gm)].map((m) => m[1]);
     expect(sorted(documented)).toEqual(sorted(CONFIG_KEYS));

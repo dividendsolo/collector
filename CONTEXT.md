@@ -265,6 +265,12 @@ once, and `.flow-canvas` in `app/globals.css` restates the page's own tokens ove
   hover (or a tap, on a touch screen) above or below the box (`tipAbove`), running toward the middle from the outer
   columns (`tipAlign`), so the canvas never clips one. Each is a React Flow `NodeToolbar`, drawn outside the zoomed
   viewport, so it reads at 11px at any zoom: inside the node it shrank with the canvas to 3.6px text on a phone.
+  The entrance (collector#153) is Emil Kowalski's tooltip rule: 125ms on the page's own `--ease-out` curve, from
+  `scale(0.97)` and no opacity, growing out of the box it belongs to (`data-side`, `top`/`bottom`, its
+  `transform-origin` the tip's own bottom or top edge). Once one tooltip of a group is open the next ones appear at
+  once: `tipWarm` in `lib/flow.ts` (300ms, `FLOW_TIP_WARM_MS`) marks a tip entered right after the last one closed
+  warm, and a warm canvas (`data-warm`) turns the entrance off — the first tooltip after the pointer arrives from
+  outside the drawing still grows in. With `prefers-reduced-motion` the scale goes and the 125ms fade stays.
 - **Light pulses**: every path carries three dots moved by SVG `animateMotion` along the very curve they travel
   (`pulseBegins` spreads them so one is always in flight), in the status's own colour, brightest down `MAIN_PATH`,
   with an arrowhead per path saying which way a card moves; a status glows as a pulse lands on it.
@@ -572,6 +578,12 @@ links to the page with the details.
 away by itself when the problem is resolved (James, 2026-11-06). Each toast has a `key` (`service:<url>`,
 `network:<machine>`) and a `state` (the status and error, or the sorted list of open ports).
 
+A toast leaves by the bottom edge it came in by (card #160): it rises 8px and fades in over 180ms (`@starting-style`),
+and on Dismiss or when the poll drops it, it sinks 8px and fades out over 150ms before the stack closes up. Both are
+CSS transitions on `.toast`, not keyframes, so a toast that comes back mid-exit turns around from where it is.
+`withLeaving` in `lib/toasts.ts` keeps a dropped toast in its place, marked `leaving`, until its opacity transition
+ends; Dismiss writes the dismissal on that same `transitionend`. Reduced motion keeps the fades and drops the 8px.
+
 A toast makes no sound (James, 2026-11-11: "remove the alert sound on the dashboard, don't need it"). The two-tone
 Web Audio alarm a new red toast played is gone, and `tests/toasts.test.ts` fails if page code makes a sound again.
 
@@ -633,8 +645,9 @@ read the same list.
 
 The toast looks like good news, not a warning (collector#180): level `good`, a blue border (`.toast.good`, the
 theme's `--blue` in dark and light), no dot, and sorted after errors and warnings. Its Dismiss acknowledges the
-notice's key (`acknowledges` on the toast, `setAck` in `components/toasts.tsx`'s `ToastCard`), so Dismiss and the
-row's Acknowledge are the same click: the toast and the row both go and do not come back. A notice whose line says
+notice's key (`acknowledges` on the toast; `components/toasts.tsx` writes it with `setAck` at the end of the
+button's own fade-out, the way it writes a dismissal), so Dismiss and the row's Acknowledge are the same click: the
+toast and the row both go and do not come back. A notice whose line says
 `level: error` stays a red toast with its dot and no Dismiss. `tests/good-news-toast.test.ts` holds it.
 `tests/notices.test.ts` and `tests/notices.driver.py` drive the real `collect.py` on a fixture home.
 
@@ -716,6 +729,42 @@ reason, that date carries the page's own hover card (`components/card-tip.tsx`, 
 `lib/work.ts`'s `holdTip` is what decides the text, and it is null when the line has no reason, so an older card's
 date stays plain — no reason, no tooltip. Read the two facts apart: `holdText` is the date the row shows,
 `holdTip` is the reason hovering it shows.
+
+## The running count says what each run does, and when it waits on GitHub (collector#220)
+
+On 2026-11-17 five foreman runs showed as running for over 20 minutes; they were asleep in `GitHub rate limit;
+waiting 480 s` back-offs, and the page could not say so. The foreman's step file
+(`~/.hermes/foreman/steps/<repo>-<n>.json`, `work_script.steps` in `config.json`) is where a run says what it does,
+and it may also carry the back-off it sleeps in:
+
+```json
+{"repo": "collector", "card": 220, "step": "opening the PR", "since": 1794933644, "pid": 567136,
+ "wait": {"on": "GitHub", "why": "rate limit", "until": 1794934124}}
+```
+
+- `collect.py`'s `step_rows` puts a `wait` on the row the page shows for that card, the agent's own row included. A
+  wait whose `until` has passed, or one with no `on`, is dropped (`step_wait`), so a run that crashed mid-sleep never
+  reads as waiting for ever. The foreman writes the field in agent-stack (its `sh()` back-off).
+- `lib/work.ts`: `runWait` is the words ("waiting on GitHub (rate limit), retry at 14:38", in the viewer's own time),
+  `runningTip` one line per run (card, who runs it, machine, how long, and what it does or waits on).
+- Hovering the sidebar's running count (Agents), or hovering or tapping the Running now panel's count, opens that list
+  in the shared hover card (`data-tip-facts`). A waiting run's pill is amber (`.pill.waiting`) and its Task cell says
+  the wait; the sidebar's count is amber, with an amber dot on the closed rail, while any run waits.
+- On a screen under 496px the hover card is as wide as the screen less 8px each side, and it is placed after it
+  renders (`useLayoutEffect`), so a tip opened from the middle of a phone screen is not squeezed against its edge.
+
+## The Jog and GitHub limits panel (collector#186)
+
+The Dashboard's "Jog and GitHub limits" panel shows the two limits the droids run on: Jog's runner minutes this month
+and GitHub's GraphQL limit (used, of the limit, and the reset, red at 90% used), the same stats as on the APIs page.
+
+On 2026-11-16 a triage run used up the GraphQL limit while the gauge read about 1,400 of 5,000: GitHub's secondary
+limit (too many calls in a short time) is not in `gh api rate_limit`. So `githubLimit` in `lib/server/machines.ts` also
+sends one small GraphQL call, `{ viewer { login } }`, at most once a minute (`graphqlProbe`, one try, 1 point). When
+GitHub refuses it with a rate-limit error (`isRateLimited`: "rate limit" or `RATE_LIMITED` in gh's error), the read
+carries `refused`, the epoch second of that refusal, also when `rate_limit` itself could not be read. The panel and the
+APIs page then say "GitHub is refusing calls" with that time, in red, whatever the count says. The next call that
+GitHub answers clears it. `tests/limits-panel.test.ts` holds the gauge, the 90% bar and the refusing state.
 
 ## The AI usage rows
 
@@ -803,6 +852,17 @@ is that folder, worked the way an email inbox works.
   the only link that exists is an `http`/`https` one. Two deliberate simplifications, both reading better for these
   briefs: a line break inside a paragraph or a list item is drawn as a line break (the briefs write one fact per line),
   and a list nested inside an item is read as a list of its own.
+
+## The rail opens for a pointer that hovers, or for the keyboard (collector#165)
+
+Navigation is by hash (`#/cron`), so a tap on a sidebar icon never reloads the page, and a phone left the rail open
+at 200px with its `8px 0 24px` shadow over the content: the tap's own faked `:hover` held it there, and on Android the
+focus it left on the link matched `.rail:focus-within` until the user tapped somewhere else. Touch has no hover, so
+every one of the rail's hover styles sits in `@media (hover: hover) and (pointer: fine)`, and the keyboard's own case
+is `.rail:has(:focus-visible)`, which a tap's focus never matches. `tests/rail-hover.test.ts` holds both rules and the
+absence of `.rail:focus-within`. The open rail is still 200px plus the left safe-area inset (collector#177), with
+its shadow, and it still snaps with no transition (collector#163). A pressed item keeps its ungated `:active` state
+(collector#170).
 
 ## Layout
 
@@ -935,3 +995,37 @@ the repo root of a worktree:
 ~/.local/share/agent-stack/current/vps/scripts/actions-lock.py lock
 ```
 
+
+## No comments in code (collector#179)
+
+The repo holds no comments, by the global rule "No comments in code" (dotfiles AGENTS.md, James, 2026-11-16). The
+checker is agent-stack's `tools/no-comments`, copied in by its `install.py` and never edited here: a fix lands in
+agent-stack and the install copies it out again (`tools/no-comments/README.md`). `bin/no-comments` runs it over every
+tracked file; `bun run lint` ends with it and `ci.yml` runs it right after the bun setup. `bun tools/no-comments/strip.ts
+.` removes comments. Biome leaves `tools/no-comments/` alone, since its formatting is agent-stack's.
+
+`.no-comments-ignore` lists `AGENTS.md` only until the session rewrites that file without the two
+`nextjs-agent-rules` marker lines (builders cannot write AGENTS.md); the entry goes in the same change.
+`next.config.ts` sets `agentRules: false`, so `next dev` no longer adds that marked block back.
+
+What the removed comments held that an operator needs is here:
+
+- `ci.yml` has no trigger but `workflow_dispatch`: agent-stack's `vps/scripts/ci-merge.py` starts it on the PR branch
+  right before the merge and merges only when it passes (James, 2026-11-09). A push runs nothing (Actions minutes). The
+  repo is public, so it runs on GitHub's runners, not Jog.
+- `launchd/com.example.collector.plist` serves a build: run `bun run build` first, and set `WorkingDirectory` and the
+  bun path to the checkout. `launchd/com.example.collector-rebuild.plist` is the rebuild job: set both paths, and
+  `--label` to the serving job's label.
+- `bun scripts/rebuild-if-stale.ts [--dir <checkout>] [--label <launchd label>] [--check] [--restart "<command>"]` and
+  `bun scripts/apply-update.ts [--dir <checkout>] [--label <launchd label>] [--restart "<command>"]`: `--dir` defaults
+  to the script's own checkout, and `--restart` replaces the launchd restart (tests use `echo restarted`). Their
+  ceilings: `bun install` 5 min, `next build` 15 min, the swap and restart 2 min, the restart alone 1 min.
+- `scripts/build-stamp.ts` runs as `postbuild`; in a folder with no git it writes no stamp and the build still
+  passes. `bun run check:config [path]` checks `config.json`, or `COLLECTOR_CONFIG` when set.
+- The rebuild job's build (`COLLECTOR_DIST_DIR` set) type-checks with `tsconfig.rebuild.json`, which leaves out the
+  served `.next/types`: those come from an older commit and can name a route that is gone (every rebuild failed on
+  2026-11-09).
+- `vitest.no-skip.ts` fails a run with a skipped or todo test, a skip inside a test included; a run filtered with `-t`
+  is not a skip. Changing it is James's call.
+- A write of `.first-seen.json` or `.vendors-seen.json` to a read-only folder fails quietly: the ages and the saved
+  vendor read are lost on restart, nothing more.

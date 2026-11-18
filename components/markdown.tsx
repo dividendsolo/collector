@@ -3,12 +3,6 @@
 import { Fragment } from "react";
 import { type Align, type Block, type Part, parseMarkdown } from "@/lib/markdown";
 
-/**
- * One brief's Markdown, drawn as React nodes (collector#64). `lib/markdown.ts` reads the text; nothing here ever
- * becomes HTML: a part is text, a line break, inline code, bold, italic or a link, and React escapes every one of
- * them. A brief quotes what other people posted, so a `<script>` in one prints as those characters on the page.
- */
-
 const Inline = ({ parts }: { parts: Part[] }) => (
   <>
     {parts.map((p, i) => {

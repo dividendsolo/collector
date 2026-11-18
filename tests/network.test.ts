@@ -2,11 +2,6 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-/**
- * The Network section's reader, driven on fixtures (collector#65): `tests/network.driver.py` runs the real
- * collect.py, so the parsing under test is the parsing a machine runs. The fixtures are the lines `ss` and `lsof`
- * really print — no host name, user or port of ours is in here, and nothing is read from a live machine.
- */
 const ROOT = process.cwd();
 
 function drive<T>(probe: unknown): T {
@@ -18,7 +13,6 @@ function drive<T>(probe: unknown): T {
   return JSON.parse(out) as T;
 }
 
-/** One listening socket as collect.py reads it. */
 interface Socket {
   proto: string;
   address: string;
@@ -27,7 +21,6 @@ interface Socket {
   pid: string | null;
 }
 
-/** One listening port with who can connect to it. */
 interface Port {
   proto: string;
   port: number;
@@ -41,7 +34,6 @@ interface Port {
   tailnet_from?: string[] | null;
 }
 
-// A machine on a home network (private addresses only) with a tailnet, and a VPS with a public address.
 const HOME = { lan: ["192.168.1.0/24"], internet: [], tailnet: "100.64.0.9" };
 const VPS = { lan: [], internet: ["203.0.113.5"], tailnet: "100.64.0.10" };
 const BARE = { lan: [], internet: [], tailnet: null };
@@ -58,7 +50,6 @@ describe("who can connect to a socket (collector#65)", () => {
   it("says a port on every address of a machine with a public address is open to the internet", () => {
     expect(reach("0.0.0.0", VPS)).toEqual(["internet", true]);
     expect(reach("::", VPS)).toEqual(["internet", true]);
-    // A machine whose networks were not read reads as the internet: the safe direction.
     expect(reach("*", BARE)).toEqual(["internet", false]);
   });
 
@@ -75,7 +66,6 @@ describe("who can connect to a socket (collector#65)", () => {
       expect(reach(a, VPS)).toEqual(["machine", false]);
     for (const a of ["100.64.0.0", "100.127.255.255", "100.64.0.5", "fd7a:115c:a1e0::1"])
       expect(reach(a, VPS)).toEqual(["tailnet", false]);
-    // Just past the Tailscale range: the shared address space a carrier uses, a private one.
     expect(reach("100.63.255.255", VPS)[0]).not.toBe("tailnet");
     expect(reach("100.128.0.0", VPS)[0]).not.toBe("tailnet");
   });
@@ -144,9 +134,6 @@ describe("the networks a machine is on", () => {
 });
 
 describe("reading `ss`", () => {
-  // `ss -tulnp` on a Linux machine, the header included: the same socket twice (IPv4 and IPv6), a UDP wildcard,
-  // two tailnet binds with the zone ss appends — an IPv6 one carrying its brackets as well — and sockets owned by
-  // another user, which carry no process without sudo: the row keeps the address, the port and no name.
   const SS = [
     "Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process",
     'tcp   LISTEN 0      4096         127.0.0.1:5432      0.0.0.0:*    users:(("postgres",pid=911,fd=6))',
@@ -178,8 +165,6 @@ describe("reading `ss`", () => {
 });
 
 describe("reading `lsof` (macOS, which has no ss)", () => {
-  // `lsof -nP -iTCP -sTCP:LISTEN` and `lsof -nP -iUDP` on a Mac: the same columns, `*` for a wildcard, `[::]`
-  // for IPv6, and `(LISTEN)` on the TCP rows.
   const TCP = [
     "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
     "bun     628125  me    8u  IPv4 81015182      0t0  TCP *:3000 (LISTEN)",
@@ -189,7 +174,6 @@ describe("reading `lsof` (macOS, which has no ss)", () => {
   const UDP = [
     "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
     "mDNSRespo  650  me    6u  IPv4    13500      0t0  UDP *:5353",
-    // Connected sockets (a browser's QUIC, a DNS lookup): lsof -iUDP lists them too, local->remote. Not listening.
     "Google    4321  me   30u  IPv4      0x1      0t0  UDP 192.0.2.5:60000->198.51.100.1:443",
     "Google    4321  me   31u  IPv6      0x2      0t0  UDP [2001:db8::5]:60001->[2001:db8::9]:443",
   ].join("\n");
@@ -273,7 +257,6 @@ describe("the process behind a port (its tooltip)", () => {
 });
 
 describe("the firewall (ufw)", () => {
-  // `sudo ufw status verbose` on a VPS that denies incoming and opens the tailnet's interface and Tailscale's port.
   const UFW = [
     "Status: active",
     "Logging: on (low)",
@@ -413,8 +396,6 @@ describe("the Mac's firewall (socketfilterfw)", () => {
 });
 
 describe("the tailnet's access rules (Tailscale ACL)", () => {
-  // `tailscale debug netmap`'s packet filter: who may reach this machine. A VPS that lets two devices in, and a
-  // laptop the rules let nobody in (2026-11-06: altair's ports read "Tailnet", and no tailnet device could connect).
   const vpsNetmap = {
     PacketFilter: [
       {
@@ -582,10 +563,8 @@ describe("the section one machine reads", () => {
       user: "me",
       path: "/opt/homebrew/opt/postgresql@17/bin/postgres",
     });
-    // Started by its parent, by the parent's own name; pid 1 is the machine's own service manager.
     expect(out.sockets.find((s) => s.port === 3000)?.info).toMatchObject({ started_by: "sshd", seconds: 245 });
     expect(["launchd", "systemd"]).toContain((pg?.info as { started_by?: string } | undefined)?.started_by);
-    // A socket with no pid has nothing to say.
     expect(out.sockets.find((s) => s.port === 49375)?.info).toBeNull();
   });
 
@@ -622,7 +601,6 @@ describe("the section one machine reads", () => {
   });
 });
 
-/** One established connection as collect.py reads it (collector#66). */
 interface Connection {
   proto: string;
   address: string;
@@ -638,9 +616,6 @@ interface Connection {
 }
 
 describe("reading `ss -tnpi` (the connections going out, with their bytes)", () => {
-  // `ss -tnpi` on a Linux machine: the header, an established socket and the indented info line that carries its
-  // counters, a connection of another user's (no process without sudo), a socket in another state, and the loopback
-  // pair two processes on one machine share.
   const SS = [
     "State      Recv-Q Send-Q Local Address:Port   Peer Address:Port Process",
     'ESTAB      0      0      192.0.2.5:51234      198.51.100.1:443   users:(("curl",pid=1234,fd=5))',
@@ -679,7 +654,6 @@ describe("reading `ss -tnpi` (the connections going out, with their bytes)", () 
         bytes_received: 2239,
         bytes_scope: "socket",
       },
-      // No info line under it: the OS gave no counters for this one, which is not an error.
       {
         proto: "tcp",
         address: "198.51.100.9",
@@ -716,8 +690,6 @@ describe("reading `ss -tnpi` (the connections going out, with their bytes)", () 
 });
 
 describe("reading `lsof -nP -iTCP -sTCP:ESTABLISHED` (macOS, which has no ss)", () => {
-  // A Mac's established connections: both ends in one `local->remote` token, IPv6 in brackets, and the state lsof
-  // appends to the row.
   const LSOF = [
     "COMMAND    PID USER   FD   TYPE    DEVICE SIZE/OFF NODE NAME",
     "Google    4321  me   30u  IPv4      0x1      0t0  TCP 192.0.2.5:51234->198.51.100.1:443 (ESTABLISHED)",
@@ -792,9 +764,6 @@ describe("reading `lsof -nP -iTCP -sTCP:ESTABLISHED` (macOS, which has no ss)", 
 });
 
 describe("reading `nettop` (the bytes a Mac counts per process)", () => {
-  // `nettop -P -L 1 -n -J bytes_in,bytes_out` as it really prints, captured on a Mac (macOS 27) on 2026-11-06 with
-  // the app names swapped for placeholders: a header whose first column is empty, then one `name.pid,in,out,` row
-  // per process, with no clock column. nettop cuts the name to 15 letters, and a name may hold a dot of its own.
   const NETTOP = [
     ",bytes_in,bytes_out,",
     "launchd.1,0,0,",
@@ -838,7 +807,6 @@ describe("reading `nettop` (the bytes a Mac counts per process)", () => {
       ["1787", 585017, 146016766, "process"],
       ["1787", 585017, 146016766, "process"],
       ["414", 164411062, 241855718, "process"],
-      // A pid nettop did not list keeps no bytes rather than another process's.
       ["9999", null, null, null],
     ]);
   });
@@ -864,7 +832,6 @@ describe("another device on the local network (collector#66)", () => {
     expect(lan("172.15.0.1")).toBe(false);
     expect(lan("172.32.0.1")).toBe(false);
     expect(lan("203.0.113.9")).toBe(false);
-    // A tailnet address is another machine, but not one on this network — even the unique-local one Tailscale uses.
     expect(lan("100.64.0.5")).toBe(false);
     expect(lan("fd7a:115c:a1e0::1")).toBe(false);
     expect(lan("")).toBe(false);
@@ -892,14 +859,12 @@ describe("the connections one machine reads", () => {
 
   it("flags a connection to a listening port from another device on the local network, and only that", () => {
     const rows: Connection[] = [
-      row({ address: "198.51.100.1", port: 443, local_port: 51234 }), // curl out to the internet
-      row({ address: "192.168.1.20", port: 49152, local_port: 22, process: "sshd", pid: "700" }), // a phone's ssh
-      row({ address: "192.168.1.21", port: 51234, local_port: 7000, process: "AirPlay", pid: "900" }), // an AirPlay probe
-      row({ address: "203.0.113.7", port: 22, local_port: 51240, process: "ssh", pid: "4321" }), // ssh out
-      row({ address: "192.168.1.22", port: 51236, local_port: 9999 }), // LAN, but nothing listens on 9999
+      row({ address: "198.51.100.1", port: 443, local_port: 51234 }),
+      row({ address: "192.168.1.20", port: 49152, local_port: 22, process: "sshd", pid: "700" }),
+      row({ address: "192.168.1.21", port: 51234, local_port: 7000, process: "AirPlay", pid: "900" }),
+      row({ address: "203.0.113.7", port: 22, local_port: 51240, process: "ssh", pid: "4321" }),
+      row({ address: "192.168.1.22", port: 51236, local_port: 9999 }),
     ];
-    // `local_port`/`remote` and the flag: the read sorts the local knocks first, then by process, address and port,
-    // so two reads of one machine list the same connections in the same order.
     expect(
       drive<Connection[]>({ fn: "connections", rows, sockets: listening }).map((c) => [
         `${c.process} ${c.address}:${c.port}`,
@@ -916,9 +881,9 @@ describe("the connections one machine reads", () => {
 
   it("leaves out what is not going anywhere: a connection a server accepted, and this machine talking to itself", () => {
     const rows: Connection[] = [
-      row({ address: "198.51.100.1", port: 443, local_port: 51234 }), // curl out: the one that stays
-      row({ address: "203.0.113.9", port: 51235, local_port: 22, process: "sshd", pid: "700" }), // ssh in from outside
-      row({ address: "203.0.113.10", port: 61000, local_port: 3000, process: "bun", pid: "628125" }), // a site visitor
+      row({ address: "198.51.100.1", port: 443, local_port: 51234 }),
+      row({ address: "203.0.113.9", port: 51235, local_port: 22, process: "sshd", pid: "700" }),
+      row({ address: "203.0.113.10", port: 61000, local_port: 3000, process: "bun", pid: "628125" }),
       row({ address: "127.0.0.1", port: 4319, local_address: "127.0.0.1", local_port: 40030, process: "next-server" }),
       row({ address: "::1", port: 4319, local_address: "::1", local_port: 50952, process: "chrome" }),
       row({ address: "::ffff:127.0.0.1", port: 5432, local_port: 50000, process: "node" }),

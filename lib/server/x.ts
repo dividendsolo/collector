@@ -10,8 +10,6 @@ export interface XUsage {
   error?: string;
 }
 
-/** Posts read this month against the X API project cap, and the pay-per-use credit balance, with X_BEARER_TOKEN
- * from .env. Null when no key is set. Read every five minutes. */
 const cache = swr<XUsage | null>("x", 300_000, async () => {
   const key = secret("X_BEARER_TOKEN");
   if (!key) return null;

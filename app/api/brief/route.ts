@@ -5,11 +5,6 @@ import { json } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic";
 
-/**
- * One brief, read whole (collector#64): its front matter, its Markdown, and whether it is read or archived on this
- * machine. The file is read on the machine that keeps it, over the same ssh Collector's snapshot uses, because the
- * folder only ever grows and the list must not carry every brief's body on every 10-second read.
- */
 export async function GET(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;

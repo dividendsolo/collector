@@ -7,15 +7,8 @@ import { getJson, HttpError, TimeoutError, why } from "@/lib/server/http";
 import { backoffDelay, MAX_ATTEMPTS, withRetry } from "@/lib/server/retry";
 import { run, runText } from "@/lib/server/run";
 
-/**
- * Repo standard S2: every outbound call has a timeout and sane retries. These are the tests behind that claim — a
- * stub server that never answers and shows the call gives up, the retries that are worth making, the answer that is
- * not, the cap and the jitter, and a hung command under the subprocess runner.
- */
-
 const servers: http.Server[] = [];
 
-/** A stub server on 127.0.0.1 that answers every request the way `respond` says; a request with no answer holds. */
 async function stub(respond: (req: http.IncomingMessage, res: http.ServerResponse) => void): Promise<string> {
   const server = http.createServer(respond);
   servers.push(server);
@@ -24,7 +17,6 @@ async function stub(respond: (req: http.IncomingMessage, res: http.ServerRespons
   return `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
 }
 
-/** A server that never answers: the hung call this card has to survive. */
 const silent = () => stub(() => {});
 
 const counting = (status: number, body = "{}") => {
@@ -168,9 +160,6 @@ describe("backoff: exponential, capped, jittered", () => {
     expect(n).toBe(MAX_ATTEMPTS);
   });
 
-  // `attempt > NaN` is false forever, so a caller asking for a count that is not a number must not turn the cap off.
-  // The sleep yields to the event loop, so a version of this that does not stop fails on the timeout below instead
-  // of spinning the whole run.
   it("falls back to its default when a caller asks for a count that is not a finite number", async () => {
     let n = 0;
     const fail = async () => {

@@ -1,26 +1,4 @@
 #!/bin/sh
-# Collector — one command that installs it and starts it, on macOS and on Linux.
-#
-#   In a checkout:  ./install.sh
-#   From anywhere:  curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install.sh | sh
-#
-# What it does: gets the repo (it is already there when you run it in a checkout, and cloned when you pipe it in),
-# checks the tools Collector needs, installs its packages, builds it, and starts the server on a free port. When it
-# installs Bun, Bun goes into ~/.bun and its installer adds itself to PATH in your shell's startup file. Apart from
-# that it writes nothing but `node_modules` and `.next` inside the Collector folder: no config.json, no .env, and
-# nothing else outside the folder. Collector runs with no settings at all.
-#
-# Environment (every one optional):
-#   COLLECTOR_DIR       where to put the repo when this runs outside a checkout (default $HOME/collector)
-#   COLLECTOR_PORT      the port to serve on (default 4000, or the first free port above it)
-#   COLLECTOR_REPO_URL  the repo to clone (default https://github.com/dividendsolo/collector.git)
-#   COLLECTOR_REF       the branch or tag to clone (default main)
-#
-# Options:
-#   --dir <path>      clone the repo here (ignored when this runs in a checkout)
-#   --port <n>        serve on this port
-#   --no-install-bun  fail instead of installing bun when it is missing
-#   -h, --help        this text
 
 set -eu
 
@@ -80,10 +58,6 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# A Collector checkout is a folder with the app, the reader script and this installer in it. `./install.sh` and
-# `sh /path/to/install.sh` both say where the file is. Piped in (`curl | sh`, `sh -s`) `$0` is just the shell's name
-# and there is no folder to look in, so the repo is cloned instead — and `sh install.sh` names no folder either, so
-# that one looks in the folder it was run from.
 here=""
 case "$0" in
   */*) here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) ;;
@@ -119,9 +93,6 @@ fi
 
 is_checkout "$src" || die "$src does not hold Collector: run this in a Collector checkout"
 
-# Bun, the runtime Collector builds and runs on: the one on this machine, else the one a last run installed (bun's
-# own installer puts it in ~/.bun/bin and in the shell's startup file, which a second run of this script would not
-# have read), else install it from bun.sh.
 BUN_BIN="${BUN_INSTALL:-$HOME/.bun}/bin"
 if ! command -v bun >/dev/null 2>&1 && [ -x "$BUN_BIN/bun" ]; then
   PATH="$BUN_BIN:$PATH"
@@ -142,8 +113,6 @@ if ! command -v bun >/dev/null 2>&1; then
 fi
 say "bun $(bun --version)"
 
-# collect.py reads every machine (this one too) over Python 3, standard library only. Collector still starts without
-# it, with its panels empty, so this is a note and not a failure.
 command -v python3 >/dev/null 2>&1 ||
   say "note: python3 is not installed. Collector reads every machine with it (collect.py), so its job and agent rows stay empty until it is: https://www.python.org/downloads/"
 
@@ -153,7 +122,6 @@ bun install || die "bun install failed"
 say "Building"
 bun run build || die "bun run build failed"
 
-# The port: the first free one from 4000 up, unless one was asked for by name.
 port_free() {
   command -v python3 >/dev/null 2>&1 || return 0
   python3 -c 'import socket, sys

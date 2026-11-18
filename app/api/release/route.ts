@@ -7,10 +7,6 @@ import { AGENT_STACK_STATUSES } from "@/lib/statuses";
 
 export const dynamic = "force-dynamic";
 
-/** Waiting on you's one-click release (James, 2026-11-12: "click the badge ... and it'll just jump up into the current
- * work"). Moves one waiting card to ready-for-agent with the agents' own card tool, so the move is the one an agent
- * makes: `--expect` the lane the page showed refuses a card that moved meanwhile, and the board is read again now so
- * the row leaves Waiting on you at once. One try: a status move is a write. */
 export async function POST(req: Request) {
   const refusal = guard(req);
   if (refusal) return refusal;

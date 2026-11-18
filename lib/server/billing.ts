@@ -3,7 +3,6 @@ import { accountsOf, config } from "./config";
 import { envFile, envStamp } from "./env";
 import { bearer, getJson, HttpError, why } from "./http";
 
-/** One subscription's price as a monthly amount in dollars. */
 export function perMonth(cents: number, interval: string | null | undefined, count?: number | null): number {
   const months = ({ day: 12 / 365, week: 12 / 52, month: 1, year: 12 } as Record<string, number>)[interval || ""];
   return months ? cents / 100 / (months * (count || 1)) : 0;
@@ -16,9 +15,6 @@ export interface Revenue {
   payments: number;
 }
 
-/** MRR from active subscriptions; revenue from every paid charge, less refunds. Clerk Billing charges plain payments
- * with no Stripe subscription behind them: a charge named "Pro (annual)" or "(monthly)" counts toward MRR until its
- * term ends. */
 export function stripeRevenue(subs: any[], charges: any[], now = Date.now() / 1000): Revenue {
   let mrr = 0;
   for (const s of subs)
@@ -93,7 +89,6 @@ export type Billing = { error: string } | (Revenue & { providers: string[]; miss
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
-/** A project can bill through more than one provider; the totals add up. */
 async function fetchBilling(): Promise<Record<string, Billing>> {
   const keys = envFile();
   const out: Record<string, Billing> = {};
@@ -148,5 +143,4 @@ async function fetchBilling(): Promise<Record<string, Billing>> {
 
 const cache = swr("billing", 600_000, fetchBilling);
 
-/** {repo: revenue or {error}}, read every ten minutes, and at once when .env changes. */
 export const billing = () => cache.get({ key: String(envStamp()) });

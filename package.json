@@ -8,14 +8,14 @@
     "postbuild": "bun scripts/build-stamp.ts",
     "start": "next start -H 127.0.0.1 -p ${COLLECTOR_PORT:-4000}",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
+    "lint": "biome check . && bin/no-comments",
     "format": "biome check --write .",
     "test": "vitest run",
     "check:config": "bun scripts/check-config.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.12.1",
-    "next": "16.4.2",
+    "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "swr": "^2.5.1",

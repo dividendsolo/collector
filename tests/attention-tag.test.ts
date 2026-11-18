@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-// James, 2026-11-11: the Dashboard's sidebar count said 3 while Priority tasks showed 4 rows. The panel adds the
-// needs-triage row on the page; the count only read the server's rows. The count is the panel's open rows.
 describe("attentionTag", () => {
   const job = {
     level: "error",

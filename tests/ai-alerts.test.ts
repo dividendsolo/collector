@@ -4,11 +4,6 @@ import { nousReading } from "@/lib/server/ai";
 import { warnings } from "@/lib/server/warnings";
 import { aiToasts } from "@/lib/toasts";
 
-/**
- * James, 2026-11-09: "We should just combine all these limit ones ... to one message that says that we are
- * completely out when all ... the fallbacks are drained. These individual ones don't really matter." And: Nous and
- * Claude running low show as toasts in the bottom right; the other providers do not.
- */
 const base = { github: {}, cfg: {}, services: [], domains: [], ticketsError: null, x: null, machines: [] } as any;
 const row = (provider: string, low: boolean, extra: Record<string, unknown> = {}) =>
   ({
@@ -38,7 +33,6 @@ describe("Needs attention for AI plans", () => {
     );
   });
 
-  // James, 2026-11-11: the row showed while Claude still had 13% of its session and 9% of its week. Low is not out.
   it("has no row while a provider is low but not out", () => {
     const ai = [
       row("anthropic", true, { out: false, left: "13%" }),
@@ -55,9 +49,6 @@ describe("Needs attention for AI plans", () => {
   });
 });
 
-// James, 2026-11-11, on "Every AI plan is out: anthropic, kimi-coding, minimax, nous" while Claude had 99% of its
-// 5-hour session and 8% of its week: "it says it's out. All of them are out. And if you look at Anthropic, it's not".
-// Low (under 10% left) is a toast; the row counts only plans whose reading says out.
 describe("the every-plan-is-out row", () => {
   const plan = (provider: string, out: boolean) => ({ provider, low: true, out, left: "8%", windows: [] }) as any;
   it("does not count a plan that is only low", () => {
@@ -92,7 +83,6 @@ describe("AI toasts", () => {
     expect(t[0].action).toBeUndefined();
   });
 
-  // James, 2026-11-11: "If the credits are out, then it just says out ... we don't need to say only 0%."
   it("says nothing under the title when a plan is out", () => {
     const nous = row("nous", true, {
       left: "$0.00",
@@ -107,7 +97,6 @@ describe("AI toasts", () => {
     expect(t.text).toBe("");
   });
 
-  // James, 2026-11-11: "when it's completely out, we need to put that button up there, not when there's 7% left".
   it("gives Claude's toast Check for reset only when a limit is used up", () => {
     const out = aiToasts([row("anthropic", true, { left: "40%", out: true })])[0];
     expect(out.title).toBe("Claude is out");
@@ -132,12 +121,6 @@ describe("a domain that expires soon", () => {
   });
 });
 
-/**
- * James, 2026-11-11, on the toast "Claude is nearly out / 94% left of this 5-hour session (resets 8:49 PM), 7% of the
- * week (resets Thu 9 PM)": "Just put why the notification is up ... only 7% of the weekly limit is left, and then put
- * resets Thursday, 9 p.m." And the toast said Thu 9 PM while the AI plans panel said 10 PM: "we need to get the dates
- * consistent. It should be local time only, not UTC."
- */
 describe("the Claude toast says only why it is up", () => {
   const now = new Date(2026, 10, 11, 16, 47).getTime();
   const weekEnd = new Date(2026, 10, 12, 21, 59, 59, 650).toISOString();
@@ -170,11 +153,6 @@ describe("the Claude toast says only why it is up", () => {
   });
 });
 
-/**
- * Review of PR #132 (card #131): on Hermes Plus a limit is not the credits. With keep-going off, a used-up limit means
- * Hermes waits for the reset and the top-up is not used, so the toast names the limit and has no Top up; the credit
- * titles stay for the credits. The row and the toast read one threshold: a limit at 90% or more is low.
- */
 describe("the Nous toast on plan limits", () => {
   const now = new Date(2026, 10, 12, 9, 0).getTime();
   const dayReset = new Date(2026, 10, 12, 11, 5).getTime();
@@ -211,8 +189,6 @@ describe("the Nous toast on plan limits", () => {
     expect(t.action).toBeUndefined();
   });
 
-  // James, 2026-11-12: "the top up button only should show when the top-up is used up, not when the daily limit is
-  // used up". With keep-going on and $25.07 left there is nothing to top up yet.
   it("has no Top up while keep-going runs on a top-up that still has money", () => {
     const [t] = aiToasts([nous(10000, true)], now);
     expect(t.title).toBe("Nous: the daily limit is used up");

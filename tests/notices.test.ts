@@ -5,16 +5,6 @@ import { acked } from "@/components/acks";
 import { warnings } from "@/lib/server/warnings";
 import { noticeToasts } from "@/lib/toasts";
 
-/**
- * Job notices (collector#82). The weekly directory-listings job on ezio appends one JSON line per newly live listing
- * to `~/.hermes/notices/directory-listings.jsonl`, and the page shows each line once: one toast and one Needs
- * attention row, linking to the listing, gone once it is acknowledged. Collector had no path for a job's good news —
- * toasts came only from services and the network, and Needs attention only from failures.
- *
- * The reading lives in collect.py, which runs on each machine, so these fixtures go through the real Python:
- * `tests/notices.driver.py` writes the case's files into a throwaway home and hands one case to `collect.notices_rows`
- * with the case's own `now`, so a fixture reads the same on every machine and at every hour.
- */
 const ROOT = process.cwd();
 const NOW = "2026-11-09T12:00:00-05:00";
 
@@ -36,7 +26,6 @@ function read(files: Record<string, { content: string }>): Row[] {
   ) as Row[];
 }
 
-/** The line the job writes when a listing goes live, with the card's own shape. */
 const line = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
     at: "2026-11-09T15:45:00Z",
@@ -68,7 +57,6 @@ describe("collect.py's notices read", () => {
 
   it("drops a line older than three weeks — the file's own record of a listing, not news", () => {
     expect(read(file(line({ at: "2026-10-01T00:00:00Z" })))).toEqual([]);
-    // The boundary is the reader's own setting, so a line just inside it is still read.
     expect(read(file(line({ at: "2026-10-19T17:01:00Z" })))).toHaveLength(1);
   });
 
@@ -95,8 +83,6 @@ describe("collect.py's notices read", () => {
   });
 
   it("keeps only a web address as the link, since the page puts it in an href", () => {
-    // The line's href comes from outside data (a directory's own URL) and ends up in an <a href> on a page whose own
-    // origin can restart the server and write config.json: a scheme that runs script there is not a link.
     for (const href of [
       "javascript:alert(1)",
       "JavaScript:alert(1)",
@@ -130,7 +116,6 @@ describe("a job's notice on the page", () => {
         ack: { key: "directory-listing:https://example.com/situation", next: null },
       },
     ]);
-    // Good news is not an error: no red row.
     expect(acked(warnings({ ...base, machines: [machine(rows)] })[0], [])).toBe(false);
   });
 
@@ -149,13 +134,10 @@ describe("a job's notice on the page", () => {
         acknowledges: true,
       },
     ]);
-    // A notice with no link still leads somewhere: the row that acknowledges it.
     expect(noticeToasts([machine(read(file(line({ href: undefined }))))])[0].href).toBe("#/dashboard?to=attention");
   });
 
   it("keeps the row and the toast on the Dashboard for a link that is not a web address", () => {
-    // Card #84: the page's own allowlist, not the reader's. A machine whose collect.py is older still sends the line
-    // as it read it, and that href lands in an `<a href>` on this origin, so the row and the toast drop it.
     const notices = [{ key: "k", level: "info", text: "Situation is listed", href: "javascript:alert(1)", at: null }];
     expect(warnings({ ...base, machines: [machine(notices)] })[0].url).toBeUndefined();
     expect(noticeToasts([machine(notices)])[0]).toEqual({

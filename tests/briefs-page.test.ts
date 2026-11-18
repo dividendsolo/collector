@@ -5,10 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Brief } from "@/lib/briefs";
 
-/**
- * The Briefs page as drawn (collector#64, the PR #81 review): the rows carry no global `.mark` box, Archived shares
- * the Inbox's columns, unread is told from read by its class, and a click updates the sidebar's count on the spot.
- */
 const swr = vi.hoisted(() => ({ mutate: vi.fn(), data: undefined as unknown }));
 vi.mock("swr", () => ({ default: () => ({ data: swr.data }), mutate: swr.mutate }));
 
@@ -95,7 +91,7 @@ describe("a Briefs row opens its brief on a click anywhere in the row (James, 20
 
 describe("Briefs text is 16px at least (James, 2026-11-10)", () => {
   const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
-  const block = css.slice(css.indexOf("/* Briefs (collector#64)"), css.indexOf("/* Outside the layers on purpose"));
+  const block = css.slice(css.indexOf(".briefs-panel,"), css.indexOf(".flow-canvas .react-flow__attribution"));
 
   it("sets no font size under 16px anywhere in the Briefs styles", () => {
     const sizes = [...block.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1]));
@@ -121,7 +117,7 @@ describe("Briefs text is 16px at least (James, 2026-11-10)", () => {
 
 describe("the brief page's way back to the Inbox (James, 2026-11-10)", () => {
   const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
-  const block = css.slice(css.indexOf("/* Briefs (collector#64)"), css.indexOf("/* Outside the layers on purpose"));
+  const block = css.slice(css.indexOf(".briefs-panel,"), css.indexOf(".flow-canvas .react-flow__attribution"));
 
   it("draws Inbox with a back arrow, as a button-shaped link", async () => {
     const { BriefPage } = await import("@/components/briefs");
@@ -223,14 +219,14 @@ describe("Archive goes back to the Inbox (James, 2026-11-10)", () => {
 
 describe("the brief's bar stays in reach (James, 2026-11-10)", () => {
   const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
-  const block = css.slice(css.indexOf("/* Briefs (collector#64)"), css.indexOf("/* Outside the layers on purpose"));
+  const block = css.slice(css.indexOf(".briefs-panel,"), css.indexOf(".flow-canvas .react-flow__attribution"));
 
   it("pins the open brief's head under the top bar while the brief scrolls", () => {
     const at = block.indexOf(".brief-panel > .panel-head {");
     expect(at).toBeGreaterThan(-1);
     const rule = block.slice(at, block.indexOf("}", at));
     expect(rule).toMatch(/position:\s*sticky/);
-    expect(rule).toMatch(/top:\s*48px/);
+    expect(rule).toMatch(/top:\s*calc\(48px \+ env\(safe-area-inset-top, 0px\)\)/);
   });
 
   it("lets the open brief's panel overflow, so the sticky head can stick", () => {
@@ -273,7 +269,7 @@ describe("the brief's keys: E archives, Esc goes back (James, 2026-11-10)", () =
 
 describe("a brief's table heads never break inside a word (2026-11-10)", () => {
   const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
-  const block = css.slice(css.indexOf("/* Briefs (collector#64)"), css.indexOf("/* Outside the layers on purpose"));
+  const block = css.slice(css.indexOf(".briefs-panel,"), css.indexOf(".flow-canvas .react-flow__attribution"));
 
   it("keeps each head on one line, while the cells still wrap", () => {
     expect(block).toMatch(/\.brief-body th \{[^}]*white-space:\s*nowrap/);
@@ -281,8 +277,6 @@ describe("a brief's table heads never break inside a word (2026-11-10)", () => {
 });
 
 describe("a brief's date is the viewer's own local day (James, 2026-11-11)", () => {
-  // The Illyism Watch that ran 2026-11-10T03:01Z went out at 10:01 pm on Nov 9 in New York. Collector showed
-  // "Nov 10" (the UTC day), one day off the email. Collector is public: the day is the viewer's, not one zone's.
   const at = "2026-11-10T03:01:34Z";
 
   it("shows the day in the viewer's time zone", () => {
