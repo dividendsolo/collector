@@ -746,6 +746,24 @@ and it may also carry the back-off it sleeps in:
 - On a screen under 496px the hover card is as wide as the screen less 8px each side, and it is placed after it
   renders (`useLayoutEffect`), so a tip opened from the middle of a phone screen is not squeezed against its edge.
 
+## Each service shows its latest PageRoast score (collector#185)
+
+James, 2026-11-16: "in the service section on the dash i want the latest pageroast score showing for those as well."
+Each row in the Dashboard's Service health panel and on the Services page shows "Roast 72 · Nov 16" after its url (the
+date in the viewer's own time zone), linked to the report at `https://pageroast.dividendsolo.com/r/<id>`. A service
+with no roast shows nothing: no 0, no error.
+
+- The score is PageRoast's own, the one a visitor sees. A weekly job on ezio roasts each service (agent-stack#483);
+  PageRoast's admin read `GET /api/latest?url=<url>` answers `{ id, score, created }` for the newest roast, or 404
+  (pageroast#31). Collector never starts a roast.
+- `lib/server/roast.ts`'s `latestRoast` sends that read with the `x-admin` header from `PAGEROAST_ADMIN` in `.env`
+  (the value in PageRoast's `.admin` file on ezio), and caches each url's answer for a day (`ROAST_TTL_MS`), so the
+  15-second health check costs PageRoast one read per service per day. No key, a 404 or an answer that is not that
+  shape (`asRoast` in `lib/roast.ts`) is no score; a failed read keeps the last good score, and the health check never
+  waits on a failure.
+- `checkServices` puts the answer on each row as `roast`; `ServiceRows` in `components/services.tsx` draws it.
+  `tests/service-roast.test.ts` holds the read, the cache and the row.
+
 ## The Jog and GitHub limits panel (collector#186)
 
 The Dashboard's "Jog and GitHub limits" panel shows the two limits the droids run on: Jog's runner minutes this month
