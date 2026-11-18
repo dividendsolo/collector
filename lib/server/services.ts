@@ -89,8 +89,6 @@ export function serviceLogLines(list: Checked[]): string[] {
     );
 }
 
-const withRoasts = (list: Checked[]) => Promise.all(list.map(async (s) => ({ ...s, roast: await latestRoast(s.url) })));
-
 const state = once("services", () => ({ list: [] as Checked[], busy: null as Promise<Checked[]> | null }));
 
 export function checkServices(): Promise<Checked[]> {
