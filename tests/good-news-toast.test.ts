@@ -43,6 +43,7 @@ describe("a good-news toast (collector#180)", () => {
     const html = renderToStaticMarkup(createElement(ToastCard, { t: good() }));
     expect(html).toContain('class="toast good no-dot"');
     expect(html).not.toContain("toast-dot");
+    expect(html).toContain('role="status"');
     expect(html).toContain(">Dismiss</button>");
   });
 
@@ -69,8 +70,27 @@ describe("a good-news toast (collector#180)", () => {
     expect(html).not.toContain("Dismiss");
   });
 
-  it("draws a blue border in both themes", () => {
+  it("leaves a warning toast as it was: the warn class, its dot and its own Dismiss", () => {
+    const warn: Toast = {
+      key: "service:https://example.com",
+      state: "slow",
+      level: "warn",
+      title: "Example is Slow",
+      text: "example.com",
+      href: "#/services?to=service:https://example.com",
+      dismissible: true,
+    };
+    const html = renderToStaticMarkup(createElement(ToastCard, { t: warn }));
+    expect(html).toContain('class="toast warn"');
+    expect(html).toContain("toast-dot");
+    expect(html).toContain(">Dismiss</button>");
+  });
+
+  it("draws a blue border, from the blue both themes define", () => {
     const css = readFileSync(path.join(__dirname, "..", "app", "globals.css"), "utf8");
     expect(css).toMatch(/\.toast\.good\s*\{\s*border-color:\s*var\(--blue\);/);
+    const [dark, light] = css.split(":root.light {");
+    expect(dark).toMatch(/--blue:\s*oklch/);
+    expect(light).toMatch(/--blue:\s*oklch/);
   });
 });
