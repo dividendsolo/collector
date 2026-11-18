@@ -1,5 +1,7 @@
+import type { Roast } from "../roast";
 import { config, type Service } from "./config";
 import { fetchWithTimeout, why } from "./http";
+import { latestRoast } from "./roast";
 import { once } from "./store";
 
 export const SLOW_SECONDS = 3;
@@ -14,6 +16,7 @@ export interface Checked {
   checked_at: number;
   hosting: string | null;
   checked?: "online" | "slow" | "down";
+  roast?: Roast | null;
   [key: string]: unknown;
 }
 
@@ -93,7 +96,7 @@ export function checkServices(): Promise<Checked[]> {
     state.busy = Promise.all((config().services || []).map(check))
       .then((list) => {
         for (const line of serviceLogLines(list)) console.log(line);
-        state.list = confirmDown(list, state.list);
+        state.list = confirmDown(list, state.list).map((s) => ({ ...s, roast: latestRoast(s.url) }));
         return state.list;
       })
       .finally(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { type Roast, roastLink, roastText } from "@/lib/roast";
 import { useApi, useLive } from "./data";
 import { PanelHead, SkelItems } from "./ui";
 
@@ -11,6 +12,7 @@ export interface Svc {
   ms: number;
   error: string | null;
   hosting: string | null;
+  roast?: Roast | null;
 }
 
 export const SVC_LABEL: Record<string, [string, string]> = {
@@ -55,6 +57,14 @@ export function ServiceRows({ list }: { list: Svc[] }) {
               <a href={x.url} target="_blank" rel="noopener">
                 {x.url.replace(/^https?:\/\//, "")}
               </a>
+              {x.roast ? (
+                <>
+                  {" · "}
+                  <a href={roastLink(x.roast.id)} target="_blank" rel="noopener">
+                    {roastText(x.roast)}
+                  </a>
+                </>
+              ) : null}
               {x.error ? (
                 <>
                   {" · "}
