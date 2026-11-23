@@ -8,7 +8,7 @@ export interface Roast {
 
 export const roastLink = (id: string) => `${PAGEROAST}/r/${encodeURIComponent(id)}`;
 
-const roastDay = (created: number, timeZone?: string) =>
+export const roastDay = (created: number, timeZone?: string) =>
   new Date(created).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(timeZone ? { timeZone } : {}) });
 
 export const roastText = (r: Roast, timeZone?: string) => `Roast ${r.score} · ${roastDay(r.created, timeZone)}`;
