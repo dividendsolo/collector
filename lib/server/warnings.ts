@@ -325,7 +325,12 @@ export function warnings(w: WarningInputs): Warning[] {
         ...(!m.local && hereDown ? { action: START_TAILSCALE } : {}),
       });
   if (w.ticketsError)
-    out.push({ group: "cant-work", level: "warn", text: `Could not list tickets: ${w.ticketsError}` });
+    out.push({
+      group: "cant-work",
+      level: "warn",
+      text: `Could not list tickets: ${w.ticketsError}`,
+      ack: { key: `tickets|${w.ticketsError}`, next: null },
+    });
   const watched = new Set((w.cfg.vendors || []).filter((v) => v.attention).map((v) => v.name));
   for (const v of w.vendors || [])
     if (watched.has(v.name) && v.incidents.length)
