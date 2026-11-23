@@ -1,6 +1,7 @@
-import { money } from "../format";
+import { ackKey, money } from "../format";
 import { webUrl } from "../links";
 import { type PriorityGroup, priorityOrder } from "../priority";
+import { providerLimit, providerLimitText } from "../provider-limit";
 import type { AiRow } from "./ai";
 import { AI_LOW_USD } from "./ai";
 import { badConfigValues, type Config, isRenewsDate, unknownConfigKeys } from "./config";
@@ -177,15 +178,23 @@ export function warnings(w: WarningInputs): Warning[] {
       j.machine = m.name;
       j.what = what[j.name] ?? (j.script || "");
       if (!j.enabled) continue;
-      if (j.last_status && !j.last_status.startsWith("ok"))
+      if (j.last_status && !j.last_status.startsWith("ok")) {
+        const why = providerLimit(j.last_error);
         out.push({
           group: "jobs",
-          level: "error",
-          text: `${j.name} on ${m.name}: last run ${j.last_status}${j.last_error ? ` (${j.last_error.slice(0, 140)})` : ""}`,
+          level: why ? "warn" : "error",
+          text: why
+            ? providerLimitText(j, m.name, why, String(j.last_error))
+            : `${j.name} on ${m.name}: last run ${j.last_status}${j.last_error ? ` (${j.last_error.slice(0, 140)})` : ""}`,
           ...(j.ssh_host && tailnetDown && m.local ? { action: START_TAILSCALE } : {}),
-          ...(j.id ? { debug: { machine: m.name, id: String(j.id) } } : {}),
+          ...(why
+            ? { ack: { key: ackKey(j), next: j.next_run_at ?? null } }
+            : j.id
+              ? { debug: { machine: m.name, id: String(j.id) } }
+              : {}),
           ...(secs(j.last_run_at) ? { since: secs(j.last_run_at) } : {}),
         });
+      }
       const key = workJobs.has(j.name) ? workLabel : j.script;
       if (key) {
         const k = JSON.stringify([key, m.name]);
@@ -316,7 +325,12 @@ export function warnings(w: WarningInputs): Warning[] {
         ...(!m.local && hereDown ? { action: START_TAILSCALE } : {}),
       });
   if (w.ticketsError)
-    out.push({ group: "cant-work", level: "warn", text: `Could not list tickets: ${w.ticketsError}` });
+    out.push({
+      group: "cant-work",
+      level: "warn",
+      text: `Could not list tickets: ${w.ticketsError}`,
+      ack: { key: `tickets|${w.ticketsError}`, next: null },
+    });
   const watched = new Set((w.cfg.vendors || []).filter((v) => v.attention).map((v) => v.name));
   for (const v of w.vendors || [])
     if (watched.has(v.name) && v.incidents.length)
