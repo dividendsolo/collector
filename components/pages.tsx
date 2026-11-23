@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { daysAgo, money, monthly, prio } from "@/lib/format";
 import { PROPOSAL_STATUSES, type Proposal, type ProposalStatus } from "@/lib/proposals";
+import { statusPill } from "@/lib/status-colors";
 import { vendorOrder } from "@/lib/vendors";
 import type { ClosedRow } from "@/lib/work";
 import { AiPanels } from "./ai";
@@ -631,7 +632,7 @@ export function WorkPage() {
                     </td>
                     <td className="wide">{t.title}</td>
                     <td>
-                      <span className="pill">{t.lane}</span>
+                      <span className={`pill ${statusPill(t.lane)}`}>{t.lane}</span>
                     </td>
                     <td>
                       {t.priority === "P0" ? (

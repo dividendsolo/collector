@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { runDoing } from "@/lib/format";
+import { statusPill } from "@/lib/status-colors";
 import {
   BLOCKED,
   cardState,
@@ -135,14 +136,6 @@ export function RunningNow() {
 }
 
 const SCHEDULED_SHOWN = 10;
-const LANE_PILL: Record<string, string> = {
-  "ready-for-agent": "human",
-  closed: "ok",
-  "ready-to-merge": "ok",
-  merging: "ok",
-  "changes-requested": "warning",
-};
-
 const RunTime = ({ r }: { r: Run }) => (
   <td
     className={`num mono ${r.kind === "build" && r.seconds > 3600 ? "stuck" : r.kind === "build" && r.seconds > 1800 ? "long" : ""}`}
@@ -177,7 +170,7 @@ function StateCell({ row }: { row: WorkRow }) {
             cls={
               shown?.includes("stale") || shown?.endsWith("unread") || holdLacksReason(hold)
                 ? "warning"
-                : LANE_PILL[row.state] || ""
+                : statusPill(row.state)
             }
             dot={false}
           >
