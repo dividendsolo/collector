@@ -757,10 +757,11 @@ with no roast shows nothing: no 0, no error.
   PageRoast's admin read `GET /api/latest?url=<url>` answers `{ id, score, created }` for the newest roast, or 404
   (pageroast#31). Collector never starts a roast.
 - `lib/server/roast.ts`'s `latestRoast` sends that read with the `x-admin` header from `PAGEROAST_ADMIN` in `.env`
-  (the value in PageRoast's `.admin` file on ezio), and caches each url's answer for a day (`ROAST_TTL_MS`), so the
-  15-second health check costs PageRoast one read per service per day. No key, a 404 or an answer that is not that
-  shape (`asRoast` in `lib/roast.ts`) is no score; a failed read keeps the last good score, and the health check never
-  waits on a failure.
+  (the value in PageRoast's `.admin` file on ezio), and caches each url's answer for a day (`ROAST_TTL_MS`), so PageRoast
+  gets one read per service per day. It never makes the health check wait:
+  it answers the cached score at once and reads in the background, so the first check after a start shows no score
+  and the next one shows it. No key, a 404 or an answer that is not that shape (`asRoast` in `lib/roast.ts`) is no
+  score; a failed read keeps the last good score, and a url with none yet is read again at the next check.
 - `checkServices` puts the answer on each row as `roast`; `ServiceRows` in `components/services.tsx` draws it.
   `tests/service-roast.test.ts` holds the read, the cache and the row.
 
