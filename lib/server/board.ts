@@ -290,8 +290,8 @@ async function readBoard(
   return { rows, cost, remaining, itemNodes, searchNodes };
 }
 
-async function readCommand(cmd: string[], lanes: string[]): Promise<Row[]> {
-  const out = await Promise.all(
+export async function readCommand(cmd: string[], lanes: string[]): Promise<Row[]> {
+  const out = await Promise.allSettled(
     lanes.map(async (slug) => {
       const [data, err] = await run(
         cmd.map((c) => expandHome(c.replace("{lane}", slug))),
@@ -312,7 +312,9 @@ async function readCommand(cmd: string[], lanes: string[]): Promise<Row[]> {
       );
     }),
   );
-  return out.flat();
+  const failed = out.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failed) throw failed.reason;
+  return out.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
 const tickets = () => config().tickets || {};
