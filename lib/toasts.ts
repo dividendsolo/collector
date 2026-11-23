@@ -6,13 +6,14 @@ import { webUrl } from "./links";
 export interface Toast {
   key: string;
   state: string;
-  level: "error" | "warn";
+  level: "error" | "warn" | "good";
   title: string;
   text: string;
   href: string;
   noDot?: boolean;
   action?: { label: string; url: string };
   dismissible?: boolean;
+  acknowledges?: boolean;
 }
 
 interface ServiceIn {
@@ -173,21 +174,25 @@ export function noticeToasts(machines: MachineIn[] | null | undefined, acks: str
       const key = n.key || text;
       if (acks.includes(key)) continue;
       const href = webUrl(n.href);
-      out.push({
+      const shared = {
         key,
         state: text,
-        level: n.level === "error" ? "error" : "warn",
         title: text,
         text: href || "",
         href: href || jumpHref("dashboard", "attention"),
-      });
+      };
+      out.push(
+        n.level === "error"
+          ? { ...shared, level: "error" }
+          : { ...shared, level: "good", noDot: true, dismissible: true, acknowledges: true },
+      );
     }
   }
   return out;
 }
 
 export function sortToasts(all: Toast[]): Toast[] {
-  const rank = { error: 0, warn: 1 };
+  const rank = { error: 0, warn: 1, good: 2 };
   return [...all].sort((a, b) => rank[a.level] - rank[b.level]);
 }
 

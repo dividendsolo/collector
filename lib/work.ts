@@ -152,6 +152,21 @@ const groupOf = (lane: string) => (lane === "ready-for-agent" ? 3 : lane === "sc
 
 const moving = (r: WorkRow) => r.group < 2;
 
+export const LANE_ORDER = [
+  "merging",
+  "ready-to-merge",
+  "code-review",
+  "changes-requested",
+  "agent-in-progress",
+  "verify-in-progress",
+];
+
+const laneRank = (r: WorkRow) => {
+  if (r.run || r.group !== 1) return 0;
+  const i = LANE_ORDER.indexOf(r.card?.lane ?? "");
+  return i < 0 ? LANE_ORDER.length : i;
+};
+
 const holdKey = (ref: string, repo: string) => (ref.startsWith("#") ? `${repo}${ref}` : ref);
 
 const deckOf = ({ group, card }: WorkRow, working: Set<string>) =>
@@ -204,6 +219,7 @@ export function currentWork(
       waitKind(a) - waitKind(b) ||
       fromDay(a).localeCompare(fromDay(b)) ||
       (b.run?.seconds ?? 0) - (a.run?.seconds ?? 0) ||
+      laneRank(a) - laneRank(b) ||
       prio(a.card?.priority) - prio(b.card?.priority) ||
       (a.card?.created ?? "").localeCompare(b.card?.created ?? ""),
   );
