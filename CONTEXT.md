@@ -768,7 +768,9 @@ with no roast shows nothing: no 0, no error.
   gets one read per service per day. It never makes the health check wait:
   it answers the cached score at once and reads in the background, so the first check after a start shows no score
   and the next one shows it. No key, a 404 or an answer that is not that shape (`asRoast` in `lib/roast.ts`) is no
-  score; a failed read keeps the last good score, and a url with none yet is read again at the next check.
+  score. A failed read (a refusal such as a wrong `PAGEROAST_ADMIN`, a 5xx, a timeout) is one try with no retry; the
+  row keeps the last good score, and that url is not read again for an hour (`ROAST_RETRY_MS`), so a broken key or a
+  PageRoast outage costs one read per service per hour, never one per health check.
 - `checkServices` puts the answer on each row as `roast`; `ServiceRows` in `components/services.tsx` draws it.
   `tests/service-roast.test.ts` holds the read, the cache and the row.
 

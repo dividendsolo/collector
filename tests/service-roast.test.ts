@@ -2,8 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServiceRows, type Svc } from "@/components/services";
-import { roastLink, roastText } from "@/lib/roast";
-import { latestRoast, readLatest } from "@/lib/server/roast";
+import { type Roast, roastLink, roastText } from "@/lib/roast";
+import { latestRoast, ROAST_RETRY_MS, ROAST_TTL_MS, readLatest } from "@/lib/server/roast";
 
 const BASE = "https://pageroast.dividendsolo.com";
 const ROAST = { id: "abc123", score: 72, created: Date.UTC(2026, 10, 16, 15) };
@@ -81,13 +81,47 @@ describe("the PageRoast admin read (collector#185)", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps no score after a failed read, and never throws into the health check", async () => {
-    const fetch = vi.fn(async () => answer(500));
+  const checks = async (url: string, n: number) => {
+    const seen: (Roast | null)[] = [];
+    for (let i = 0; i < n; i++) {
+      seen.push(latestRoast(url));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return seen;
+  };
+
+  for (const status of [401, 500]) {
+    it(`sends one read per back-off window after a ${status}, never one per health check`, async () => {
+      const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+      const fetch = vi.fn(async () => answer(status));
+      vi.stubGlobal("fetch", fetch);
+      vi.stubEnv("PAGEROAST_ADMIN", "k3y");
+      const url = `https://refused-${status}.example.com`;
+      expect(await checks(url, 20)).toEqual(Array(20).fill(null));
+      expect(fetch).toHaveBeenCalledTimes(1);
+      now.mockReturnValue(1_000_000 + ROAST_RETRY_MS - 1);
+      await checks(url, 20);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      now.mockReturnValue(1_000_000 + ROAST_RETRY_MS + 1);
+      await checks(url, 20);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      now.mockRestore();
+    });
+  }
+
+  it("keeps the last good score through a failed read, and never throws into the health check", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(5_000_000);
+    const fetch = vi.fn(async () => answer(200, ROAST));
     vi.stubGlobal("fetch", fetch);
     vi.stubEnv("PAGEROAST_ADMIN", "k3y");
-    expect(latestRoast("https://down.example.com")).toBeNull();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
-    expect(latestRoast("https://down.example.com")).toBeNull();
+    const url = "https://flaky.example.com";
+    await checks(url, 2);
+    expect(latestRoast(url)).toEqual(ROAST);
+    fetch.mockImplementation(async () => answer(500));
+    now.mockReturnValue(5_000_000 + ROAST_TTL_MS + 1);
+    expect(await checks(url, 20)).toEqual(Array(20).fill(ROAST));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    now.mockRestore();
   });
 });
 
