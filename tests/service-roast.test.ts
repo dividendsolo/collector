@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -148,6 +150,13 @@ describe("a service row's roast score (collector#185)", () => {
     const html = render([svc(ROAST)]);
     expect(html).toContain('href="https://pageroast.dividendsolo.com/r/abc123"');
     expect(html).toContain("Roast 72");
+  });
+
+  it("keeps the score and the date on one line, so a narrow row breaks only before the roast", () => {
+    expect(render([svc(ROAST)])).toMatch(/<a class="roast" href="https:\/\/pageroast\.dividendsolo\.com\/r\/abc123"/);
+    const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
+    const rule = css.match(/\.health \.sub a\.roast\s*\{([^}]*)\}/);
+    expect(rule?.[1]).toContain("white-space: nowrap");
   });
 
   it("shows nothing for a service with no roast yet", () => {

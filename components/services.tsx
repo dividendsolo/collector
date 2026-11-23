@@ -60,7 +60,7 @@ export function ServiceRows({ list }: { list: Svc[] }) {
               {x.roast ? (
                 <>
                   {" · "}
-                  <a href={roastLink(x.roast.id)} target="_blank" rel="noopener">
+                  <a className="roast" href={roastLink(x.roast.id)} target="_blank" rel="noopener">
                     {roastText(x.roast)}
                   </a>
                 </>

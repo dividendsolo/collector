@@ -712,6 +712,9 @@
   .health .sub a:active {
     color: var(--text);
   }
+  .health .sub a.roast {
+    white-space: nowrap;
+  }
   .health .right {
     display: flex;
     align-items: center;
