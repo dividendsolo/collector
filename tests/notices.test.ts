@@ -125,10 +125,13 @@ describe("a job's notice on the page", () => {
       {
         key: "directory-listing:https://example.com/situation",
         state: "Situation is listed on Example Directory",
-        level: "warn",
+        level: "good",
         title: "Situation is listed on Example Directory",
         text: "https://example.com/situation",
         href: "https://example.com/situation",
+        noDot: true,
+        dismissible: true,
+        acknowledges: true,
       },
     ]);
     expect(noticeToasts([machine(read(file(line({ href: undefined }))))])[0].href).toBe("#/dashboard?to=attention");
@@ -140,10 +143,13 @@ describe("a job's notice on the page", () => {
     expect(noticeToasts([machine(notices)])[0]).toEqual({
       key: "k",
       state: "Situation is listed",
-      level: "warn",
+      level: "good",
       title: "Situation is listed",
       text: "",
       href: "#/dashboard?to=attention",
+      noDot: true,
+      dismissible: true,
+      acknowledges: true,
     });
   });
 

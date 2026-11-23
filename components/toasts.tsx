@@ -15,7 +15,7 @@ import {
   visibleToasts,
   withLeaving,
 } from "@/lib/toasts";
-import { useAcks } from "./acks";
+import { setAck, useAcks } from "./acks";
 import { useAi } from "./ai";
 import { useLive } from "./data";
 import { useServices } from "./services";
@@ -96,7 +96,8 @@ export function Toasts() {
     if (e.target !== e.currentTarget || e.propertyName !== "opacity") return;
     if (dismissing.has(t.key)) {
       setDismissing((d) => new Set([...d].filter((k) => k !== t.key)));
-      dismiss(t.key, t.state);
+      if (t.acknowledges) setAck(t.key, true);
+      else dismiss(t.key, t.state);
     } else if (!t.leaving) return;
     setRendered((r) => r.filter((x) => x.key !== t.key));
   };
