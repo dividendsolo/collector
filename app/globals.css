@@ -2114,6 +2114,9 @@
   .toast.warn {
     border-color: var(--amber-line);
   }
+  .toast.good {
+    border-color: var(--blue);
+  }
   .toast-dot {
     width: 8px;
     height: 8px;
