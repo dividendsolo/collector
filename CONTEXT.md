@@ -651,6 +651,21 @@ toast and the row both go and do not come back. A notice whose line says
 `level: error` stays a red toast with its dot and no Dismiss. `tests/good-news-toast.test.ts` holds it.
 `tests/notices.test.ts` and `tests/notices.driver.py` drive the real `collect.py` on a fixture home.
 
+## A refused model login (2026-11-23)
+
+When Nous refuses an agent's login ("Invalid refresh token"), the agent falls back to other models and nothing said
+so: on 2026-11-14 it happened and builds ran on Kimi and Claude for nine days. The foreman now writes one line into
+`~/.hermes/notices/model-login.jsonl` on its machine when a run's log says "Primary auth failed" (agent-stack
+`note_refused_login`), with `machine` and `provider` on the line. No timer checks the login: the agent that hits the
+refusal pushes it.
+
+`collect.py` reads it like any notice and adds `login: {machine, provider}`. `lib/server/warnings.ts` makes it a red
+`cant-work` row in Priority tasks with a "Sign in to Nous on <machine>" button, not an Acknowledge. The button posts
+to `/api/model-login`, which runs `hermes auth add nous --type oauth --no-browser` on that machine (`lib/server/model-login.ts`,
+over ssh for a remote one) and opens the Nous approval page it prints. The link is made on the click, so its 10
+minutes start then. A sign-in that succeeds appends `{"resolved": true, "machine", "provider"}`, which closes every
+notice before it for that machine and provider; a later refusal is a new row. `tests/model-login.test.ts` holds it.
+
 ## Only a web address is an href (collector#84, #86)
 
 The page takes a few links from outside data — a vendor's status feed gives an incident's own link, a machine's notice

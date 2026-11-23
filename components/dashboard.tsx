@@ -43,6 +43,58 @@ function AlertAction({ action, done }: { action: { label: string; post: string }
   );
 }
 
+function LoginAction({ login }: { login: { machine: string; provider: string; label: string } }) {
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState("");
+  const [link, setLink] = useState("");
+  const [signedIn, setSignedIn] = useState(false);
+  const { tick } = useLive();
+  const click = async () => {
+    const tab = window.open("", "_blank");
+    setBusy(true);
+    setWhy("");
+    try {
+      const r = await fetch("/api/model-login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(login),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok && body.link) {
+        setLink(body.link);
+        if (tab) tab.location.href = body.link;
+      } else if (r.ok && body.signedIn) {
+        tab?.close();
+        setSignedIn(true);
+        tick();
+      } else {
+        tab?.close();
+        setWhy(body.why || `failed (${r.status})`);
+      }
+    } catch (e) {
+      tab?.close();
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <span className="act">
+      {why ? <span className="why">{why}</span> : null}
+      {signedIn ? (
+        <span className="text-muted-foreground">Signed in</span>
+      ) : link ? (
+        <a className="btn" href={link} target="_blank" rel="noreferrer">
+          Approve in Nous (10 min)
+        </a>
+      ) : (
+        <button className="btn" type="button" onClick={click} disabled={busy}>
+          {busy ? "Starting…" : login.label}
+        </button>
+      )}
+    </span>
+  );
+}
+
 interface OpenFix {
   pane: string;
   step: string;
@@ -221,7 +273,9 @@ function PriorityTasks() {
                   <BlurText text={x.aside} />
                 </span>
               ) : null}
-              {x.action ? (
+              {x.login ? (
+                <LoginAction login={x.login} />
+              ) : x.action ? (
                 <AlertAction action={x.action} done={() => setFixed({ post: x.action.post, at: Date.now() / 1000 })} />
               ) : x.unblock ? (
                 <span className="act">
