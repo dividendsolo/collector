@@ -73,6 +73,26 @@ describe("currentWork", () => {
       [3, null],
     ]);
   });
+  it("keeps each status together, in the order the foreman takes them, then priority, then oldest (2026-11-23)", () => {
+    const cards = [
+      card("pageroast", 36, "changes-requested", { priority: "P2" }),
+      card("docket", 35, "code-review", { priority: "P1" }),
+      card("pointy", 15, "changes-requested", { priority: "P2", created: "2026-09-01T00:00:00Z" }),
+      card("app", 7, "agent-in-progress", { priority: "P0" }),
+      card("app", 8, "ready-to-merge", { priority: "P2" }),
+      card("app", 9, "merging", { priority: "P2" }),
+      card("app", 10, "code-review", { priority: "P2" }),
+    ];
+    expect(currentWork(cards, [], [], WAITING, 0).map((r) => `${r.card?.lane} ${r.card?.number}`)).toEqual([
+      "merging 9",
+      "ready-to-merge 8",
+      "code-review 35",
+      "code-review 10",
+      "changes-requested 15",
+      "changes-requested 36",
+      "agent-in-progress 7",
+    ]);
+  });
   it("orders a group by priority, then oldest", () => {
     const cards = [
       card("app", 1, "scheduled", { created: "2026-10-02T00:00:00Z" }),
@@ -99,9 +119,9 @@ describe("currentWork", () => {
     const rows = currentWork(cards, [], [], WAITING, 0);
     expect(rows.map((r) => [r.card?.number, cardState(r)])).toEqual([
       [1, "session"],
+      [4, "code-review"],
       [2, "agent-in-progress"],
       [3, "verify-in-progress"],
-      [4, "code-review"],
     ]);
   });
   it("shows stale run data instead of the lane: a page snapshot past its interval, or a machine whose read failed", () => {
@@ -115,15 +135,15 @@ describe("currentWork", () => {
     const rows = currentWork(cards, [], [], WAITING, 0);
     const fresh = staleness({ at: now - 5, machines: [{ name: "altair" }, { name: "ezio" }] }, now);
     expect(rows.map((r) => cardState(r, fresh))).toEqual([
+      "code-review",
       "agent-in-progress",
       "agent-in-progress",
       "verify-in-progress",
-      "code-review",
     ]);
 
     const page = staleness({ at: now - 180, machines: [{ name: "altair" }, { name: "ezio" }] }, now);
     expect(page.page).toBe(180);
-    expect(rows.map((r) => cardState(r, page))).toEqual(["stale 3 min", "stale 3 min", "stale 3 min", "code-review"]);
+    expect(rows.map((r) => cardState(r, page))).toEqual(["code-review", "stale 3 min", "stale 3 min", "stale 3 min"]);
 
     const ezio = staleness(
       { at: now - 5, machines: [{ name: "altair" }, { name: "ezio", stale: true, read_at: now - 240 }] },
@@ -131,14 +151,14 @@ describe("currentWork", () => {
     );
     expect(ezio.page).toBeNull();
     expect(rows.map((r) => cardState(r, ezio))).toEqual([
+      "code-review",
       "ezio stale 4 min",
       "agent-in-progress",
       "ezio stale 4 min",
-      "code-review",
     ]);
 
     const never = staleness({ at: now - 5, machines: [{ name: "ezio", stale: true, read_at: null }] }, now);
-    expect(cardState(rows[0], never)).toBe("ezio unread");
+    expect(cardState(rows[1], never)).toBe("ezio unread");
   });
   it("reads the state of a custom set's statuses too: the working set is a setting now (collector#53)", () => {
     const rows = currentWork(
@@ -149,8 +169,8 @@ describe("currentWork", () => {
       0,
     );
     const page = staleness({ at: 10_000 - 180, machines: [] }, 10_000);
-    expect(rows.map((r) => cardState(r, page, ["review-me"]))).toEqual(["stale 3 min", "agent-in-progress"]);
-    expect(rows.map((r) => cardState(r, page, ["agent-in-progress"]))).toEqual(["review-me", "stale 3 min"]);
+    expect(rows.map((r) => cardState(r, page, ["review-me"]))).toEqual(["agent-in-progress", "stale 3 min"]);
+    expect(rows.map((r) => cardState(r, page, ["agent-in-progress"]))).toEqual(["stale 3 min", "review-me"]);
   });
   it("calls the page stale only past its interval", () => {
     expect(staleness({ at: 100 }, 100 + STALE_SECONDS).page).toBeNull();
