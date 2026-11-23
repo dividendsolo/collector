@@ -23,9 +23,12 @@ export interface Warning {
   action?: { label: string; post: string };
   debug?: { machine: string; id: string };
   fixMain?: { machine: string; repo: string };
+  login?: { machine: string; provider: string; label: string };
   ack?: { key: string; next: string | null };
   since?: number;
 }
+
+const providerName = (p: string) => ({ nous: "Nous", anthropic: "Anthropic" })[p] ?? p;
 
 const START_TAILSCALE = { label: "Start Tailscale", post: "/api/tailscale" };
 const START_HERMES = { label: "Start Hermes", post: "/api/hermes" };
@@ -210,6 +213,19 @@ export function warnings(w: WarningInputs): Warning[] {
         });
     for (const n of m.notices || []) {
       const href = webUrl(n?.href);
+      if (n?.text && n.login?.machine && n.login?.provider) {
+        out.push({
+          group: "cant-work",
+          level: "error",
+          text: String(n.text),
+          login: {
+            machine: String(n.login.machine),
+            provider: String(n.login.provider),
+            label: `Sign in to ${providerName(String(n.login.provider))} on ${n.login.machine}`,
+          },
+        });
+        continue;
+      }
       if (n?.text)
         out.push({
           group: "good-news",
