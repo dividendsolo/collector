@@ -2338,6 +2338,14 @@ def notice_time(at):
         return None
 
 
+def notice_resolved(entry, later):
+    """A sign-in line resolves every notice before it for the same machine and provider (agent-stack, 2026-11-23)."""
+    if not entry.get("machine") or not entry.get("provider"):
+        return False
+    return any(isinstance(e, dict) and e.get("resolved") and e.get("machine") == entry["machine"]
+               and e.get("provider") == entry["provider"] for e in later)
+
+
 def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
     """One row per notice line under `<home>/.hermes/notices/*.jsonl` (collector#82), oldest first.
 
@@ -2347,12 +2355,16 @@ def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
     """
     rows = []
     for path in sorted(glob.glob(os.path.join(home, NOTICES, "*.jsonl"))):
+        entries = []
         for line in tail_text(path, NOTICE_TAIL).splitlines():
             try:
-                entry = json.loads(line)
+                entries.append(json.loads(line))
             except ValueError:
                 continue
+        for i, entry in enumerate(entries):
             if not isinstance(entry, dict) or not str(entry.get("text") or "").strip():
+                continue
+            if notice_resolved(entry, entries[i + 1:]):
                 continue
             at = notice_time(entry.get("at"))
             if at is not None and now.timestamp() - at > keep_s:
@@ -2360,13 +2372,16 @@ def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
             href = str(entry["href"]) if entry.get("href") else ""
             if not href.lower().startswith(NOTICE_SCHEMES):
                 href = None
-            rows.append({
+            row = {
                 "key": str(entry.get("key") or entry["text"]),
                 "level": str(entry.get("level") or "info"),
                 "text": str(entry["text"]),
                 "href": href,
                 "at": at,
-            })
+            }
+            if entry.get("machine") and entry.get("provider"):
+                row["login"] = {"machine": str(entry["machine"]), "provider": str(entry["provider"])}
+            rows.append(row)
     return sorted(rows, key=lambda r: r["at"] or 0)
 
 
