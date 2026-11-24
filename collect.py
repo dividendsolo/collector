@@ -8,6 +8,7 @@ Code and Codex keep on this machine, the Briefs folder a cron job's emailed brie
 jobs a config.json `watch` entry names (a process, a coding-agent session, a launchd label, a log or a heartbeat
 file), and changes nothing. With `brief <file>` as a second argument it prints one brief of that folder whole.
 """
+import fcntl
 import glob
 import hashlib
 import ipaddress
@@ -37,6 +38,7 @@ WORK_STEPS = os.path.expanduser(WORK["steps"]) if WORK.get("steps") else None
 VERIFY_LABEL = CONFIG.get("verify_label")
 REPOS = os.path.expanduser(CONFIG.get("repos_dir") or "~/code")
 FOREMAN = os.path.join(HERMES, "foreman")
+PAUSE_FILE = os.path.join(HERMES, "runs-paused")
 HOST_BROKEN = "host-broken-"
 PULL_DEPLOY_STATE = os.path.join(HERMES, "cron", "output", "pull-deploy", "state.json")
 DROID_USER = "lab"
@@ -1967,6 +1969,80 @@ def host_broken(scratch=FOREMAN):
     return out
 
 
+CREW_SLOTS = (("build-1", "build"), ("build-2", "build"), ("review", "review"))
+CREW_KINDS = {"session", "leftover", "lab"}
+
+
+def slot_held(path):
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except FileNotFoundError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def lock_openers(paths):
+    """The pids that have each of these files open, from `lsof` (on macOS and Linux both); a file nobody has open
+    is missing from the answer. lsof exits 1 when one of the files is not open, so its output is read either way."""
+    if not paths:
+        return {}
+    try:
+        done = subprocess.run(["lsof", "-F", "pn", "--", *paths], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    out, pid = {}, None
+    for line in done.stdout.splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            pid = int(line[1:])
+        elif line.startswith("n") and pid is not None:
+            out.setdefault(line[1:], set()).add(pid)
+    return out
+
+
+def slot_run(step, running, now):
+    """The slot's card from the foreman step its holder writes, and the profile and time of that card's run."""
+    rows = [r for r in running if (r.get("repo"), r.get("card")) == (step["repo"], step["card"])
+            and r.get("type") in ("agent", "script") and r.get("kind") not in CREW_KINDS]
+    r = next((r for r in rows if r["type"] == "agent"), rows[0] if rows else None)
+    seconds = r.get("seconds") if r else max(0, now - int(step.get("since") or now))
+    return {"repo": step["repo"], "card": step["card"],
+            "profile": r.get("name") if r and r["type"] == "agent" else None, "seconds": seconds}
+
+
+def crew_read(running, steps=(), scratch=FOREMAN, pause_file=PAUSE_FILE):
+    """The foreman's positions on this machine: each build and review slot free or held, tried with a non-blocking
+    flock released at once, and whether `~/.hermes/runs-paused` stops the ticks. The lock files hold no card, but
+    the foreman process that holds a slot writes its card's step file with its own pid: a held slot carries the
+    card of the step whose pid has that lock file open, and the profile and time of that card's `running` row.
+    No foreman folder, no crew: null."""
+    if not os.path.isdir(scratch):
+        return None
+    paths = {slot: os.path.join(scratch, slot + ".lock") for slot, _ in CREW_SLOTS}
+    held = {slot for slot, p in paths.items() if slot_held(p)}
+    openers = lock_openers([paths[s] for s in sorted(held)])
+    now = int(time.time())
+    slots = []
+    for slot, role in CREW_SLOTS:
+        if slot not in held:
+            slots.append({"slot": slot, "role": role, "state": "free"})
+            continue
+        row = {"slot": slot, "role": role, "state": "held"}
+        pids = openers.get(os.path.realpath(paths[slot]), set()) | openers.get(paths[slot], set())
+        step = next((st for st in steps if isinstance(st.get("pid"), int) and st["pid"] in pids
+                     and st.get("repo") and st.get("card") is not None), None)
+        if step:
+            row.update(slot_run(step, running, now))
+        slots.append(row)
+    return {"paused": os.path.exists(pause_file), "slots": slots}
+
+
 def first_error(log_path):
     """The first line of the foreman's base-gate log (beside the marker) that names an error, so the row says what
     failed and not only which step (James, 2026-11-11: "It's not a great error"). "" when there is no log."""
@@ -2392,6 +2468,7 @@ def main():
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
     tailnet = tailscale_state()
+    running = running_agents()
     print(json.dumps({
         "host": socket.gethostname(),
         "tz": time.strftime("%Z"),
@@ -2403,7 +2480,8 @@ def main():
         "network": network_read(),
         "watch": watch_rows(now),
         "notices": notices_rows(now),
-        "running": running_agents(),
+        "running": running,
+        "crew": crew_read(running, work_steps()),
         "host_broken": host_broken(),
         "pull_deploys": pull_deploys(),
         "profiles": hermes_profiles(),

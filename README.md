@@ -77,25 +77,28 @@ The Dashboard answers these questions at a glance:
    checks, which GitHub limit is nearly gone (the API limits, and GitHub Actions minutes at 90% of what the plan
    includes; that row carries the dollars billed this month on its right). The APIs page shows the same bar for Jog's
    runner minutes beside them, and the Dashboard shows the Jog bar in its own panel.
-2. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long. Hover a card number to read what the card is for.
+2. **Crew:** beside Priority tasks, each foreman position on each machine (builder 1, builder 2, reviewer, the
+   foreman itself, and the waiting crew where its Hermes profile exists), what fills it, and what it does now: the card
+   and for how long, free, paused (`~/.hermes/runs-paused`), or unreachable when the machine does not answer.
+3. **Running now:** which agent or script works on which card, in which repo, on which machine, and for how long. Hover a card number to read what the card is for.
    A build turns amber after 30 minutes and red after an hour.
    A process left in a card's worktree — a test server nothing stopped — is its own row: `leftover`, the program it
    runs with the port it listens on (`bun start :4123`), and how long it has been there. It is never named after the
    work script, and the work script's own rows say the step it is on (preparing, verifying, merging), never `building`.
    The table also shows the model each agent calls now (a fallback model shows too).
-3. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
-4. **AI usage:** one line per AI provider your Hermes profiles use (each profile's `config.yaml`), read from the
+4. **Service health:** whether each of your sites is online, slow (over 3 s), or down, checked once a minute.
+5. **AI usage:** one line per AI provider your Hermes profiles use (each profile's `config.yaml`), read from the
    provider. Plans (subscriptions with usage windows) show bars like the GitHub limit: the Claude subscription
    through Claude Code's own login in the macOS keychain (read only, never renewed), the MiniMax coding plan through
    `MINIMAX_API_KEY` in `~/.hermes/.env`, and Grok as a login check (xAI has no usage API for subscriptions).
    Pay-as-you-go credits (Nous, through Hermes's portal login) show the balance. Under $5, under 10% left, or a
    failed login goes to Priority tasks. The Subscriptions page has both panels on top, then your subscriptions, with annual
    charges counted as a twelfth a month and the day each one renews (`subscriptions[].renews`); every eye button blurs every amount, so you can share the screen.
-5. **Work:** open cards on the board, cards closed as done today and in 30 days, deploys today per repo (production
+6. **Work:** open cards on the board, cards closed as done today and in 30 days, deploys today per repo (production
    GitHub deployments, or successful CI jobs named "deploy" on pushes to main). The Waiting on you panel lists every ticket in the waiting statuses (`statuses.waiting`, the old `tickets.each`), with one filter button per status; its red
    count, and a red dot on Work in the sidebar, are the P0s. Its New card button opens a form that creates a GitHub
    issue in a roster repo (`status repos --json`) and sets its status, needs-triage unless you choose another.
-6. **Cron jobs:** every scheduled job on every machine — Hermes's own, launchd's on a Mac, this user's plain
+7. **Cron jobs:** every scheduled job on every machine — Hermes's own, launchd's on a Mac, this user's plain
    `crontab` lines and the systemd timers on Linux — with its status, machine, schedule, last run, and last result.
    A crontab line keeps no run history, so its row says so instead of reading as a failure; a systemd timer shows the
    last exit of the service it starts, so a run that failed shows as failed.
