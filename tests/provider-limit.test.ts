@@ -30,6 +30,15 @@ describe("providerLimit reads the provider's own refusal", () => {
     ).toBe("the account's usage limit is reached until 2026-12-01 at 00:00 UTC");
   });
 
+  it("names Hermes's daily usage limit with the time it resets, so the row is acknowledged, not debugged", () => {
+    const error =
+      "RuntimeError: HTTP 402: Your included Hermes usage for today is used up and your credits can't cover this request. It resets at Nov 24, 4:22 PM UTC. Add credits to keep going now.";
+    expect(providerLimit(error)).toBe("the account's usage limit is reached until Nov 24, 4:22 PM UTC");
+    const r = row({ ...demandWatch, name: "Lead Watch", last_error: error });
+    expect(r.ack).toBeDefined();
+    expect(r.debug).toBeUndefined();
+  });
+
   it("names an out-of-credits refusal", () => {
     expect(
       providerLimit(
