@@ -235,7 +235,7 @@ export function CurrentWork() {
         <span className="count">{rows?.filter((r) => r.state !== "closed").length ?? 0}</span>
       </PanelHead>
       <div className="wrap scroll">
-        <table>
+        <table className="stack">
           <thead>
             <tr>
               <th>Status</th>
@@ -261,9 +261,9 @@ export function CurrentWork() {
                 return (
                   <tr key={row.key} className={row.state === "closed" ? "done" : ""}>
                     <StateCell row={row} />
-                    <td className={lab ? "mono lab" : "mono"}>{r ? runName(r) : <Dash />}</td>
-                    <td>{r ? <ModelCell model={r.model} provider={r.provider} /> : <Dash />}</td>
-                    <td>
+                    <td className={lab ? "mono lab phone-off" : "mono phone-off"}>{r ? runName(r) : <Dash />}</td>
+                    <td className="phone-off">{r ? <ModelCell model={r.model} provider={r.provider} /> : <Dash />}</td>
+                    <td className="line">
                       {r ? (
                         <>
                           {runWait(r) || runDoing(r)}
@@ -278,7 +278,7 @@ export function CurrentWork() {
                         <Dash />
                       )}
                     </td>
-                    <td>{r ? runMachine(r) : row.local ? "local" : <Dash />}</td>
+                    <td className="phone-off">{r ? runMachine(r) : row.local ? "local" : <Dash />}</td>
                     <td className="mono">
                       <CardRef repo={c?.repo ?? (lab ? LAB.repo : repo)} number={num} />
                     </td>

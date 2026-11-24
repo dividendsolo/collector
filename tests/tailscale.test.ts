@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { restartSshJobs, tailscaleBin } from "@/lib/server/tailscale";
+import { restartSshJobs, selfDnsName, tailscaleBin } from "@/lib/server/tailscale";
 import { warnings } from "@/lib/server/warnings";
 
 const DRIVER = `import json, os, sys
@@ -104,5 +104,19 @@ describe("restartSshJobs", () => {
       { scheduler: "cron", id: "x", ssh_host: "h", last_status: "exit 255" },
     ];
     expect(await restartSshJobs(jobs, -1)).toEqual(["com.example.tunnel"]);
+  });
+});
+
+describe("selfDnsName (collector#217)", () => {
+  it("reads this machine's MagicDNS name off tailscale status --json", () => {
+    const status = {
+      BackendState: "Running",
+      Self: { HostName: "machine", DNSName: "machine.example-tailnet.ts.net." },
+    };
+    expect(selfDnsName(JSON.stringify(status))).toBe("machine.example-tailnet.ts.net.");
+  });
+  it("is null when the answer has no name or is not JSON", () => {
+    for (const out of ["", "not json", "{}", JSON.stringify({ Self: { DNSName: "" } })])
+      expect(selfDnsName(out), out).toBeNull();
   });
 });

@@ -73,7 +73,7 @@ export const BriefRow = ({ b }: { b: Brief }) => (
       </a>
     </td>
     <td className="wide">{b.subject || b.file}</td>
-    <td className="mono">{day(b.sent_at)}</td>
+    <td className="mono end">{day(b.sent_at)}</td>
   </tr>
 );
 
@@ -94,7 +94,7 @@ export function BriefsPage() {
           </p>
         ) : null}
         <div className="wrap">
-          <table className="briefs">
+          <table className="briefs stack">
             <thead>
               <tr>
                 <th>From</th>

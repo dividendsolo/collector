@@ -56,6 +56,37 @@ http://127.0.0.1:4000. The job's stdout and stderr are both `~/Library/Logs/coll
 Remote machines are read the same way in the request: the server sends `collect.py` over SSH
 (`ssh <host> python3 -`), standard library only, read only, nothing installed there.
 
+## On James's phone: Tailscale Serve, tailnet only, never Funnel (collector#217)
+
+Collector has no sign-in, and its buttons (Start Tailscale, Start Hermes) act on the Mac, so it never listens on
+anything but loopback: `next start -H 127.0.0.1`, and `lsof -iTCP:4000 -sTCP:LISTEN` shows `127.0.0.1:4000` only.
+A device on the tailnet reaches it through Tailscale Serve on altair, which takes HTTPS on altair's tailnet name and
+passes each request to `127.0.0.1:4000`:
+
+```bash
+tailscale serve --bg 4000
+tailscale serve status
+```
+
+- The phone opens `https://altair.<tailnet>.ts.net` (the name is `Self.DNSName` in `tailscale status --json`). Serve
+  listens only on altair's tailnet address, so a device off the tailnet cannot reach it.
+- **Never Tailscale Funnel** (`tailscale funnel`, or `serve` with `--funnel`): Funnel puts the page on the public
+  internet, with no sign-in in front of buttons that act on the Mac.
+- `--bg` stores the setting in tailscaled, so it survives a restart of tailscaled and of altair. `tailscale serve
+  reset` removes it.
+- Serve needs the tailnet's HTTPS certificates, and Serve itself, turned on once in the Tailscale admin. Until then
+  `tailscale serve` prints "Serve is not enabled on your tailnet" and a link to turn it on.
+- Serve keeps the browser's `Host` (`altair.<tailnet>.ts.net`), so the guard (`lib/server/guard.ts`, "A route answers
+  this page only") lets that one name through as well as the loopback ones. `learnTailnetName` in
+  `lib/server/tailscale.ts` reads it from `tailscale status --json` at boot and once a minute after (`warm()`), and
+  keeps the last name it read while Tailscale is stopped. Any other name, another `*.ts.net` one included, is still
+  a 403.
+- At phone width (under 700px) a table with the `stack` class (Current work, Waiting on you, Open cards, Closed
+  today, the Briefs inbox) draws each row as one wrapping line, with no header row: the cell marked `wide` or `line`
+  (the reason, the title, the subject, what a run does) gets its own line, a `num` or `end` cell sits at the right,
+  and a `phone-off` cell (Model, Machine, Type, Labels, Opened, Name / profile) is hidden. A panel head wraps its
+  buttons onto a second line instead of running past the screen's edge. `tests/phone-width.test.ts` holds both.
+
 ## A change reaches port 4000 only through main and the rebuild job
 
 `bun start` serves the `.next` build in `/Users/james/code/collector`, never the source: editing a file changes
@@ -942,8 +973,9 @@ found both; `lib/server/guard.ts` is the fix.
 reads the method itself, so one function covers both rules:
 
 - the `Host` — or, for a `Request` that carries none, the URL it goes to — must be a loopback name (`localhost`,
-  `*.localhost`, any 127/8 address, `::1`) on every route: a browser sends the name it was given, and Collector is
-  only ever reached at one of those;
+  `*.localhost`, any 127/8 address, `::1`) or this machine's own tailnet name, on every route: a browser sends the
+  name it was given, and Collector is only ever reached at one of those (the tailnet name through Tailscale Serve,
+  next section);
 - anything but `GET`/`HEAD` must come from this page: `Sec-Fetch-Site: same-origin`, or, where the browser sends no
   such header, an `Origin` whose host is this one. No such header at all is not a browser: a shell or an agent is
   answered as before, the way a one-click route already did (that route had its own copy of this check; the shared

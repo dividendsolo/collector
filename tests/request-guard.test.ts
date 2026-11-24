@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { fromAnotherSite, guard, hostName, isLoopbackHost } from "@/lib/server/guard";
+import { fromAnotherSite, guard, hostName, isLoopbackHost, rememberTailnetName } from "@/lib/server/guard";
 
 vi.mock("@/lib/server/paths", async () => {
   const fs = await import("node:fs");
@@ -177,6 +177,40 @@ describe("a read through a name that is not this machine's (DNS rebinding)", () 
     expect((await read({ host: "attacker.example.com:4000" })).status).toBe(403);
     for (const own of [HOST, "localhost:4000", "[::1]:4000"]) expect((await read({ host: own })).status, own).toBe(200);
     expect(await (await read({ host: HOST })).text()).toBe("dev");
+  });
+});
+
+describe("this machine's own tailnet name, the one Tailscale Serve passes on (collector#217)", () => {
+  const OWN = "machine.example-tailnet.ts.net";
+  const at = (host: string, init: RequestInit = {}) =>
+    guard(new Request(`http://${HOST}/api/state`, { ...init, headers: { host, ...(init.headers || {}) } }));
+
+  afterAll(() => rememberTailnetName(null));
+
+  it("is refused until Collector has read the name from Tailscale", () => {
+    rememberTailnetName(null);
+    expect(at(OWN)?.status).toBe(403);
+  });
+
+  it("answers a read and the page's own click through the name, and refuses every other tailnet's name", async () => {
+    rememberTailnetName(`${OWN}.`);
+    expect(at(OWN)).toBeNull();
+    expect(at(`${OWN.toUpperCase()}:443`)).toBeNull();
+    expect((await read({ host: OWN })).status).toBe(200);
+    expect(
+      at(OWN, { method: "POST", headers: { origin: `https://${OWN}`, "sec-fetch-site": "same-origin" } }),
+    ).toBeNull();
+    expect(
+      at(OWN, { method: "POST", headers: { origin: "https://evil.example.com", "sec-fetch-site": "cross-site" } })
+        ?.status,
+    ).toBe(403);
+    for (const other of [
+      "other.example-tailnet.ts.net",
+      "machine.other-tailnet.ts.net",
+      `${OWN}.evil.example.com`,
+      "machine",
+    ])
+      expect(at(other)?.status, other).toBe(403);
   });
 });
 

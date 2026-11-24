@@ -1,4 +1,5 @@
 import { json } from "@/lib/server/respond";
+import { once } from "@/lib/server/store";
 
 export function hostName(host: string): string {
   const h = host.trim().toLowerCase();
@@ -26,6 +27,14 @@ export const isLoopbackHost = (host: string): boolean => {
   );
 };
 
+const tailnet = once<{ name: string | null }>("tailnet-name", () => ({ name: null }));
+
+export function rememberTailnetName(name: string | null) {
+  tailnet.name = name ? hostName(name) : null;
+}
+
+const isOwnHost = (host: string) => isLoopbackHost(host) || (!!tailnet.name && hostName(host) === tailnet.name);
+
 const requestHost = (req: Request, url: URL) => req.headers.get("host") || url.host;
 
 export function fromAnotherSite(req: Request, url: URL): boolean {
@@ -42,8 +51,11 @@ export function fromAnotherSite(req: Request, url: URL): boolean {
 
 export function guard(req: Request): Response | null {
   const url = new URL(req.url);
-  if (!isLoopbackHost(requestHost(req, url)))
-    return json({ why: "Collector answers only on this machine's own address (127.0.0.1 or localhost)" }, 403);
+  if (!isOwnHost(requestHost(req, url)))
+    return json(
+      { why: "Collector answers only on this machine's own address (127.0.0.1, localhost or its tailnet name)" },
+      403,
+    );
   if (req.method !== "GET" && req.method !== "HEAD" && fromAnotherSite(req, url))
     return json({ why: "a write comes from this page only" }, 403);
   return null;

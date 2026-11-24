@@ -5,6 +5,7 @@ import { domains } from "./domains";
 import { snapshot } from "./machines";
 import { projects } from "./projects";
 import { checkServices } from "./services";
+import { learnTailnetName, TAILNET_NAME_MS } from "./tailscale";
 import { vendors } from "./vendors";
 import { workStats } from "./workstats";
 
@@ -18,4 +19,6 @@ export function warm() {
   quiet(datafast.get());
   quiet(projects());
   quiet(workStats());
+  quiet(learnTailnetName());
+  setInterval(() => quiet(learnTailnetName()), TAILNET_NAME_MS).unref();
 }

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { rememberTailnetName } from "./guard";
 import { runText } from "./run";
 
 export const TAILSCALE_BINS = [
@@ -18,6 +19,23 @@ export async function tailnetState(bin: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export const TAILNET_NAME_MS = 60_000;
+
+export function selfDnsName(statusJson: string): string | null {
+  try {
+    return JSON.parse(statusJson)?.Self?.DNSName || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function learnTailnetName(): Promise<void> {
+  const bin = tailscaleBin();
+  if (!bin) return;
+  const name = selfDnsName((await runText([bin, "status", "--json"], { timeout: 5 })).stdout);
+  if (name) rememberTailnetName(name);
 }
 
 export async function startTailscale(): Promise<{ ok: boolean; state: string | null; why?: string }> {

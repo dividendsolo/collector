@@ -608,7 +608,7 @@ export function WorkPage() {
           </span>
         </PanelHead>
         <div className="wrap">
-          <table>
+          <table className="stack">
             <thead>
               <tr>
                 <th>Repo</th>
@@ -641,8 +641,8 @@ export function WorkPage() {
                         <span className="mono">{t.priority || "—"}</span>
                       )}
                     </td>
-                    <td className="sub">{(t.labels || []).join(", ") || "—"}</td>
-                    <td className="num">{daysAgo(t.created)}</td>
+                    <td className="sub phone-off">{(t.labels || []).join(", ") || "—"}</td>
+                    <td className="num phone-off">{daysAgo(t.created)}</td>
                   </tr>
                 ))
               ) : (
@@ -955,7 +955,7 @@ export function ClosedPage() {
           </div>
         </PanelHead>
         <div className="wrap">
-          <table>
+          <table className="stack">
             <thead>
               <tr>
                 <th>Repo</th>

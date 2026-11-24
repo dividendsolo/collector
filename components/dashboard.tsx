@@ -559,7 +559,7 @@ export function Waiting() {
         </div>
       </PanelHead>
       <div className="wrap scroll">
-        <table>
+        <table className="stack">
           <thead>
             <tr>
               <th>Status</th>
@@ -596,7 +596,7 @@ export function Waiting() {
                         <span style={{ color: "var(--muted)" }}>{t.title}</span>
                       )}
                     </td>
-                    <td>{t.type || "—"}</td>
+                    <td className="phone-off">{t.type || "—"}</td>
                     <td>
                       {t.priority === "P0" ? (
                         <Pill cls="failed" dot={false}>
@@ -606,7 +606,7 @@ export function Waiting() {
                         <span className="mono">{t.priority || "—"}</span>
                       )}
                     </td>
-                    <td className="num">{ago(t.created)}</td>
+                    <td className="num phone-off">{ago(t.created)}</td>
                   </tr>
                 ))}
                 {current === "all" &&

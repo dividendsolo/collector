@@ -944,12 +944,6 @@
     font-size: 15px;
     line-height: 1.5;
   }
-  @media (max-width: 700px) {
-    .journey-page .panel-head {
-      flex-wrap: wrap;
-      row-gap: 8px;
-    }
-  }
   .journey-row.hot {
     background: var(--hover);
   }
@@ -1197,8 +1191,9 @@
   }
   .panel-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
+    gap: 8px 10px;
     min-height: 44px;
     padding: 8px 16px;
     border-bottom: 1px solid var(--line);
@@ -1421,6 +1416,45 @@
     position: sticky;
     top: 0;
     z-index: 1;
+  }
+  @media (max-width: 700px) {
+    .panel-head .seg {
+      flex-wrap: wrap;
+    }
+    table.stack,
+    table.stack tbody {
+      display: block;
+    }
+    table.stack thead {
+      display: none;
+    }
+    table.stack tbody tr {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    table.stack td {
+      padding: 0;
+      border: 0;
+      min-width: 0;
+    }
+    table.stack td.wide,
+    table.stack td.line {
+      order: 1;
+      flex-basis: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    table.stack td.num,
+    table.stack td.end {
+      margin-left: auto;
+    }
+    table.stack td.phone-off {
+      display: none;
+    }
   }
   #current-work tr.done td {
     opacity: 0.6;
