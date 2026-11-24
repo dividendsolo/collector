@@ -25,6 +25,7 @@ const SESSION = { repo: "collector", kind: "session", card: 12, type: "agent", n
 function read({
   hold = [] as string[],
   running = [] as object[],
+  steps = [] as object[],
   paused = false,
   files = ["build-1.lock", "build-2.lock", "review.lock"],
   scratch = true,
@@ -37,16 +38,28 @@ function read({
   }
   const pause = path.join(dir, "runs-paused");
   if (paused) fs.writeFileSync(pause, "");
+  const holder =
+    "import fcntl, sys; f = open(sys.argv[1], 'w'); fcntl.flock(f, fcntl.LOCK_EX); print(flush=True); sys.stdin.read()";
   const code = [
-    "import fcntl, json, os, sys",
+    "import json, os, subprocess, sys",
     `sys.path.insert(0, ${JSON.stringify(process.cwd())})`,
     "import collect",
-    `held = [open(os.path.join(${JSON.stringify(foreman)}, n), "w") for n in ${JSON.stringify(hold)}]`,
-    "[fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB) for f in held]",
-    `print(json.dumps(collect.crew_read(json.loads(${JSON.stringify(JSON.stringify(running))}), ${JSON.stringify(foreman)}, ${JSON.stringify(pause)})))`,
+    `holders = {n: subprocess.Popen([sys.executable, "-c", ${JSON.stringify(holder)}, os.path.join(${JSON.stringify(foreman)}, n)], stdin=subprocess.PIPE, stdout=subprocess.PIPE) for n in ${JSON.stringify(hold)}}`,
+    "[h.stdout.readline() for h in holders.values()]",
+    `steps = [dict(s, pid=holders[s["pid"]].pid) for s in json.loads(${JSON.stringify(JSON.stringify(steps))})]`,
+    `print(json.dumps(collect.crew_read(json.loads(${JSON.stringify(JSON.stringify(running))}), steps=steps, scratch=${JSON.stringify(foreman)}, pause_file=${JSON.stringify(pause)})))`,
+    "[h.kill() for h in holders.values()]",
   ].join("\n");
   return JSON.parse(execFileSync("python3", ["-c", code], { encoding: "utf8" }));
 }
+
+const stepOf = (row: { repo: string; card: number }, step: string, lock: string) => ({
+  repo: row.repo,
+  card: row.card,
+  step,
+  since: 0,
+  pid: lock,
+});
 
 describe("collect.py's crew reading (collector#231)", () => {
   it("reads every slot free when no lock is held", () => {
@@ -65,7 +78,11 @@ describe("collect.py's crew reading (collector#231)", () => {
   });
 
   it("reads a held slot and carries its repo, card and profile from the running rows", () => {
-    const crew = read({ hold: ["build-1.lock", "review.lock"], running: [SESSION, REVIEWER, BUILDER] });
+    const crew = read({
+      hold: ["build-1.lock", "review.lock"],
+      running: [SESSION, REVIEWER, BUILDER],
+      steps: [stepOf(BUILDER, "building", "build-1.lock"), stepOf(REVIEWER, "reviewing", "review.lock")],
+    });
     expect(crew.slots).toEqual([
       {
         slot: "build-1",
@@ -99,7 +116,9 @@ describe("collect.py's crew reading (collector#231)", () => {
 
   it("names no profile for a foreman step that holds the slot between agents", () => {
     const step = { repo: "pageroast", kind: "reviewing", card: 30, type: "script", name: "foreman.py", seconds: 157 };
-    expect(read({ hold: ["review.lock"], running: [step] }).slots[2]).toEqual({
+    expect(
+      read({ hold: ["review.lock"], running: [step], steps: [stepOf(step, "reviewing", "review.lock")] }).slots[2],
+    ).toEqual({
       slot: "review",
       role: "review",
       state: "held",
@@ -108,6 +127,72 @@ describe("collect.py's crew reading (collector#231)", () => {
       profile: null,
       seconds: 157,
     });
+  });
+
+  it("fills the reviewer row, and no builder row, with a review in its preparing step", () => {
+    const review = {
+      repo: "collector",
+      kind: "preparing",
+      card: 231,
+      type: "script",
+      name: "foreman.py",
+      seconds: 300,
+    };
+    const opening = {
+      repo: "situation",
+      kind: "opening the PR",
+      card: 920,
+      type: "script",
+      name: "foreman.py",
+      seconds: 20,
+    };
+    const crew = read({
+      hold: ["build-1.lock", "review.lock"],
+      running: [review, opening],
+      steps: [stepOf(review, "preparing", "review.lock"), stepOf(opening, "opening the PR", "build-1.lock")],
+    });
+    expect(crew.slots).toEqual([
+      { slot: "build-1", role: "build", state: "held", repo: "situation", card: 920, profile: null, seconds: 20 },
+      { slot: "build-2", role: "build", state: "free" },
+      { slot: "review", role: "review", state: "held", repo: "collector", card: 231, profile: null, seconds: 300 },
+    ]);
+  });
+
+  it("fills the reviewer row with its own review while it verifies, with no build held", () => {
+    const review = {
+      repo: "collector",
+      kind: "verifying",
+      card: 231,
+      type: "script",
+      name: "foreman.py",
+      seconds: 240,
+    };
+    const crew = read({
+      hold: ["review.lock"],
+      running: [review],
+      steps: [stepOf(review, "verifying", "review.lock")],
+    });
+    expect(crew.slots[0]).toEqual({ slot: "build-1", role: "build", state: "free" });
+    expect(crew.slots[2]).toEqual({
+      slot: "review",
+      role: "review",
+      state: "held",
+      repo: "collector",
+      card: 231,
+      profile: null,
+      seconds: 240,
+    });
+  });
+
+  it("does not fill a held reviewer row with a merge of another card", () => {
+    const merging = { repo: "pointy", kind: "merging", card: 59, type: "script", name: "foreman.py", seconds: 900 };
+    const crew = read({
+      hold: ["review.lock", "merge.lock"],
+      files: ["build-1.lock", "build-2.lock", "review.lock", "merge.lock"],
+      running: [merging, REVIEWER],
+      steps: [stepOf(merging, "merging", "merge.lock"), stepOf(REVIEWER, "reviewing", "review.lock")],
+    });
+    expect(crew.slots[2]).toMatchObject({ slot: "review", repo: "echo-form", card: 55, profile: "echo-form-reviewer" });
   });
 
   it("does not try the merge lock or a base-gate lock as a position", () => {

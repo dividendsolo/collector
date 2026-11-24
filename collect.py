@@ -1970,10 +1970,7 @@ def host_broken(scratch=FOREMAN):
 
 
 CREW_SLOTS = (("build-1", "build"), ("build-2", "build"), ("review", "review"))
-SLOT_KINDS = {
-    "build": {"build", "building", "preparing", "claiming", "verifying", "verify", "regate", "saving work"},
-    "review": {"review", "reviewing", "merging"},
-}
+CREW_KINDS = {"session", "leftover", "lab"}
 
 
 def slot_held(path):
@@ -1991,27 +1988,57 @@ def slot_held(path):
         os.close(fd)
 
 
-def crew_read(running, scratch=FOREMAN, pause_file=PAUSE_FILE):
+def lock_openers(paths):
+    """The pids that have each of these files open, from `lsof` (on macOS and Linux both); a file nobody has open
+    is missing from the answer. lsof exits 1 when one of the files is not open, so its output is read either way."""
+    if not paths:
+        return {}
+    try:
+        done = subprocess.run(["lsof", "-F", "pn", "--", *paths], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    out, pid = {}, None
+    for line in done.stdout.splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            pid = int(line[1:])
+        elif line.startswith("n") and pid is not None:
+            out.setdefault(line[1:], set()).add(pid)
+    return out
+
+
+def slot_run(step, running, now):
+    """The slot's card from the foreman step its holder writes, and the profile and time of that card's run."""
+    rows = [r for r in running if (r.get("repo"), r.get("card")) == (step["repo"], step["card"])
+            and r.get("type") in ("agent", "script") and r.get("kind") not in CREW_KINDS]
+    r = next((r for r in rows if r["type"] == "agent"), rows[0] if rows else None)
+    seconds = r.get("seconds") if r else max(0, now - int(step.get("since") or now))
+    return {"repo": step["repo"], "card": step["card"],
+            "profile": r.get("name") if r and r["type"] == "agent" else None, "seconds": seconds}
+
+
+def crew_read(running, steps=(), scratch=FOREMAN, pause_file=PAUSE_FILE):
     """The foreman's positions on this machine: each build and review slot free or held, tried with a non-blocking
-    flock released at once, and whether `~/.hermes/runs-paused` stops the ticks. A held slot carries the card, repo
-    and profile of a `running` row of its role, the longest-running first; the lock files hold no card of their own.
+    flock released at once, and whether `~/.hermes/runs-paused` stops the ticks. The lock files hold no card, but
+    the foreman process that holds a slot writes its card's step file with its own pid: a held slot carries the
+    card of the step whose pid has that lock file open, and the profile and time of that card's `running` row.
     No foreman folder, no crew: null."""
     if not os.path.isdir(scratch):
         return None
-    runs = {role: sorted((r for r in running if r.get("repo") and r.get("card") is not None
-                          and r.get("type") in ("agent", "script") and r.get("kind") in kinds),
-                         key=lambda r: -(r.get("seconds") or 0))
-            for role, kinds in SLOT_KINDS.items()}
+    paths = {slot: os.path.join(scratch, slot + ".lock") for slot, _ in CREW_SLOTS}
+    held = {slot for slot, p in paths.items() if slot_held(p)}
+    openers = lock_openers([paths[s] for s in sorted(held)])
+    now = int(time.time())
     slots = []
     for slot, role in CREW_SLOTS:
-        if not slot_held(os.path.join(scratch, slot + ".lock")):
+        if slot not in held:
             slots.append({"slot": slot, "role": role, "state": "free"})
             continue
         row = {"slot": slot, "role": role, "state": "held"}
-        if runs[role]:
-            r = runs[role].pop(0)
-            row.update(repo=r["repo"], card=r["card"], profile=r.get("name") if r["type"] == "agent" else None,
-                       seconds=r.get("seconds"))
+        pids = openers.get(os.path.realpath(paths[slot]), set()) | openers.get(paths[slot], set())
+        step = next((st for st in steps if isinstance(st.get("pid"), int) and st["pid"] in pids
+                     and st.get("repo") and st.get("card") is not None), None)
+        if step:
+            row.update(slot_run(step, running, now))
         slots.append(row)
     return {"paused": os.path.exists(pause_file), "slots": slots}
 
@@ -2454,7 +2481,7 @@ def main():
         "watch": watch_rows(now),
         "notices": notices_rows(now),
         "running": running,
-        "crew": crew_read(running),
+        "crew": crew_read(running, work_steps()),
         "host_broken": host_broken(),
         "pull_deploys": pull_deploys(),
         "profiles": hermes_profiles(),

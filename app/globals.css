@@ -1461,8 +1461,10 @@
     table.crew th,
     table.crew td {
       white-space: normal;
-      padding: 9px 8px;
-      overflow-wrap: anywhere;
+      padding: 9px 5px;
+    }
+    table.crew .card-tip {
+      white-space: nowrap;
     }
   }
   .card-tip {
