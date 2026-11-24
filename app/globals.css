@@ -2504,12 +2504,36 @@
     opacity: 0.6;
   }
   .section-head {
-    padding: 7px 16px;
+    padding: 0;
     font-size: 16px;
     color: var(--faint);
     background: var(--panel-2);
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
+  }
+  .archived-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 16px;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .archived-toggle:active {
+    background: var(--hover);
+  }
+  .archived-toggle .arch-chev {
+    width: 12px;
+    height: 12px;
+    color: var(--faint);
+  }
+  .archived-toggle[aria-expanded="true"] .arch-chev {
+    transform: rotate(90deg);
   }
   .brief-skel {
     padding: 14px 16px 20px;
@@ -2656,6 +2680,10 @@
     }
     .briefs-panel a.back:hover {
       color: var(--text);
+    }
+    .archived-toggle:hover {
+      color: var(--text);
+      background: var(--hover);
     }
   }
 }

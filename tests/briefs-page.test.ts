@@ -8,7 +8,7 @@ import type { Brief } from "@/lib/briefs";
 const swr = vi.hoisted(() => ({ mutate: vi.fn(), data: undefined as unknown }));
 vi.mock("swr", () => ({ default: () => ({ data: swr.data }), mutate: swr.mutate }));
 
-const { BriefsPage, postBrief, briefDay } = await import("@/components/briefs");
+const { BriefsPage, ArchivedSection, postBrief, briefDay } = await import("@/components/briefs");
 
 const brief = (file: string, read: boolean, archived = false): Brief =>
   ({ machine: "ezio", file, brief: file, subject: `Subject ${file}`, sent_at: null, read, archived }) as Brief;
@@ -31,17 +31,16 @@ describe("the Briefs page as drawn (collector#64)", () => {
     expect(html).not.toMatch(/unread-dot/);
   });
 
-  it("draws the Archived rows in the Inbox's own table, under one full-width Archived row", () => {
+  it("draws the Archived section in the Inbox's own table, in one full-width cell", () => {
     const html = draw();
     expect(html.match(/<table/g)).toHaveLength(1);
-    expect(html).toMatch(/<td colSpan="3" class="section-head">Archived<\/td>/);
-    expect(html.indexOf("Archived<")).toBeLessThan(html.indexOf("Subject c.md"));
+    expect(html).toMatch(/<td colSpan="3" class="section-head">/);
   });
 
   it("marks each row unread or read, so the weight follows the class", () => {
     const html = draw();
     expect(html.match(/<tr class="row unread">/g)).toHaveLength(1);
-    expect(html.match(/<tr class="row read">/g)).toHaveLength(3);
+    expect(html.match(/<tr class="row read">/g)).toHaveLength(1);
   });
 });
 
@@ -295,5 +294,108 @@ describe("a brief's date is the viewer's own local day (James, 2026-11-11)", () 
   it("shows a dash for a brief with no date", () => {
     expect(briefDay(null)).toBe("—");
     expect(briefDay("not a date")).toBe("—");
+  });
+});
+
+type El = { type?: unknown; props?: Record<string, unknown> };
+
+const buttonProps = (node: unknown): Record<string, unknown> => {
+  const found: El[] = [];
+  const walk = (n: unknown) => {
+    if (Array.isArray(n)) {
+      for (const child of n) walk(child);
+      return;
+    }
+    if (!n || typeof n !== "object" || !("props" in n)) return;
+    const el = n as El;
+    found.push(el);
+    walk(el.props?.children);
+  };
+  walk(node);
+  const button = found.find((el) => el.type === "button");
+  expect(button, "the Archived row draws a button").toBeDefined();
+  return button?.props ?? {};
+};
+
+describe("the Archived section starts collapsed and opens on a click (collector#239)", () => {
+  const archived = [brief("c.md", true, true), brief("d.md", true, true)];
+  const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
+  const rule = (selector: string) => {
+    const at = css.indexOf(`${selector} {`);
+    expect(at, `${selector} has a rule`).toBeGreaterThan(-1);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  const section = (open: boolean, onToggle = () => {}) => ArchivedSection({ archived, open, onToggle });
+
+  beforeEach(() => {
+    swr.data = { at: 0, inbox: [brief("a.md", false)], archived };
+  });
+
+  it("opens with the archived rows hidden and the count on the Archived row", () => {
+    const html = draw();
+    expect(html).toMatch(
+      /<tr><td colSpan="3" class="section-head"><button type="button" class="archived-toggle" aria-expanded="false">/,
+    );
+    expect(html).toMatch(/Archived<span class="count" title="2 archived">2<\/span>/);
+    expect(html).not.toContain("Subject c.md");
+    expect(html).not.toContain("Subject d.md");
+  });
+
+  it("draws the archived rows, read as they are, once it is open", () => {
+    const html = renderToStaticMarkup(createElement(ArchivedSection, { archived, open: true, onToggle: () => {} }));
+    expect(html).toMatch(/aria-expanded="true"/);
+    expect(html).toContain("Subject c.md");
+    expect(html).toContain("Subject d.md");
+    expect(html.match(/<tr class="row read">/g)).toHaveLength(2);
+  });
+
+  it("closes the section again on the next click", () => {
+    let open = true;
+    const toggle = () => {
+      open = !open;
+    };
+    const props = buttonProps(section(true, toggle));
+    (props.onClick as () => void)();
+    expect(open).toBe(false);
+  });
+
+  it("opens the section on a mouse click, through the row's own button", () => {
+    const onToggle = vi.fn();
+    const props = buttonProps(section(false, onToggle));
+    expect(props["aria-expanded"]).toBe(false);
+    (props.onClick as () => void)();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens by keyboard: a real button, in the tab order, with nothing eating Enter or Space", () => {
+    const props = buttonProps(section(false));
+    expect(props.type).toBe("button");
+    expect(props.tabIndex).toBeUndefined();
+    expect(props.onKeyDown).toBeUndefined();
+  });
+
+  it("fills the whole strip, so the Archived row itself is the click target", () => {
+    expect(rule(".section-head")).toMatch(/padding:\s*0;/);
+    const toggle = rule(".archived-toggle");
+    expect(toggle).toMatch(/width:\s*100%/);
+    expect(toggle).toMatch(/padding:\s*7px 16px;/);
+    expect(toggle).toMatch(/font:\s*inherit/);
+    expect(toggle).toMatch(/background:\s*none/);
+    expect(toggle).toMatch(/cursor:\s*pointer/);
+  });
+
+  it("answers the press", () => {
+    expect(rule(".archived-toggle:active")).toMatch(/background:\s*var\(--hover\)/);
+  });
+
+  it("flips its chevron when it is open, with no motion", () => {
+    expect(rule('.archived-toggle[aria-expanded="true"] .arch-chev')).toMatch(/transform:\s*rotate\(90deg\)/);
+    for (const selector of [
+      ".archived-toggle",
+      ".archived-toggle .arch-chev",
+      '.archived-toggle[aria-expanded="true"] .arch-chev',
+    ]) {
+      expect(rule(selector), `${selector} adds no motion`).not.toMatch(/transition|animation/);
+    }
   });
 });

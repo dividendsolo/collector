@@ -77,10 +77,41 @@ export const BriefRow = ({ b }: { b: Brief }) => (
   </tr>
 );
 
+export const ArchivedSection = ({
+  archived,
+  open,
+  onToggle,
+}: {
+  archived: Brief[];
+  open: boolean;
+  onToggle: () => void;
+}) => (
+  <>
+    <tr>
+      <td colSpan={3} className="section-head">
+        <button type="button" className="archived-toggle" aria-expanded={open} onClick={onToggle}>
+          <Icon name="chev" className="i arch-chev" />
+          Archived
+          <Count n={archived.length} title={`${archived.length} archived`} />
+        </button>
+      </td>
+    </tr>
+    {!archived.length ? (
+      <tr>
+        <td colSpan={3} className="sub">
+          Nothing archived yet.
+        </td>
+      </tr>
+    ) : null}
+    {open ? archived.map((b) => <BriefRow b={b} key={`${b.machine}/${b.file}`} />) : null}
+  </>
+);
+
 export function BriefsPage() {
   const { data } = useApi<BriefsData>("/api/briefs");
   const inbox: Brief[] = data?.inbox || [];
   const archived: Brief[] = data?.archived || [];
+  const [open, setOpen] = useState(false);
   return (
     <div className="page">
       <section className="panel briefs-panel">
@@ -118,22 +149,8 @@ export function BriefsPage() {
                 </tr>
               )}
               {data ? (
-                <tr>
-                  <td colSpan={3} className="section-head">
-                    Archived
-                  </td>
-                </tr>
+                <ArchivedSection archived={archived} open={open} onToggle={() => setOpen((was) => !was)} />
               ) : null}
-              {data && !archived.length ? (
-                <tr>
-                  <td colSpan={3} className="sub">
-                    Nothing archived yet.
-                  </td>
-                </tr>
-              ) : null}
-              {archived.map((b) => (
-                <BriefRow b={b} key={`${b.machine}/${b.file}`} />
-              ))}
             </tbody>
           </table>
         </div>
