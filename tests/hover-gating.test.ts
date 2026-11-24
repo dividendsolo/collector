@@ -63,6 +63,7 @@ const LISTED = [
   ".empty .empty-next:hover",
   ".crumbs a:hover",
   ".briefs-panel a.back:hover",
+  ".archived-toggle:hover",
 ];
 
 describe("a hover state only exists where a pointer can hover", () => {
@@ -96,6 +97,7 @@ describe("a hover state only exists where a pointer can hover", () => {
     expect(rulesFor(".empty .empty-next:hover")[0]?.body).toMatch(/text-decoration:\s*underline/);
     expect(rulesFor(".crumbs a:hover")[0]?.body).toMatch(/color:\s*var\(--text\)/);
     expect(rulesFor(".briefs-panel a.back:hover")[0]?.body).toMatch(/color:\s*var\(--text\)/);
+    expect(rulesFor(".archived-toggle:hover")[0]?.body).toMatch(/background:\s*var\(--hover\)/);
   });
 
   it("leaves the keyboard focus ring outside the block, where every input has it", () => {

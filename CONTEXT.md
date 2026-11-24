@@ -902,7 +902,11 @@ is that folder, worked the way an email inbox works.
   machine could not be read, so an empty Inbox is never a lie. `briefBody()` is the one-file read, with its state.
 - The page (`components/briefs.tsx`) is `#/briefs`: the Inbox oldest first, unread bold with its dot and read in the
   normal weight, dimmed where it stands, then the Archived rows under a full-width Archived row of the same table (so
-  they share the Inbox's columns), newest first. The dot's cell is `td.unread-dot`: the global `.mark` class is a blue
+  they share the Inbox's columns), newest first. `ArchivedSection` draws that one row as a real
+  `<button type="button">` carrying `aria-expanded` and the count ("Archived 46"), and the section starts collapsed
+  (collector#239): a click anywhere on the row, or Enter or Space on the focused row — the browser's own activation of
+  a button — shows or hides the archived rows, and the Inbox rows and their order do not change. The dot's cell is
+  `td.unread-dot`: the global `.mark` class is a blue
   box and must not be reused there. `#/briefs/<machine>/<file>` opens one brief as
   Markdown, and the Archive button sits at its top — the Acknowledge toggle's own button; there is no unarchive in this
   pass. Opening a brief is what makes it Read, and an archived brief still opens. The sidebar's Briefs link carries the
