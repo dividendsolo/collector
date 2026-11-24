@@ -1,8 +1,8 @@
 const HTTP_STATUS = /\bHTTP (\d{3})\b/;
 
 const RATE_LIMIT = /would exceed your account's rate limit|rate limit (?:reached|exceeded)/i;
-const USAGE_LIMIT = /reached your specified API usage limits/i;
-const REGAIN = /regain access on ([^.]+?)(?:\.|$)/i;
+const USAGE_LIMIT = /reached your specified API usage limits|included Hermes usage for today is used up/i;
+const REGAIN = /(?:regain access on|resets at) ([^.]+?)(?:\.|$)/i;
 const CREDITS = /requires more credits|add more credits|insufficient credits|out of credits/i;
 const TOKEN_LIMIT = /prompt tokens limit exceeded/i;
 
