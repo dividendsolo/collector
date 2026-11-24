@@ -257,6 +257,7 @@ describe("every route in the repo", () => {
       "app/api/proposals/route.ts",
       "app/api/release/route.ts",
       "app/api/tailscale/route.ts",
+      "app/api/ticket/route.ts",
     ]);
   });
 });

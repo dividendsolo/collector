@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { statusSets, WAITING_CHECK_LABEL } from "../statuses";
+import { TICKET_TYPES } from "../ticket";
 import { type Board, config } from "./config";
 import { expandHome } from "./paths";
 import { run } from "./run";
@@ -57,7 +58,6 @@ export function parseHold(body: string | null | undefined, url: string): Hold | 
   return after.length || from ? { after, from, why, to } : null;
 }
 
-export const TICKET_TYPES = ["bug", "enhancement", "tech-debt", "security"];
 const ISSUE = "number title url body createdAt state repository{name} labels(first:30){nodes{name}}";
 const ITEMS_PAGE = 55;
 const SEARCH_PAGE = 40;
@@ -86,7 +86,7 @@ export function labelReposFrom(board: Board, fromStatus: string[] | null): strin
 
 let statusRepos: { at: number; repos: string[] | null } = { at: 0, repos: null };
 
-async function readStatusRepos(): Promise<string[] | null> {
+export async function readStatusRepos(): Promise<string[] | null> {
   if (Date.now() - statusRepos.at < 60_000) return statusRepos.repos;
   const [repos] = await run<string[]>([expandHome("~/.local/bin/status"), "repos", "--json"], { timeout: 15 });
   statusRepos = { at: Date.now(), repos: Array.isArray(repos) && repos.length ? repos : statusRepos.repos };
