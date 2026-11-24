@@ -1457,6 +1457,14 @@
     white-space: normal;
     min-width: 220px;
   }
+  @media (max-width: 600px) {
+    table.crew th,
+    table.crew td {
+      white-space: normal;
+      padding: 9px 8px;
+      overflow-wrap: anywhere;
+    }
+  }
   .card-tip {
     cursor: help;
     border-bottom: 1px dotted var(--line-2);

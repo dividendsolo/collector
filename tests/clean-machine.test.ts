@@ -36,6 +36,7 @@ describe("a clean machine (collector#55)", () => {
     expect(snap.profiles).toEqual([]);
     expect(snap.hermes_gateway).toBeNull();
     expect(snap.host_broken).toEqual([]);
+    expect(snap.crew).toBeNull();
     expect(Object.keys(snap.network.networks).sort()).toEqual(["internet", "lan", "tailnet"]);
     expect(Array.isArray(snap.network.sockets)).toBe(true);
     for (const s of snap.network.sockets) expect(["internet", "lan", "tailnet", "machine"]).toContain(s.reach);

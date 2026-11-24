@@ -8,6 +8,7 @@ Code and Codex keep on this machine, the Briefs folder a cron job's emailed brie
 jobs a config.json `watch` entry names (a process, a coding-agent session, a launchd label, a log or a heartbeat
 file), and changes nothing. With `brief <file>` as a second argument it prints one brief of that folder whole.
 """
+import fcntl
 import glob
 import hashlib
 import ipaddress
@@ -37,6 +38,7 @@ WORK_STEPS = os.path.expanduser(WORK["steps"]) if WORK.get("steps") else None
 VERIFY_LABEL = CONFIG.get("verify_label")
 REPOS = os.path.expanduser(CONFIG.get("repos_dir") or "~/code")
 FOREMAN = os.path.join(HERMES, "foreman")
+PAUSE_FILE = os.path.join(HERMES, "runs-paused")
 HOST_BROKEN = "host-broken-"
 PULL_DEPLOY_STATE = os.path.join(HERMES, "cron", "output", "pull-deploy", "state.json")
 DROID_USER = "lab"
@@ -1967,6 +1969,53 @@ def host_broken(scratch=FOREMAN):
     return out
 
 
+CREW_SLOTS = (("build-1", "build"), ("build-2", "build"), ("review", "review"))
+SLOT_KINDS = {
+    "build": {"build", "building", "preparing", "claiming", "verifying", "verify", "regate", "saving work"},
+    "review": {"review", "reviewing", "merging"},
+}
+
+
+def slot_held(path):
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except FileNotFoundError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+
+
+def crew_read(running, scratch=FOREMAN, pause_file=PAUSE_FILE):
+    """The foreman's positions on this machine: each build and review slot free or held, tried with a non-blocking
+    flock released at once, and whether `~/.hermes/runs-paused` stops the ticks. A held slot carries the card, repo
+    and profile of a `running` row of its role, the longest-running first; the lock files hold no card of their own.
+    No foreman folder, no crew: null."""
+    if not os.path.isdir(scratch):
+        return None
+    runs = {role: sorted((r for r in running if r.get("repo") and r.get("card") is not None
+                          and r.get("type") in ("agent", "script") and r.get("kind") in kinds),
+                         key=lambda r: -(r.get("seconds") or 0))
+            for role, kinds in SLOT_KINDS.items()}
+    slots = []
+    for slot, role in CREW_SLOTS:
+        if not slot_held(os.path.join(scratch, slot + ".lock")):
+            slots.append({"slot": slot, "role": role, "state": "free"})
+            continue
+        row = {"slot": slot, "role": role, "state": "held"}
+        if runs[role]:
+            r = runs[role].pop(0)
+            row.update(repo=r["repo"], card=r["card"], profile=r.get("name") if r["type"] == "agent" else None,
+                       seconds=r.get("seconds"))
+        slots.append(row)
+    return {"paused": os.path.exists(pause_file), "slots": slots}
+
+
 def first_error(log_path):
     """The first line of the foreman's base-gate log (beside the marker) that names an error, so the row says what
     failed and not only which step (James, 2026-11-11: "It's not a great error"). "" when there is no log."""
@@ -2392,6 +2441,7 @@ def main():
     now = datetime.now(timezone.utc).astimezone()
     starts = work_script_starts(now.replace(tzinfo=None))
     tailnet = tailscale_state()
+    running = running_agents()
     print(json.dumps({
         "host": socket.gethostname(),
         "tz": time.strftime("%Z"),
@@ -2403,7 +2453,8 @@ def main():
         "network": network_read(),
         "watch": watch_rows(now),
         "notices": notices_rows(now),
-        "running": running_agents(),
+        "running": running,
+        "crew": crew_read(running),
         "host_broken": host_broken(),
         "pull_deploys": pull_deploys(),
         "profiles": hermes_profiles(),

@@ -768,6 +768,25 @@ and it may also carry the back-off it sleeps in:
 - On a screen under 496px the hover card is as wide as the screen less 8px each side, and it is placed after it
   renders (`useLayoutEffect`), so a tip opened from the middle of a phone screen is not squeezed against its edge.
 
+## The Crew panel: the positions on each machine and what fills them (collector#231)
+
+The Dashboard's top row is Priority tasks and Crew side by side (`.pair`; they stack under 900px). Crew is keyed by
+worker, not by card, so "is a builder free" and "did the foreman tick" read at a glance.
+
+- `collect.py`'s `crew_read` adds `crew` to each machine snapshot: `build-1`, `build-2` and `review` (the foreman's
+  `ROLE_SLOTS`, `~/.hermes/foreman/<slot>.lock`) each `free` or `held`, tried with a non-blocking `flock` released at
+  once (a missing file is free), and `paused` when `~/.hermes/runs-paused` is there. The lock files hold nothing, so a
+  held slot takes its repo, card, profile and time from the `running` rows of its role (build kinds or review kinds,
+  longest-running first); a held slot with no such row reads `busy`. `merge.lock` and the `base-gate-*`, `card-*` and
+  `git-*` locks are not positions. No `~/.hermes/foreman` folder: `crew` is null and the machine has no rows. ezio's
+  crew rides in the same ssh read as the rest of its snapshot.
+- `lib/crew.ts`'s `crewRows` makes the rows: the three slots, then `foreman` (the default profile's Hermes job named
+  `foreman`, its schedule and its `last_run_at`) and `waiting crew` (a job in the `waiting-crew` profile, its cadence
+  and `next_run_at`) when the machine has them. Each position carries a one-sentence tip on hover.
+- A machine whose read failed reads `unreachable` on every row, never `free` (the foreman counts an unreachable ezio
+  as full too). A paused machine reads `paused` on its builder and reviewer rows.
+- Under 600px the Crew table wraps its cells (`table.crew`), so it fits a 425px screen without a sideways scroll.
+
 ## Each service shows its latest PageRoast score (collector#185)
 
 James, 2026-11-16: "in the service section on the dash i want the latest pageroast score showing for those as well."

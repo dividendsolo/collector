@@ -10,6 +10,7 @@ import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
 import { useBriefs } from "./briefs";
 import { CardRef } from "./card-link";
+import { CrewPanel } from "./crew";
 import { useApi, useLive } from "./data";
 import { GraphqlLimit, JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
@@ -697,7 +698,10 @@ function ServiceHealth() {
 export function Dashboard() {
   return (
     <div className="page">
-      <PriorityTasks />
+      <div className="pair">
+        <PriorityTasks />
+        <CrewPanel />
+      </div>
       <CurrentWork />
       <WorkPanel />
       <Waiting />
