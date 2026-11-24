@@ -2,7 +2,10 @@
 
 One local page showing every cron job and agent run across machines, live. Next.js (App Router) + TypeScript on
 Bun, no database, no auth. It reads only, apart from the two buttons you click yourself — Start Tailscale and Start
-Hermes, each acting on the machine it runs on — and the projects list it writes to `config.json`.
+Hermes, each acting on the machine it runs on — the projects list it writes to `config.json`, the release and triage
+pills in Waiting on you, and the New card form there, which creates GitHub issues and moves them on the board
+(collector#229).
+
 `AGENTS.md` holds the stack, the commands and the dangers; this file holds the code's layout, how the running one is
 built, restarted and served, and how its features work.
 
@@ -931,6 +934,28 @@ its shadow, and it still snaps with no transition (collector#163). A pressed ite
 - `components/`: the page (one client app with a hash router, as before).
 - `instrumentation.ts`: starts the board poll and warms the readers at boot.
 
+## New card: a ticket from the Waiting on you panel (collector#229)
+
+James, 2026-11-23: "there's a little button at the bottom of the Waiting on me, maybe, where we can click to add a new
+card, just to add a new issue." The quiet New card button at the bottom of `#waiting-panel` (`NewTicket` in
+`components/dashboard.tsx`) opens a `.fields` form inside the panel, not a modal: Repo, Title, Body, Type, Priority,
+Status. Status starts at needs-triage and Priority at none; James changes them only when he wants to.
+
+- `lib/ticket.ts` holds the lists and the one check the form and the route share: the repo is on the roster, the title
+  is one line (256 characters at most), the body 20,000 at most, the type one of `TICKET_TYPES`, the priority one of
+  none, P0, P1, P2, the status one of `AGENT_STACK_ALL`. A status other than needs-triage with no priority is refused
+  before anything runs, with the priority gate as the reason: `status set` refuses to take a card out of triage
+  without one (agent-stack `test_status_priority_gate.py`), so it would leave an issue that cannot move.
+- The roster is the live one: `GET /api/ticket` answers `readStatusRepos` in `lib/server/board.ts`
+  (`status repos --json`, cached a minute), the list the board poll already reads. Nothing in Collector copies it.
+- `POST /api/ticket` (guarded like every write) runs `gh issue create -R <repo> --title <t> --label <type>
+  --body-file -` (the body on stdin), reads the number from the URL gh prints (GitHub picks it; Collector never
+  guesses one), then `~/.local/bin/status set <repo>#<n> <status>`, then `status priority <repo>#<n> <P>` when one
+  was chosen, then `poll("new-ticket")` so the card is in the panel on the next board event.
+- A failure names its step (`step`) and carries that tool's own error (`why`), and the form keeps what was typed. A
+  failed `gh issue create` made nothing. A failure after it answers the issue's `url` and says the card "was created
+  but not moved" (or got no priority), so a half-made card is never silent. `tests/ticket.test.ts` holds all of it.
+
 ## The data endpoints
 
 | Endpoint | What it answers |
@@ -942,6 +967,7 @@ its shadow, and it still snaps with no transition (collector#163). A pressed ite
 | `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; and every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's), the knocks from its local network among them — the read an agent asks to answer "is anything open that should not be?" |
 | `/api/proposals` | The client proposals, newest first, and the open pipeline per currency worked out from them (`GET`); the page's one write route adds (`POST`), edits (`PUT`) and removes (`DELETE ?id=`) one, every field parsed on the server, and answers the list and the pipeline as they stand after the change. |
 | `/api/briefs` | The Briefs page: the Inbox (every brief that is not archived, oldest first) and the Archived section (newest first), read off the machine snapshot every other page already reads (`GET`); the page's one write (`POST`) sets one brief's read or archived state, on this machine, and answers both lists as they stand after it. |
+| `/api/ticket` | The live roster for the New card form (`GET`), and the form's write (`POST`): create the issue, set its status and priority, poll the board; a failure names its step and, once the issue exists, its URL. |
 | `/api/brief` | One brief read whole, over the ssh the snapshot uses (`GET ?machine=&file=`): its front matter, its Markdown and whether it is read or archived here. |
 
 The rest are one route per reader (`/api/ai`, `/api/services`, `/api/vendors`, `/api/domains`, `/api/projects`,

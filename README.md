@@ -96,7 +96,8 @@ The Dashboard answers these questions at a glance:
    charges counted as a twelfth a month and the day each one renews (`subscriptions[].renews`); every eye button blurs every amount, so you can share the screen.
 6. **Work:** open cards on the board, cards closed as done today and in 30 days, deploys today per repo (production
    GitHub deployments, or successful CI jobs named "deploy" on pushes to main). The Waiting on you panel lists every ticket in the waiting statuses (`statuses.waiting`, the old `tickets.each`), with one filter button per status; its red
-   count, and a red dot on Work in the sidebar, are the P0s.
+   count, and a red dot on Work in the sidebar, are the P0s. Its New card button opens a form that creates a GitHub
+   issue in a roster repo (`status repos --json`) and sets its status, needs-triage unless you choose another.
 7. **Cron jobs:** every scheduled job on every machine — Hermes's own, launchd's on a Mac, this user's plain
    `crontab` lines and the systemd timers on Linux — with its status, machine, schedule, last run, and last result.
    A crontab line keeps no run history, so its row says so instead of reading as a failure; a systemd timer shows the

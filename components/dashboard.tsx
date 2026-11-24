@@ -4,7 +4,8 @@ import { Fragment, useEffect, useState } from "react";
 import { ago, fetchedText } from "@/lib/format";
 import { jumpHref } from "@/lib/jump";
 import { briefsRow, fullRepo, p0Rows, priorityOrder, TRIAGE_LANE, transitionNames, triageRow } from "@/lib/priority";
-import { waitingList } from "@/lib/statuses";
+import { AGENT_STACK_ALL, waitingList } from "@/lib/statuses";
+import { checkTicket, newTicket, TICKET_PRIORITIES, TICKET_TYPES, type TicketDraft, ticketRequest } from "@/lib/ticket";
 import { transitionName, transitionOut } from "@/lib/view-transition";
 import { acked, setAck, useAcks } from "./acks";
 import { AiPlan, byAiOrder, useAi } from "./ai";
@@ -634,7 +635,170 @@ export function Waiting() {
           </tbody>
         </table>
       </div>
+      <NewTicket />
     </section>
+  );
+}
+
+function NewTicket() {
+  const [open, setOpen] = useState(false);
+  const [made, setMade] = useState<{ url: string; number: number } | null>(null);
+  if (!open)
+    return (
+      <div className="new-ticket">
+        {made ? (
+          <a className="plain sub" href={made.url} target="_blank" rel="noopener">
+            Created #{made.number}
+          </a>
+        ) : null}
+        <button className="btn ghost" type="button" onClick={() => setOpen(true)}>
+          New card
+        </button>
+      </div>
+    );
+  return (
+    <TicketForm
+      onCancel={() => setOpen(false)}
+      onMade={(m) => {
+        setMade(m);
+        setOpen(false);
+      }}
+    />
+  );
+}
+
+function TicketForm({
+  onCancel,
+  onMade,
+}: {
+  onCancel: () => void;
+  onMade: (m: { url: string; number: number }) => void;
+}) {
+  const { data } = useApi<{ repos: string[] }>("/api/ticket", 0);
+  const repos = data?.repos || [];
+  const [f, setF] = useState<TicketDraft>(newTicket());
+  const [why, setWhy] = useState("");
+  const [half, setHalf] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set =
+    (k: keyof TicketDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setF((d) => ({ ...d, [k]: e.target.value }));
+  const save = async () => {
+    setWhy("");
+    setHalf("");
+    const check = checkTicket(f, repos);
+    if (!check.ok) {
+      setWhy(check.why);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/ticket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: ticketRequest(f),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) onMade({ url: d.url, number: d.number });
+      else {
+        setWhy(d.step ? `${d.step}: ${d.why}` : d.why || `failed (${r.status})`);
+        setHalf(d.url || "");
+      }
+    } catch (e) {
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <form
+      className="fields new-ticket-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <label>
+        Repo
+        <select required value={f.repo} onChange={set("repo")}>
+          <option value="" disabled>
+            {data ? "Choose a repo" : "Reading the roster…"}
+          </option>
+          {repos.map((r) => (
+            <option key={r} value={r}>
+              {r.split("/").pop()}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="wide">
+        Title
+        <input
+          required
+          maxLength={256}
+          value={f.title}
+          onChange={set("title")}
+          placeholder="What the card aims to achieve"
+        />
+      </label>
+      <label className="wide">
+        Body
+        <textarea rows={3} value={f.body} onChange={set("body")} />
+      </label>
+      <label>
+        Type
+        <select required value={f.type} onChange={set("type")}>
+          <option value="" disabled>
+            Choose a type
+          </option>
+          {TICKET_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Priority
+        <select value={f.priority} onChange={set("priority")}>
+          {TICKET_PRIORITIES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Status
+        <select value={f.status} onChange={set("status")}>
+          {AGENT_STACK_ALL.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </label>
+      {why ? (
+        <p className="err wide" role="alert">
+          {why}
+          {half ? (
+            <>
+              {" "}
+              <a className="plain" href={half} target="_blank" rel="noopener">
+                Open the card
+              </a>
+            </>
+          ) : null}
+        </p>
+      ) : null}
+      <div className="wide actions">
+        <button className="btn ghost" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="btn primary" type="submit" disabled={busy || !data}>
+          {busy ? "Creating…" : "Create card"}
+        </button>
+      </div>
+    </form>
   );
 }
 
