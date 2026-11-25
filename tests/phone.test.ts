@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import * as aiProvidersRoute from "@/app/api/ai-providers/route";
+import * as briefsRoute from "@/app/api/briefs/route";
 import * as debugFixRoute from "@/app/api/debug-fix/route";
 import * as hermesRoute from "@/app/api/hermes/route";
 import * as modelLoginRoute from "@/app/api/model-login/route";
@@ -6,6 +8,7 @@ import * as projectsRoute from "@/app/api/projects/route";
 import * as proposalsRoute from "@/app/api/proposals/route";
 import * as releaseRoute from "@/app/api/release/route";
 import * as tailscaleRoute from "@/app/api/tailscale/route";
+import * as ticketRoute from "@/app/api/ticket/route";
 import {
   caller,
   guard,
@@ -23,6 +26,9 @@ const stubs = vi.hoisted(() => ({
   restartSshJobs: vi.fn(async () => [] as string[]),
   startGateway: vi.fn(async () => ({ ok: true, state: "running", pid: "1064" })),
   startLogin: vi.fn(async () => ({ ok: true, signedIn: true })),
+  setBriefState: vi.fn((_key: string, _change: unknown) => ({ read: [], archived: [] })),
+  addFallback: vi.fn(async () => []),
+  removeFallbacks: vi.fn(async () => []),
 }));
 
 vi.mock("@/lib/server/run", async () => {
@@ -42,6 +48,18 @@ vi.mock("@/lib/server/tailscale", () => ({
 }));
 vi.mock("@/lib/server/hermes", () => ({ startGateway: stubs.startGateway }));
 vi.mock("@/lib/server/model-login", () => ({ loginCommand: () => null, startLogin: stubs.startLogin }));
+vi.mock("@/lib/server/briefs", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/server/briefs")>("@/lib/server/briefs");
+  return {
+    ...actual,
+    setBriefState: stubs.setBriefState,
+    briefsView: async () => ({ at: 0, inbox: [], archived: [] }),
+  };
+});
+vi.mock("@/lib/server/fallbacks", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/server/fallbacks")>("@/lib/server/fallbacks");
+  return { ...actual, addFallback: stubs.addFallback, removeFallbacks: stubs.removeFallbacks };
+});
 
 const MAC = "127.0.0.1:4000";
 const TAILNET = "altair.tailnet.ts.net";
@@ -57,6 +75,9 @@ const routes: Record<string, Route> = {
   "model-login": modelLoginRoute as unknown as Route,
   projects: projectsRoute as unknown as Route,
   proposals: proposalsRoute as unknown as Route,
+  ticket: ticketRoute as unknown as Route,
+  "ai-providers": aiProvidersRoute as unknown as Route,
+  briefs: briefsRoute as unknown as Route,
 };
 
 const req = (host: string, path: string, method = "POST", extra: Record<string, string> = {}, body?: unknown) =>
@@ -128,6 +149,10 @@ describe("an action route on the phone", () => {
     ["proposals", "POST", "/api/proposals", { client: "A", title: "T" }],
     ["proposals", "PUT", "/api/proposals", { id: "x" }],
     ["proposals", "DELETE", "/api/proposals?id=x"],
+    ["ticket", "POST", "/api/ticket", { repo: "dividendsolo/collector", title: "T", type: "bug", body: "B" }],
+    ["ai-providers", "POST", "/api/ai-providers", { action: "add", provider: "nous", model: "m" }],
+    ["ai-providers", "POST", "/api/ai-providers", { action: "remove", provider: "nous" }],
+    ["briefs", "POST", "/api/briefs", { machine: "altair", file: "brief.md", archived: true }],
   ];
 
   it("answers 403 to every one of them, with the tailnet Host, and runs nothing", async () => {
@@ -142,6 +167,24 @@ describe("an action route on the phone", () => {
     expect(stubs.startGateway).not.toHaveBeenCalled();
     expect(stubs.startTailscale).not.toHaveBeenCalled();
     expect(stubs.runText).not.toHaveBeenCalled();
+    expect(stubs.setBriefState).not.toHaveBeenCalled();
+    expect(stubs.addFallback).not.toHaveBeenCalled();
+    expect(stubs.removeFallbacks).not.toHaveBeenCalled();
+  });
+
+  it("still reads the open Debug and fix sessions from the phone", async () => {
+    const r = await routes["debug-fix"].GET(onPhone("/api/debug-fix", "GET"));
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ fixes: {} });
+  });
+
+  it("marks a brief read from the phone, the way opening it on the Mac does", async () => {
+    stubs.setBriefState.mockClear();
+    const r = await routes.briefs.POST(
+      onPhone("/api/briefs", "POST", { machine: "altair", file: "brief.md", read: true }),
+    );
+    expect(r.status).toBe(200);
+    expect(stubs.setBriefState).toHaveBeenCalledWith(expect.any(String), { read: true });
   });
 
   it("behaves as today for the same routes on a loopback Host", async () => {

@@ -1098,10 +1098,16 @@ hiding a button alone is not enough:
 | the model login | `POST /api/model-login` | the same |
 | project edits | `POST /api/projects` | the same |
 | proposals | `POST`/`PUT`/`DELETE /api/proposals` | the same |
+| New card | `POST /api/ticket` | the same |
+| Add provider, Remove a provider | `POST /api/ai-providers` | the same |
+| archiving a brief | `POST /api/briefs` with `archived` | `refusePhone` when the body sets `archived` |
 | closing a card | `POST /api/card-move` with a done status | `403` from the route itself |
 
-`refusePhone` answers `403` and `this action stays on the Mac`. `lib/phone.ts` names the sides (`mac`, `phone`) and
-the actions `MAC_ONLY` lists, and is client-safe so a component hides the same button the server refuses.
+`refusePhone` answers `403` and `this action stays on the Mac`. The reads stay open to the phone, `GET /api/debug-fix`
+too (the Dashboard polls it for the Triage pill), and so does `POST /api/briefs` with only `read`: opening a brief
+marks it read, on the phone as on the Mac. `lib/phone.ts` names the two sides (`mac`, `phone`) and is client-safe;
+each component that draws a Mac-only button asks `useSide()`. `tests/request-guard.test.ts` holds every write route
+to `refusePhone`, except `card-move`, which checks the phone itself.
 
 **Changing a card's status or priority** is `POST /api/card-move` (`lib/card-move.ts` holds the check): a status from
 the agent stack's list, a priority of `none`/`P0`/`P1`/`P2`, or both, run through `~/.local/bin/status set` and

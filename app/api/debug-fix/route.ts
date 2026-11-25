@@ -111,9 +111,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const refusal = guard(req) ?? refusePhone(req);
-  if (refusal) return refusal;
-  return json({ fixes: await openFixes() });
+  return guard(req) ?? json({ fixes: await openFixes() });
 }
 
 export async function DELETE(req: Request) {

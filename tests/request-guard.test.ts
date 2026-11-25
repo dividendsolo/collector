@@ -262,4 +262,12 @@ describe("every route in the repo", () => {
       "app/api/ticket/route.ts",
     ]);
   });
+
+  it("refuses the phone on every one of them, except the card move, which checks the phone itself", () => {
+    const writes = routeFiles().filter((f) => handlersIn(fs.readFileSync(f, "utf8")).some((h) => !h.endsWith("GET")));
+    const open = writes
+      .filter((f) => !fs.readFileSync(f, "utf8").includes("refusePhone("))
+      .map((f) => path.relative(process.cwd(), f));
+    expect(open).toEqual(["app/api/card-move/route.ts"]);
+  });
 });

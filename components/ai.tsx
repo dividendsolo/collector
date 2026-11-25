@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import { resetText } from "@/lib/format";
 import { addQuestion, emptyNote, removalQuestion, removalRefusal } from "@/lib/providers";
 import { useApi } from "./data";
+import { useSide } from "./side";
 import { BlurText, BlurToggle, Icon, PanelHead, SkelPlans, SkelRows } from "./ui";
 
 const AI_NAMES: Record<string, string> = {
@@ -60,7 +61,8 @@ export const written = (d: { machines?: any[] }) => {
 };
 
 export function RemoveX({ a, open, onToggle }: { a: any; open: boolean; onToggle: () => void }) {
-  if (!a.removal) return null;
+  const mac = useSide() === "mac";
+  if (!mac || !a.removal) return null;
   const name = aiName(a.provider);
   return (
     <button
@@ -120,6 +122,7 @@ export function RemoveConfirm({ a, onClose }: { a: any; onClose: () => void }) {
 }
 
 export function AddProviderButton({ onClick }: { onClick: () => void }) {
+  if (useSide() !== "mac") return null;
   return (
     <button className="btn ghost" type="button" onClick={onClick}>
       Add provider

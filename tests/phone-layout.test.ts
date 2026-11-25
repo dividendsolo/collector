@@ -5,14 +5,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { SideProvider } from "@/components/side";
 
-const page = vi.hoisted(() => ({ state: null as any, board: null as any }));
+const page = vi.hoisted(() => ({ state: null as any, board: null as any, ai: null as any }));
 
 vi.mock("@/components/data", async () => {
   const actual = await vi.importActual<typeof import("@/components/data")>("@/components/data");
   return {
     ...actual,
     useLive: () => ({ state: page.state, updated: "", liveClass: "live", tick: () => {}, board: page.board }),
-    useApi: () => ({ data: undefined, mutate: async () => {} }),
+    useApi: (key: string) => ({ data: key === "/api/ai" ? page.ai : undefined, mutate: async () => {} }),
   };
 });
 
@@ -31,6 +31,20 @@ const card = (repo: string, number: number, lane: string) => ({
 });
 
 const fixture = () => {
+  page.ai = {
+    at: 0,
+    providers: [
+      {
+        provider: "nous",
+        name: "Nous",
+        kind: "plan",
+        plan: "Pro",
+        profiles: 2,
+        windows: [],
+        removal: { providers: [] },
+      },
+    ],
+  };
   page.state = {
     at: 0,
     machines: [],
@@ -70,7 +84,15 @@ const draw = (side: "mac" | "phone"): string => {
   return renderToStaticMarkup(createElement(SideProvider, { side }, createElement(Dashboard)));
 };
 
-const MAC_ONLY_TEXT = ["Start Hermes", "Start Tailscale", "Debug and fix", "release-btn"];
+const MAC_ONLY_TEXT = [
+  "Start Hermes",
+  "Start Tailscale",
+  "Debug and fix",
+  "release-btn",
+  "New card",
+  "Add provider",
+  'aria-label="Remove ',
+];
 
 describe("the Dashboard on a phone", () => {
   it("draws every Mac-only action on the Mac", () => {

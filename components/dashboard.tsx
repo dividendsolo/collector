@@ -653,8 +653,10 @@ export function Waiting() {
 }
 
 function NewTicket() {
+  const mac = useSide() === "mac";
   const [open, setOpen] = useState(false);
   const [made, setMade] = useState<{ url: string; number: number } | null>(null);
+  if (!mac) return null;
   if (!open)
     return (
       <div className="new-ticket">
