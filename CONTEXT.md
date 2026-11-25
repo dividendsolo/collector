@@ -36,17 +36,20 @@ note, not a failure: the page starts and every machine row stays empty until it 
 
 Two rules shape the script. It writes `node_modules` and `.next` inside that folder and nothing else — no
 `config.json`, no `.env`, nothing on any remote machine — apart from Bun when it installs it: Bun goes into `~/.bun`
-and its installer adds itself to `PATH` in the shell's startup file (the README says so). And it holds no path, host name, user name or job label of
+and its installer adds itself to `PATH` in the shell's startup file where one exists (a new Mac account has none, so it
+prints the line instead and the README gives it). And it holds no path, host name, user name or job label of
 ours. Its usage text is `printf` lines rather than a heredoc, because `sh` reads a piped script from stdin and the
 heredoc's body would have to come from the same stream. `tests/install.test.ts` holds both rules, runs `sh -n` over
 it, and pipes it in as `sh -s -- --help` the way `curl | sh` does.
 
 A new Mac has no Command Line Tools, so `git` and `python3` are shims that print `xcode-select: note: No developer
 tools were found` and exit 1, and the one command fails at its `git clone`. `install.sh` says so before it tries
-(its `no_dev_tools`, naming `xcode-select --install`), the README's [Set it up on a Mac](README.md) section is the
-three steps a stranger follows, and `docs/252/clean-mac.md` is that section run on a clean macOS account (the tart
-test VM): the failure above, then the one command installing Bun, building and serving, with `/api/state` answering
-the machine it runs on. `tests/install.test.ts` runs the script on a stubbed Darwin that has no developer tools.
+(its `no_dev_tools`, naming `xcode-select --install`); the same account also has no shell startup file, so Bun's
+installer leaves no `PATH` line behind and the next terminal needs `export PATH="$HOME/.bun/bin:$PATH"`. The README's
+[Set it up on a Mac](README.md) section is the three steps a stranger follows, and `docs/252/clean-mac.md` is that
+section run on a clean macOS account (the tart test VM): both failures above, then the one command installing Bun,
+building and serving, with `/api/state` answering the machine it runs on, and the login job serving the page.
+`tests/install.test.ts` runs the script on a stubbed Darwin that has no developer tools.
 
 **A machine with none of the tools reads empty, not an error.** On 2026-11-02 a clean Debian container — no `ps`, no
 `git`, no `docker`, no `gh`, no `~/.hermes` — answered `Could not read this machine: FileNotFoundError: 'ps'`: three

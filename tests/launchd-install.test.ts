@@ -44,7 +44,11 @@ function world(args: string[] = []) {
 const labelOf = (file: string) => file.replace(".plist", "");
 
 function fakeCheckout(template: string) {
-  const dir = temp("collector-not-a-checkout-");
+  return checkoutAt(temp("collector-not-a-checkout-"), template);
+}
+
+function checkoutAt(dir: string, template: string) {
+  fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "package.json"), "{}\n");
   fs.writeFileSync(path.join(dir, "collect.py"), "");
   fs.writeFileSync(path.join(dir, "install.sh"), "");
@@ -154,6 +158,14 @@ describe("scripts/launchd.ts", () => {
     expect(fs.existsSync(path.join(agentsOf(w.home), REBUILD))).toBe(false);
   });
 
+  it("escapes a checkout path that would break the plist XML, so what it writes is still a plist", () => {
+    const dir = checkoutAt(path.join(temp("collector-odd-"), "a&b"), TEMPLATE);
+    const w = world(["--dir", dir, "--print"]);
+    expect(w.code).toBe(0);
+    expect(w.out).toContain("a&amp;b");
+    expect(w.out).not.toContain("a&b");
+  });
+
   it("refuses a folder that is not a Collector checkout, and names --dir", () => {
     const w = world(["--dir", temp("collector-empty-")]);
     expect(w.code).toBe(1);
@@ -200,5 +212,9 @@ describe("README, the Mac's setup", () => {
 
   it("tells a reader not to copy config.example.json as it stands", () => {
     expect(section).toMatch(/[Dd]o not copy `?\[?config\.example\.json/);
+  });
+
+  it("gives the PATH line Bun needs on an account that has no shell startup file for its installer", () => {
+    expect(readme).toContain('export PATH="$HOME/.bun/bin:$PATH"');
   });
 });

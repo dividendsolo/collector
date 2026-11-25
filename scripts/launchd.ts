@@ -35,10 +35,11 @@ if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65_535) {
 
 const portsIn = (text: string) => /<key>COLLECTOR_PORT<\/key><string>\d+<\/string>/.test(text);
 const labelOf = (text: string) => /<key>Label<\/key><string>([^<]+)<\/string>/.exec(text)?.[1] ?? "";
+const xml = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const render = (text: string) =>
   text
-    .replaceAll("/path/to/.bun/bin/bun", process.execPath)
-    .replaceAll("/path/to/collector", checkout)
+    .replaceAll("/path/to/.bun/bin/bun", xml(process.execPath))
+    .replaceAll("/path/to/collector", xml(checkout))
     .replace(/(<key>COLLECTOR_PORT<\/key><string>)\d+(<\/string>)/, `$1${port}$2`);
 
 const jobs = files.map((file) => {

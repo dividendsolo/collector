@@ -22,9 +22,17 @@ curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install
 
 It clones Collector into `~/collector`, installs [Bun](https://bun.sh) when you do not have it, installs the app's
 packages, builds it and starts it on http://127.0.0.1:4000. Another folder or port: `COLLECTOR_DIR` and
-`COLLECTOR_PORT`, or `install.sh --help`. When it installs Bun, Bun goes into `~/.bun` and its installer adds itself
-to your `PATH` in your shell's startup file. Apart from that it writes nothing outside the Collector folder (only
-`node_modules` and `.next` inside it): no settings file, no `.env`, and nothing at all on the machines it reads.
+`COLLECTOR_PORT`, or `install.sh --help`. When it installs Bun, Bun goes into `~/.bun`, and `install.sh` runs it from
+there for the whole install. Bun's own installer adds it to your `PATH` only where your shell already has a startup
+file to edit; on an account that has none — which is what a new Mac account is — it prints the line instead, and the
+next terminal needs it:
+
+```bash
+export PATH="$HOME/.bun/bin:$PATH"
+```
+
+Apart from that it writes nothing outside the Collector folder (only `node_modules` and `.next` inside it): no settings
+file, no `.env`, and nothing at all on the machines it reads.
 
 In a checkout you already have, the same script is in the folder:
 
@@ -77,7 +85,7 @@ edit it down to something you have.
 
 **3. Start it at login.** The plists in `launchd/` are templates with `/path/to/collector` in them. Fill them in and
 load them with one command, which takes the checkout, the Bun binary that runs it and the port from the machine it
-runs on:
+runs on (`export PATH="$HOME/.bun/bin:$PATH"` first in a terminal that has never seen Bun):
 
 ```bash
 bun scripts/launchd.ts            # serve this checkout at login, on http://127.0.0.1:4000
