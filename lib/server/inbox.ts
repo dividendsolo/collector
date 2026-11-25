@@ -43,10 +43,22 @@ function save(state: State): State {
   return state;
 }
 
-export function setInboxHandled(key: string, handled: boolean): State {
+type Snapshot = Awaited<ReturnType<typeof snapshot.get>>;
+
+function stillHeld(snap: Snapshot) {
+  const read = (snap.machines || []).filter((m) => !m.error && Array.isArray(m.inbox));
+  const held = new Set(
+    read.flatMap((m) =>
+      (m.inbox || []).map((line: { id?: unknown }) => keyOf({ machine: m.name, id: String(line.id ?? "") })),
+    ),
+  );
+  return (key: string) => held.has(key) || !read.some((m) => key.startsWith(`${m.name}/`));
+}
+
+export async function setInboxHandled(key: string, handled: boolean): Promise<State> {
   const state = load();
-  const list = handled ? [...state.handled.filter((k) => k !== key), key] : state.handled.filter((k) => k !== key);
-  return save({ handled: list });
+  const kept = state.handled.filter(stillHeld(await snapshot.get())).filter((k) => k !== key);
+  return save({ handled: handled ? [...kept, key] : kept });
 }
 
 function stateForPage(): { state: State; why?: string } {
@@ -69,6 +81,7 @@ export async function inboxView(): Promise<InboxView> {
   const { state, why } = stateForPage();
   const rows: InboxMessage[] = [];
   const problems: string[] = why ? [why] : [];
+  const done = new Set(state.handled);
   for (const machine of snap.machines || []) {
     if (machine.error) problems.push(`${machine.name} could not be read: ${machine.error}`);
     for (const line of machine.inbox || []) {
@@ -81,7 +94,7 @@ export async function inboxView(): Promise<InboxView> {
         text: String(line.text ?? ""),
         href: line.href ?? null,
         at: line.at ?? null,
-        handled: state.handled.includes(keyOf({ machine: machine.name, id })),
+        handled: done.has(keyOf({ machine: machine.name, id })),
       });
     }
   }

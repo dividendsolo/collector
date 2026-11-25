@@ -2596,6 +2596,41 @@
   table.inbox td.actions .btn {
     padding: 3px 12px;
   }
+  @media (max-width: 600px) {
+    table.inbox thead {
+      display: none;
+    }
+    table.inbox,
+    table.inbox tbody {
+      display: block;
+    }
+    table.inbox tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+    table.inbox td {
+      grid-column: 1 / -1;
+      border-bottom: 0;
+    }
+    table.inbox td.from {
+      max-width: none;
+      padding-bottom: 0;
+    }
+    table.inbox td.wide {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    table.inbox tr.row td.mono {
+      grid-column: 1;
+      padding-top: 0;
+    }
+    table.inbox tr.row td.actions {
+      grid-column: 2;
+      padding-top: 0;
+    }
+  }
   .section-head {
     padding: 0;
     font-size: 16px;

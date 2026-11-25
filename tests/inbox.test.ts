@@ -250,6 +250,16 @@ describe("a message on the page", () => {
     expect(fs.readFileSync(STATE, "utf8")).toBe("{ not json");
   });
 
+  it("forgets a Handled row once its machine no longer holds it, and keeps one from a machine it could not read", async () => {
+    fs.writeFileSync(STATE, JSON.stringify({ handled: ["altair/gone", "ezio/signal:7"] }));
+    fake.machines = [
+      { name: "altair", inbox: read(file(line())) },
+      { name: "ezio", error: "ssh: connect to host ezio port 22: timed out" },
+    ];
+    await post({ machine: "altair", id: "signal:1", handled: true });
+    expect(JSON.parse(fs.readFileSync(STATE, "utf8"))).toEqual({ handled: ["ezio/signal:7", "altair/signal:1"] });
+  });
+
   it("says so when a machine could not be read, rather than showing an empty inbox", async () => {
     fake.machines = [{ name: "ezio", error: "ssh: connect to host ezio port 22: timed out" }];
     expect((await (await get()).json()).why).toContain("ezio could not be read");

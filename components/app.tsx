@@ -24,9 +24,9 @@ import { ServicesPage, ServicesWatcher } from "./services";
 import { Toasts } from "./toasts";
 import { Icon, type IconName, Sprite } from "./ui";
 
-const NAV: { page: string; href: string; icon: IconName; label: string; tag?: string; sep?: boolean }[] = [
+export const NAV: { page: string; href: string; icon: IconName; label: string; tag?: string; sep?: boolean }[] = [
   { page: "dashboard", href: "#/", icon: "dash", label: "Dashboard", tag: "attention" },
-  { page: "briefs", href: "#/briefs", icon: "brief", label: "Briefs", tag: "briefs" },
+  { page: "briefs", href: "#/briefs", icon: "doc", label: "Briefs", tag: "briefs" },
   { page: "inbox", href: "#/inbox", icon: "inbox", label: "Inbox", tag: "inbox" },
   { page: "agents", href: "#/agents", icon: "bot", label: "Agents", tag: "running" },
   { page: "work", href: "#/work", icon: "list", label: "Work", tag: "work" },

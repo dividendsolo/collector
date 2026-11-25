@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   if (!machine || !isInboxId(id)) return json({ why: "a row is a machine and one message id" }, 400);
   if (typeof input.handled !== "boolean") return json({ why: "a write sets handled" }, 400);
   try {
-    setInboxHandled(keyOf({ machine, id }), input.handled);
+    await setInboxHandled(keyOf({ machine, id }), input.handled);
   } catch (e) {
     if (e instanceof InboxFileError) return json({ why: e.message }, 409);
     throw e;
