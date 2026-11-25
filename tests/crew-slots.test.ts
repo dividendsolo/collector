@@ -13,11 +13,11 @@ const BUILDER = {
   seconds: 2040,
 };
 const REVIEWER = {
-  repo: "echo-form",
+  repo: "collector",
   kind: "review",
   card: 55,
   type: "agent",
-  name: "echo-form-reviewer",
+  name: "collector-reviewer",
   seconds: 360,
 };
 const PYTHON = execFileSync("python3", ["-c", "import sys; print(sys.executable)"], { encoding: "utf8" }).trim();
@@ -100,9 +100,9 @@ describe("collect.py's crew reading (collector#231)", () => {
         slot: "review",
         role: "review",
         state: "held",
-        repo: "echo-form",
+        repo: "collector",
         card: 55,
-        profile: "echo-form-reviewer",
+        profile: "collector-reviewer",
         seconds: 360,
       },
     ]);
@@ -204,7 +204,7 @@ describe("collect.py's crew reading (collector#231)", () => {
       running: [merging, REVIEWER],
       steps: [stepOf(merging, "merging", "merge.lock"), stepOf(REVIEWER, "reviewing", "review.lock")],
     });
-    expect(crew.slots[2]).toMatchObject({ slot: "review", repo: "echo-form", card: 55, profile: "echo-form-reviewer" });
+    expect(crew.slots[2]).toMatchObject({ slot: "review", repo: "collector", card: 55, profile: "collector-reviewer" });
   });
 
   it("does not try the merge lock or a base-gate lock as a position", () => {

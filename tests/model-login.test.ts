@@ -23,7 +23,7 @@ const refused = {
   level: "error",
   machine: "ezio",
   provider: "nous",
-  text: "Nous refused the login on ezio (echo-form-builder): agents fall back to other models until you sign in again",
+  text: "Nous refused the login on ezio (collector-builder): agents fall back to other models until you sign in again",
 };
 const jsonl = (...lines: object[]) => `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`;
 const base = { github: {}, cfg: {}, services: [], domains: [], ticketsError: null, x: null, ai: [] } as any;
