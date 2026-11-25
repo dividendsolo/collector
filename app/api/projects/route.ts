@@ -1,4 +1,4 @@
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import { projects, saveProjects } from "@/lib/server/projects";
 import { json } from "@/lib/server/respond";
 
@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const GET = async (req: Request) => guard(req) ?? json(await projects());
 
 export async function POST(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   if (req.headers.get("content-type") !== "application/json") return new Response("Not found", { status: 404 });
   let repos: unknown;

@@ -1,13 +1,92 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MOVE_PRIORITIES } from "@/lib/card-move";
 import { type Journey, journeyVisits, journeyWalk, moveTime, nowLine, stayText } from "@/lib/journey";
+import { AGENT_STACK_ALL, AGENT_STACK_STATUSES } from "@/lib/statuses";
 import { useApi } from "./data";
 import { Drawing, useReducedMotion } from "./flow";
+import { useSide } from "./side";
 import { Ext, PanelHead } from "./ui";
 
+function Move({
+  repo,
+  number,
+  lane,
+  onMoved,
+}: {
+  repo: string;
+  number: number;
+  lane: string;
+  onMoved: () => Promise<unknown>;
+}) {
+  const mac = useSide() === "mac";
+  const statuses = mac ? AGENT_STACK_ALL : AGENT_STACK_ALL.filter((s) => !AGENT_STACK_STATUSES.done.includes(s));
+  const [status, setStatus] = useState(lane || "ready-for-human");
+  const [priority, setPriority] = useState("none");
+  const [why, setWhy] = useState("");
+  const [busy, setBusy] = useState(false);
+  const move = async () => {
+    setBusy(true);
+    setWhy("");
+    try {
+      const r = await fetch("/api/card-move", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ repo, number, status, priority }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) await onMoved();
+      else setWhy(d.step ? `${d.step}: ${d.why}` : d.why || `failed (${r.status})`);
+    } catch (e) {
+      setWhy((e as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <form
+      className="fields move-card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        move();
+      }}
+    >
+      <label>
+        Status
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          {statuses.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Priority
+        <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+          {MOVE_PRIORITIES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="actions">
+        <button className="btn primary" type="submit" disabled={busy}>
+          {busy ? "Moving…" : "Move"}
+        </button>
+      </div>
+      {why ? (
+        <p className="err wide" role="alert">
+          {why}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 export function JourneyPage({ repo, number }: { repo: string; number: number }) {
-  const { data, error, isLoading } = useApi<Journey>(
+  const { data, error, isLoading, mutate } = useApi<Journey>(
     `/api/journey?repo=${encodeURIComponent(repo)}&n=${number}`,
     60_000,
   );
@@ -57,6 +136,20 @@ export function JourneyPage({ repo, number }: { repo: string; number: number }) 
           </>
         )}
       </section>
+
+      {card ? (
+        <section className="panel" id="move-panel">
+          <PanelHead icon="list" title="Move the card">
+            <span className="sub">a status, a priority, or both</span>
+          </PanelHead>
+          <Move
+            repo={card.repo}
+            number={card.number}
+            lane={moves.length ? moves[moves.length - 1].status : ""}
+            onMoved={() => mutate()}
+          />
+        </section>
+      ) : null}
 
       {card ? (
         <section className="panel">

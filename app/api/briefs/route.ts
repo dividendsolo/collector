@@ -1,6 +1,6 @@
 import { isBriefFile, keyOf } from "@/lib/briefs";
 import { BriefsFileError, briefsView, setBriefState } from "@/lib/server/briefs";
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import { json } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,8 @@ export async function POST(req: Request) {
     ...(typeof input.archived === "boolean" ? { archived: input.archived } : {}),
   };
   if (!("read" in change) && !("archived" in change)) return json({ why: "a write sets read or archived" }, 400);
+  const archiving = "archived" in change ? refusePhone(req) : null;
+  if (archiving) return archiving;
   try {
     setBriefState(keyOf({ machine, file }), change);
   } catch (e) {
