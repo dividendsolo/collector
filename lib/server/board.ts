@@ -353,7 +353,7 @@ export async function poll(reason = "timer"): Promise<void> {
     S.stats.costs = S.stats.costs.filter(([t]) => Date.now() - t < 3600_000);
     for (const r of rows) if (r.lane === BLOCKED) r.blockers = blockerCache.get(r.url)?.blockers;
     const prev = S.rows;
-    S.rows = rows;
+    S.rows = uniqueRows(rows);
     S.at = Date.now();
     const hadError = S.error;
     S.error = null;
@@ -520,9 +520,11 @@ export function ticketsView() {
   };
 }
 
+export const uniqueRows = (rows: Row[]) => [...new Map(rows.map((r) => [r.url, r])).values()];
+
 export function workCards(rows: Row[], lanes: string[], done: string[]) {
   const known = new Set(lanesOf());
-  return rows
+  return uniqueRows(rows)
     .filter((r) => lanes.includes(r.lane) && !done.includes(r.lane))
     .map((r) => ({
       repo: r.repo,
