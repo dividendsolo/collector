@@ -5,6 +5,7 @@ import { mutate } from "swr";
 import type { Brief } from "@/lib/briefs";
 import { useApi } from "./data";
 import { Markdown } from "./markdown";
+import { useSide } from "./side";
 import { Count, Icon, PanelHead, SkelRows } from "./ui";
 
 interface BriefsData {
@@ -175,6 +176,7 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
   );
   const brief = data?.brief;
   const head = brief || listed;
+  const mac = useSide() === "mac";
   const [archived, setArchived] = useState(false);
   useEffect(() => {
     if (!brief || brief.read) return;
@@ -190,7 +192,7 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
     const onKey = (e: KeyboardEvent) => {
       const k = briefKey(e);
       if (k === "inbox") location.hash = "#/briefs";
-      else if (k === "archive" && !isArchived) void archive();
+      else if (k === "archive" && mac && !isArchived) void archive();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -205,9 +207,11 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
               <Icon name="back" />
               Inbox
             </a>
-            <button className="btn" type="button" disabled={isArchived} onClick={archive} title="Archive (E)">
-              {isArchived ? "Archived" : "Archive"}
-            </button>
+            {mac ? (
+              <button className="btn" type="button" disabled={isArchived} onClick={archive} title="Archive (E)">
+                {isArchived ? "Archived" : "Archive"}
+              </button>
+            ) : null}
           </div>
         </PanelHead>
         {data?.why ? (

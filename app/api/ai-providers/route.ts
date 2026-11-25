@@ -8,7 +8,7 @@ import {
   planFor,
   removeFallbacks,
 } from "@/lib/server/fallbacks";
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import { json } from "@/lib/server/respond";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ const answer = (action: string, provider: string, machines: MachineWrite[]) => {
 };
 
 export async function POST(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const body = await req.json().catch(() => ({}));
   const provider = typeof body?.provider === "string" ? body.provider.trim() : "";

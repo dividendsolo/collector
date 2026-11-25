@@ -1073,6 +1073,64 @@ the tailnet or kickstarts the Hermes gateway.
 `config.json` and `.env` are gitignored and stay that way: the repo is public and `config.json` holds real host
 names, job names and board ids.
 
+## The phone reaches it over Tailscale, and may do only two things (collector#232)
+
+James reads Collector from his phone (the Pixel 8 Pro), and the page tells the two apart (a grill with James,
+2026-11-25). Collector stays on altair: the Mac asleep means the phone cannot reach it, and that is fine. The route
+in is Tailscale Serve, and only his phone is allowed by a Tailscale policy rule (collector#217, #233 turn those on).
+There is no separate phone page: the same pages, laid out for a phone.
+
+**How the two are told apart.** `lib/server/guard.ts`'s `caller(req)` is the one place: a loopback `Host` is the Mac;
+a `Host` that ends in `.ts.net` (altair's tailnet name, what Tailscale Serve forwards) with Serve's
+`Tailscale-User-Login` header is the phone; anything else is refused, as it was before. The `.ts.net` name is what
+keeps the DNS-rebinding protection of card #69 whole: a page that rebinds its own domain to 127.0.0.1 can set that
+header, but it cannot set its `Host` to a name under Tailscale's own domain.
+
+**What the phone may do.** It reads every page, and it may Acknowledge an alert and change one card's status or
+priority. Everything else stays on the Mac, and the server refuses those routes as well as hiding the buttons —
+hiding a button alone is not enough:
+
+| Stays on the Mac | The route | Refused with |
+|---|---|---|
+| Start Tailscale, Start Hermes | `POST /api/tailscale`, `POST /api/hermes` | `guard(req) ?? refusePhone(req)` |
+| Debug and fix, Triage, Unblock, and the Close that ends one | `POST`/`DELETE /api/debug-fix` | the same |
+| the release pill | `POST /api/release` | the same |
+| the model login | `POST /api/model-login` | the same |
+| project edits | `POST /api/projects` | the same |
+| proposals | `POST`/`PUT`/`DELETE /api/proposals` | the same |
+| New card | `POST /api/ticket` | the same |
+| Add provider, Remove a provider | `POST /api/ai-providers` | the same |
+| archiving a brief | `POST /api/briefs` with `archived` | `refusePhone` when the body sets `archived` |
+| closing a card | `POST /api/card-move` with a done status | `403` from the route itself |
+
+`refusePhone` answers `403` and `this action stays on the Mac`. The reads stay open to the phone, `GET /api/debug-fix`
+too (the Dashboard polls it for the Triage pill), and so does `POST /api/briefs` with only `read`: opening a brief
+marks it read, on the phone as on the Mac. `lib/phone.ts` names the two sides (`mac`, `phone`) and is client-safe;
+each component that draws a Mac-only button asks `useSide()`. `tests/request-guard.test.ts` holds every write route
+to `refusePhone`, except `card-move`, which checks the phone itself.
+
+**Changing a card's status or priority** is `POST /api/card-move` (`lib/card-move.ts` holds the check): a status from
+the agent stack's list, a priority of `none`/`P0`/`P1`/`P2`, or both, run through `~/.local/bin/status set` and
+`status priority`, then `poll("card-move")`. A phone may do all of it except a done status, which is closing a card.
+The control is on a card's journey page (`#/card/<repo>/<n>`, the Move the card panel), so one card at a time; the
+phone's Status list leaves the done lanes out.
+
+**The phone's layout.** `app/page.tsx` reads the request's own headers on the server and hands the side to the app
+(`SideProvider`, `useSide`); the app div carries `data-side`, which is how a served page says which it is. On the
+phone the Dashboard shows Priority tasks, then Current work, then a Briefs panel (the Mac has no Briefs panel; its
+Briefs page is in the sidebar), and the Mac-only buttons are not drawn. The Projects page draws no `Choose repos`,
+and the Proposals page no `Add proposal`, `Edit` or `Delete` (nor its actions column): both pages still read. Under 900px the paired panels are one column
+and every panel can shrink (`min-width: 0`), so nothing pushes the page sideways at 412px.
+
+**The home-screen app** is `public/manifest.webmanifest` (`display: standalone`, icons 192 and 512 at
+`public/icons/`), linked from `app/layout.tsx`; the icons are a plain dark rounded square with the theme's blue ring,
+drawn once and committed as PNGs.
+
+`tests/phone.test.ts` holds the side and the refusals, `tests/card-move.test.ts` the move, `tests/phone-layout.test.ts`
+the phone Dashboard and the 412px rules, `tests/phone-pages.test.ts` the Projects and Proposals pages, and
+`tests/manifest.test.ts` the manifest and its two icons.
+
+
 ## Every outbound call has a deadline, and a bounded retry (repo standard S2)
 
 Collector is a local, read-only page, so "outbound" is narrow and known: the HTTP GETs its readers make, the

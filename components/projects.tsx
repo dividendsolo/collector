@@ -6,6 +6,7 @@ import { ago, money, monthly, plural, runLabel } from "@/lib/format";
 import { reposToSave } from "@/lib/repos";
 import { useApi, useLive } from "./data";
 import { SVC_LABEL, type Svc, useServices } from "./services";
+import { useSide } from "./side";
 import { BlurToggle, Icon, Money, PanelHead, SkelRows } from "./ui";
 
 export const useProjects = () => useApi("/api/projects");
@@ -177,6 +178,7 @@ export function ProjectsPage() {
   const { data } = useProjects();
   const services = useServices() || [];
   const [picking, setPicking] = useState(false);
+  const mac = useSide() === "mac";
   const list: any[] = data?.projects || [];
   return (
     <div className="page">
@@ -184,11 +186,13 @@ export function ProjectsPage() {
         <PanelHead icon="layers">
           <span className="count">{list.length}</span>
           <span className="sub">{data?.at ? `read ${ago(new Date(data.at * 1000))}` : ""}</span>
-          <div className="tools">
-            <button className="btn" type="button" onClick={() => setPicking(true)}>
-              Choose repos
-            </button>
-          </div>
+          {mac ? (
+            <div className="tools">
+              <button className="btn" type="button" onClick={() => setPicking(true)}>
+                Choose repos
+              </button>
+            </div>
+          ) : null}
         </PanelHead>
         <div className="wrap">
           <table className="fit">
@@ -278,7 +282,7 @@ export function ProjectsPage() {
           </table>
         </div>
       </section>
-      {picking ? <Picker onClose={() => setPicking(false)} /> : null}
+      {mac && picking ? <Picker onClose={() => setPicking(false)} /> : null}
     </div>
   );
 }
