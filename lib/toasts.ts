@@ -310,7 +310,7 @@ function nousLimitToast(a: AiIn, now: number): Pick<Toast, "state" | "title" | "
   if (a.left === "$0.00") return null;
   if (usedUp.length)
     return {
-      state: `on:${usedUp.map((w) => w.label).join(",")}:${a.left}`,
+      state: `on:${usedUp.map((w) => `${w.label}@${w.resets ?? ""}`).join(",")}`,
       title: `Nous: ${theLimits(usedUp)} used up`,
       text: `Hermes keeps going on the top-up: ${a.left ?? "?"} left.`,
     };

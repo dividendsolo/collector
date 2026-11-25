@@ -158,7 +158,7 @@ describe("the Nous toast on plan limits", () => {
   const dayReset = new Date(2026, 10, 12, 11, 5).getTime();
   const weekReset = new Date(2026, 10, 19, 0, 0).getTime();
   const monthReset = new Date(2026, 10, 20, 9, 7).getTime();
-  const nous = (day: number, keepGoing = false, credits = 25.071492236524648, week = 1868) => ({
+  const nous = (day: number, keepGoing = false, credits = 25.071492236524648, week = 1868, reset = dayReset) => ({
     provider: "nous",
     profiles: 3,
     kind: "usage",
@@ -173,7 +173,7 @@ describe("the Nous toast on plan limits", () => {
       topup: credits,
       usage_window: {
         gauges: [
-          { id: "day", label: "Today", used_bp: day, resets_at_ms: dayReset },
+          { id: "day", label: "Today", used_bp: day, resets_at_ms: reset },
           { id: "week", label: "This week", used_bp: week, resets_at_ms: weekReset },
           { id: "month", label: "This month", used_bp: 622, resets_at_ms: monthReset },
         ],
@@ -194,6 +194,14 @@ describe("the Nous toast on plan limits", () => {
     expect(t.title).toBe("Nous: the daily limit is used up");
     expect(t.text).toBe("Hermes keeps going on the top-up: $25.07 left.");
     expect(t.action).toBeUndefined();
+  });
+
+  it("keeps one dismissal while the top-up is spent, until the limit resets", () => {
+    const [before] = aiToasts([nous(10000, true)], now);
+    const [after] = aiToasts([nous(10000, true, 12.5)], now);
+    expect(after.state).toBe(before.state);
+    const [nextDay] = aiToasts([nous(10000, true, 12.5, 1868, dayReset + 86_400_000)], now);
+    expect(nextDay.state).not.toBe(before.state);
   });
 
   it("has no Top up on a nearly used-up limit with keep-going on", () => {
