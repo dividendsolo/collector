@@ -41,6 +41,13 @@ ours. Its usage text is `printf` lines rather than a heredoc, because `sh` reads
 heredoc's body would have to come from the same stream. `tests/install.test.ts` holds both rules, runs `sh -n` over
 it, and pipes it in as `sh -s -- --help` the way `curl | sh` does.
 
+A new Mac has no Command Line Tools, so `git` and `python3` are shims that print `xcode-select: note: No developer
+tools were found` and exit 1, and the one command fails at its `git clone`. `install.sh` says so before it tries
+(its `no_dev_tools`, naming `xcode-select --install`), the README's [Set it up on a Mac](README.md) section is the
+three steps a stranger follows, and `docs/252/clean-mac.md` is that section run on a clean macOS account (the tart
+test VM): the failure above, then the one command installing Bun, building and serving, with `/api/state` answering
+the machine it runs on. `tests/install.test.ts` runs the script on a stubbed Darwin that has no developer tools.
+
 **A machine with none of the tools reads empty, not an error.** On 2026-11-02 a clean Debian container — no `ps`, no
 `git`, no `docker`, no `gh`, no `~/.hermes` — answered `Could not read this machine: FileNotFoundError: 'ps'`: three
 reads in `collect.py` called `subprocess.run` directly instead of `read_command` (the helper that returns nothing when
@@ -1244,9 +1251,14 @@ What the removed comments held that an operator needs is here:
 - `ci.yml` has no trigger but `workflow_dispatch`: agent-stack's `vps/scripts/ci-merge.py` starts it on the PR branch
   right before the merge and merges only when it passes (James, 2026-11-09). A push runs nothing (Actions minutes). The
   repo is public, so it runs on GitHub's runners, not Jog.
-- `launchd/com.example.collector.plist` serves a build: run `bun run build` first, and set `WorkingDirectory` and the
-  bun path to the checkout. `launchd/com.example.collector-rebuild.plist` is the rebuild job: set both paths, and
-  `--label` to the serving job's label.
+- `scripts/launchd.ts` is the login job, one command and no hand-edited file (card #252): it fills this checkout's
+  and this Bun's paths into `launchd/com.example.collector.plist` (and the rebuild plist with `--rebuild`), writes
+  them to `~/Library/LaunchAgents/` and loads them with `launchctl bootstrap gui/<uid>`, booting an older job out
+  first. The two plists stay templates with `/path/to/collector` and `/path/to/.bun/bin/bun` in them, and the script
+  refuses a template carrying a `/path/to` path it does not fill, rather than loading a job that cannot run. `--port`
+  picks the port in the job, `--print` writes nothing, `--uninstall` stops it, and `--launchctl <command>` replaces
+  launchctl, which is how `tests/launchd-install.test.ts` reads the exact bootout and bootstrap it runs. The serving
+  job runs `bun start`, so the checkout needs a build in `.next` first (`install.sh` makes one).
 - `bun scripts/rebuild-if-stale.ts [--dir <checkout>] [--label <launchd label>] [--check] [--restart "<command>"]` and
   `bun scripts/apply-update.ts [--dir <checkout>] [--label <launchd label>] [--restart "<command>"]`: `--dir` defaults
   to the script's own checkout, and `--restart` replaces the launchd restart (tests use `echo restarted`). Their

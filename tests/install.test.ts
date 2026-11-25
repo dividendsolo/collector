@@ -65,6 +65,28 @@ describe("install.sh", () => {
     expect(piped.stdout).not.toContain("Collector is here");
     expect(piped.stderr).toContain("git is needed to download Collector");
   });
+  it("names the Command Line Tools on a Mac that has none, so the clone it is about to try is not a mystery", () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "collector-install-")));
+    fs.writeFileSync(path.join(dir, "install.sh"), INSTALL);
+    for (const file of ["package.json", "collect.py"]) fs.writeFileSync(path.join(dir, file), "{}");
+    const bin = path.join(dir, "bin");
+    fs.mkdirSync(bin);
+    for (const [name, body] of [
+      ["uname", "#!/bin/sh\necho Darwin\n"],
+      ["xcode-select", "#!/bin/sh\nexit 1\n"],
+    ]) {
+      fs.writeFileSync(path.join(bin, name), body);
+      fs.chmodSync(path.join(bin, name), 0o755);
+    }
+    const out = spawnSync("/bin/sh", ["install.sh", "--no-install-bun"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { PATH: bin, HOME: dir, NODE_ENV: "test" },
+    });
+    expect(out.stdout).toContain("no Command Line Tools");
+    expect(out.stdout).toContain("xcode-select --install");
+    expect(INSTALL).toContain("xcode-select --install");
+  });
 });
 
 describe("README, for a stranger", () => {
