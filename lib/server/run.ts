@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { commandEnv } from "./gh";
 import { attemptsFor, backoffDelay, type RetryOptions } from "./retry";
 
 export interface RunResult {
@@ -27,7 +28,10 @@ function once(cmd: string[], opts: RunOptions): Promise<RunResult> {
     };
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(cmd[0], cmd.slice(1), { env: opts.env ?? process.env, stdio: ["pipe", "pipe", "pipe"] });
+      child = spawn(cmd[0], cmd.slice(1), {
+        env: commandEnv(cmd[0], opts.env ?? process.env),
+        stdio: ["pipe", "pipe", "pipe"],
+      });
     } catch (e) {
       resolve({ ok: false, stdout: "", error: String((e as Error).message).slice(0, 300) });
       return;

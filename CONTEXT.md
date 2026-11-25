@@ -1054,6 +1054,23 @@ machine whatever the read interval does. `tests/outbound.test.ts` holds the beha
 answers and the call that times out, a 5xx that is retried until it recovers, a 404 that is not, the cap and the
 jitter, and a hung command under `runText`.
 
+## Collector's gh calls run through agent-stack's gh shim (collector#215)
+
+Collector is the biggest caller of the shared GitHub limit, and its calls ran `gh` by name from launchd's PATH,
+so none of them reached agent-stack's gh shim or its rate-limit backoff. Every subprocess Collector runs goes
+through one seam, `lib/server/run.ts`, and every `gh` call it makes goes through that seam too: the board poll
+and its reason reads (`board.ts`), one card's journey (`journey.ts`), a repo's row (`projects.ts`), the GitHub
+limits (`machines.ts`, `workstats.ts`, `jog.ts`), `card.ts`, and the New card form's `gh issue create`
+(`app/api/ticket/route.ts`).
+
+`lib/server/gh.ts`'s `commandEnv(cmd, base)` gives a `gh` command the agent-stack tools copy's `vps/bin`
+(`~/.local/share/agent-stack/current/vps/bin`) first on the PATH it is spawned with, and `GH_CALLER=collector`,
+so each call lands in `~/.hermes/state/gh-calls.jsonl` named `collector` and a GitHub rate limit stops that kind
+of call on the machine instead of retrying at once (agent-stack#450). Every other command keeps the environment
+it was given, so `~/.local/bin/status` still names itself `status` in the log. `COLLECTOR_GH_BIN` names another
+shim directory, and a machine with no shim there — a stranger's install, CI — keeps its own environment and `gh`
+resolves as it did. `tests/gh-shim.test.ts` holds it.
+
 ## CI: every action is pinned to a commit (collector#144)
 
 `ci.yml` is started by hand by `ci-merge.py` on the PR branch, right before the merge, and its job carries the
