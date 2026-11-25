@@ -1316,6 +1316,12 @@
     color: var(--green, var(--text));
     opacity: 1;
   }
+  .alert .act .btn.fixing.stalled {
+    background: var(--amber-bg, var(--panel-2));
+    border-color: var(--amber-line, var(--line-2));
+    color: var(--amber, var(--text));
+    opacity: 1;
+  }
   .alert .act .btn.fixing.stuck {
     background: var(--amber-bg, var(--panel-2));
     border-color: var(--amber-line, var(--line-2));

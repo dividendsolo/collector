@@ -101,9 +101,12 @@ function LoginAction({ login }: { login: { machine: string; provider: string; la
 interface OpenFix {
   pane: string;
   step: string;
-  state: "working" | "done" | "stuck";
+  state: "working" | "done" | "stuck" | "stalled";
+  since?: number;
   card?: { repo: string; number: number };
 }
+const STALL_MIN = 20;
+const stalledFor = (since?: number) => (since ? Math.round(Date.now() / 1000 - since) : 0);
 const useFixes = () => useApi<{ fixes: Record<string, OpenFix> }>("/api/debug-fix", 3_000);
 
 function DebugFix({
@@ -165,13 +168,22 @@ function DebugFix({
   };
   if (open) {
     const working = open.state === "working";
-    const text = open.state === "stuck" ? "Stuck: needs you" : open.state === "done" ? "Done" : open.step;
+    const text =
+      open.state === "stuck"
+        ? "Stuck: needs you"
+        : open.state === "done"
+          ? "Done"
+          : open.state === "stalled"
+            ? `${open.step}: no change for ${Math.round(stalledFor(open.since) / 60)} m`
+            : open.step;
     const title =
       open.state === "stuck"
         ? `The session needs you: read it in tmux pane ${open.pane}`
         : open.state === "done"
           ? `The session finished: read it in tmux pane ${open.pane}`
-          : `Debug and fix is open in tmux pane ${open.pane}`;
+          : open.state === "stalled"
+            ? `The session has not moved past "${open.step}" in ${STALL_MIN} minutes: read it in tmux pane ${open.pane}, or close it`
+            : `Debug and fix is open in tmux pane ${open.pane}`;
     return (
       <>
         {why ? <span className="why">{why}</span> : null}
