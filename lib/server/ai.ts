@@ -221,31 +221,52 @@ async function anthropic(): Promise<Reading> {
   }
   if ((login.expiresAt || 0) / 1000 < Date.now() / 1000)
     return { plan: plan0, note: "Claude Code login expired: open Claude Code to renew it" };
+  const headers = { ...bearer(login.accessToken), "anthropic-beta": "oauth-2025-04-20" };
   let d: any;
   try {
-    d = await getJson("https://api.anthropic.com/api/oauth/usage", {
-      ...bearer(login.accessToken),
-      "anthropic-beta": "oauth-2025-04-20",
-    });
+    d = await getJson("https://api.anthropic.com/api/oauth/usage", headers);
   } catch (e) {
     return { plan: plan0, note: `Could not read Claude usage: ${why(e).slice(0, 80)}` };
   }
-  const session = d.five_hour || {};
-  const week = d.seven_day || {};
-  const sUsed = Math.round(session.utilization || 0);
+  let profile: any = null;
+  try {
+    profile = await getJson("https://api.anthropic.com/api/oauth/profile", headers);
+  } catch {
+    profile = null;
+  }
+  return claudeReading(d, profile, login);
+}
+
+const CLAUDE_PLANS: Record<string, string> = {
+  max: "Claude Max",
+  pro: "Claude Pro",
+  claude_max: "Claude Max",
+  claude_pro: "Claude Pro",
+};
+
+export function claudeReading(d: any, profile: any, login: any): Reading {
+  const org = profile?.organization || {};
+  const kind = org.organization_type || login?.subscriptionType || "";
+  const tier = (org.rate_limit_tier || login?.rateLimitTier || "").match(/(\d+x)$/);
+  const plan = (CLAUDE_PLANS[kind] || "Claude subscription") + (tier ? ` (${tier[1]})` : "");
+  const session = d?.five_hour || null;
+  const week = d?.seven_day || {};
   const wUsed = Math.round(week.utilization || 0);
-  const tier = (login.rateLimitTier || "").match(/(\d+x)$/);
-  const plan = ({ max: "Claude Max", pro: "Claude Pro" } as Record<string, string>)[login.subscriptionType] || plan0;
+  const sUsed = session ? Math.round(session.utilization || 0) : null;
+  const weekText = `${100 - wUsed}% of the week (resets ${resetText(week.resets_at)})`;
+  const left = Math.min(100 - wUsed, sUsed == null ? 100 : 100 - sUsed);
   return {
-    plan: plan + (tier ? ` (${tier[1]})` : ""),
-    left: `${100 - sUsed}%`,
+    plan,
+    left: `${sUsed == null ? 100 - wUsed : 100 - sUsed}%`,
     windows: [
-      { label: "5-hour session", used: sUsed, resets: session.resets_at ?? null },
+      ...(session ? [{ label: "5-hour session", used: sUsed as number, resets: session.resets_at ?? null }] : []),
       { label: "Week", used: wUsed, resets: week.resets_at ?? null },
     ],
-    detail: `of this 5-hour session (resets ${resetText(session.resets_at)}), ${100 - wUsed}% of the week (resets ${resetText(week.resets_at)})`,
-    low: Math.min(100 - sUsed, 100 - wUsed) < AI_LOW_PERCENT,
-    out: Math.min(100 - sUsed, 100 - wUsed) <= 0,
+    detail: session
+      ? `of this 5-hour session (resets ${resetText(session.resets_at)}), ${weekText}`
+      : `left: ${weekText}`,
+    low: left < AI_LOW_PERCENT,
+    out: left <= 0,
   };
 }
 
