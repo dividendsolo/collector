@@ -186,7 +186,7 @@ export function currentWork(
   const rows: WorkRow[] = [];
   const byCard = new Map<string, WorkRow>();
   for (const c of cards) {
-    if (waiting.includes(c.lane)) continue;
+    if (waiting.includes(c.lane) || byCard.has(`${c.repo}#${c.number}`)) continue;
     const local = Boolean(c.labels?.includes("local"));
     const row: WorkRow = { key: c.url, group: local ? 0 : groupOf(c.lane), state: c.lane, card: c, run: null, local };
     byCard.set(`${c.repo}#${c.number}`, row);
