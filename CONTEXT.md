@@ -10,6 +10,13 @@ confirmed click (collector#218).
 `AGENTS.md` holds the stack, the commands and the dangers; this file holds the code's layout, how the running one is
 built, restarted and served, and how its features work.
 
+## The goal (James, 2026-11-25)
+
+A solo developer owns their own stack: free or as cheap as it can be, full control, secure, and a huge amount of work
+done. Collector and the agent stack stay on machines we own (altair, ezio), never a hosted service. Credentials stay
+local to those machines. Integrations other people use, such as Slack, are worth adding when they are optional.
+Every feature is judged against this (collector#238).
+
 ## Installing it: one command, and what a clean machine needs (card #55)
 
 A stranger with none of our files installs it with one line, from the README:
