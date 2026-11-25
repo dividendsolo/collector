@@ -844,9 +844,9 @@ export function LimitsPanel() {
       <div className="stats">
         {state ? <JogMinutes j={state.jog} /> : <div className="note sub">Reading Jog&hellip;</div>}
         <GraphqlLimit g={g} />
-        {g?.error && !g.refused ? (
+        {g?.error && !g.refusal ? (
           <div className="stat">
-            <span className="label">GraphQL (board reads)</span>
+            <span className="label">Hourly (board reads)</span>
             <span className="sub">Could not read: {g.error}</span>
           </div>
         ) : null}
