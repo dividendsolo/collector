@@ -1994,7 +1994,7 @@ def lock_openers(paths):
     if not paths:
         return {}
     try:
-        done = subprocess.run(["lsof", "-F", "pn", "--", *paths], capture_output=True, text=True, timeout=10)
+        done = subprocess.run([LSOF, "-F", "pn", "--", *paths], capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired):
         return {}
     out, pid = {}, None

@@ -20,6 +20,7 @@ const REVIEWER = {
   name: "echo-form-reviewer",
   seconds: 360,
 };
+const PYTHON = execFileSync("python3", ["-c", "import sys; print(sys.executable)"], { encoding: "utf8" }).trim();
 const SESSION = { repo: "collector", kind: "session", card: 12, type: "agent", name: "Claude Code", seconds: 9000 };
 
 function read({
@@ -29,6 +30,7 @@ function read({
   paused = false,
   files = ["build-1.lock", "build-2.lock", "review.lock"],
   scratch = true,
+  env = process.env as NodeJS.ProcessEnv,
 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "collector-crew-"));
   const foreman = path.join(dir, "foreman");
@@ -50,7 +52,7 @@ function read({
     `print(json.dumps(collect.crew_read(json.loads(${JSON.stringify(JSON.stringify(running))}), steps=steps, scratch=${JSON.stringify(foreman)}, pause_file=${JSON.stringify(pause)})))`,
     "[h.kill() for h in holders.values()]",
   ].join("\n");
-  return JSON.parse(execFileSync("python3", ["-c", code], { encoding: "utf8" }));
+  return JSON.parse(execFileSync(PYTHON, ["-c", code], { encoding: "utf8", env }));
 }
 
 const stepOf = (row: { repo: string; card: number }, step: string, lock: string) => ({
@@ -104,6 +106,16 @@ describe("collect.py's crew reading (collector#231)", () => {
         seconds: 360,
       },
     ]);
+  });
+
+  it("finds a held slot's card when /usr/sbin is not on the PATH, as under launchd on a Mac", () => {
+    const crew = read({
+      hold: ["build-1.lock"],
+      running: [BUILDER],
+      steps: [stepOf(BUILDER, "building", "build-1.lock")],
+      env: { ...process.env, PATH: "/usr/bin:/bin" },
+    });
+    expect(crew.slots[0]).toMatchObject({ state: "held", repo: "situation", card: 920 });
   });
 
   it("keeps a held slot with no matching run held, with no card", () => {
