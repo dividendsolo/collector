@@ -816,18 +816,40 @@ with no roast shows nothing: no 0, no error.
 - `checkServices` puts the answer on each row as `roast`; `ServiceRows` in `components/services.tsx` draws it.
   `tests/service-roast.test.ts` holds the read, the cache and the row.
 
-## The Jog and GitHub limits panel (collector#186)
+## The Jog and GitHub limits panel (collector#186, collector#219)
 
-The Dashboard's "Jog and GitHub limits" panel shows the two limits the droids run on: Jog's runner minutes this month
-and GitHub's GraphQL limit (used, of the limit, and the reset, red at 90% used), the same stats as on the APIs page.
+The Dashboard's "Jog and GitHub limits" panel shows the limits the droids run on: Jog's runner minutes this month and
+GitHub's two GraphQL limits, the same stats as on the APIs page. Both pages draw GitHub's rows with one component,
+`GraphqlLimit` in `components/pages.tsx`.
 
-On 2026-11-16 a triage run used up the GraphQL limit while the gauge read about 1,400 of 5,000: GitHub's secondary
-limit (too many calls in a short time) is not in `gh api rate_limit`. So `githubLimit` in `lib/server/machines.ts` also
-sends one small GraphQL call, `{ viewer { login } }`, at most once a minute (`graphqlProbe`, one try, 1 point). When
-GitHub refuses it with a rate-limit error (`isRateLimited`: "rate limit" or `RATE_LIMITED` in gh's error), the read
-carries `refused`, the epoch second of that refusal, also when `rate_limit` itself could not be read. The panel and the
-APIs page then say "GitHub is refusing calls" with that time, in red, whatever the count says. The next call that
-GitHub answers clears it. `tests/limits-panel.test.ts` holds the gauge, the 90% bar and the refusing state.
+GitHub has two GraphQL limits. The hourly limit (5,000 points) is in `gh api rate_limit`. The per-minute limit (GitHub's
+"secondary" limit, about 2,000 points a minute) is not published anywhere: on 2026-11-16 a triage run hit it while the
+hourly gauge read about 1,400 of 5,000. So the panel shows two rows:
+
+- **Hourly (board reads)**: used, of the limit, and the reset, red at 90% used. When the hourly limit refused a call,
+  the row reads "Hourly limit reached · resets 10:31" instead, with the reset from the current `rate_limit` read.
+- **Per minute**: "OK", or "Too many calls in one minute · refused 9:24 · clears in about 2 min" when the per-minute
+  limit refused a call ("clears in a few minutes" when GitHub named no `retry-after`; `clearsText`). A line under it
+  says "GitHub does not publish this count."
+
+`githubLimit` in `lib/server/machines.ts` also sends one small GraphQL call, `gh api graphql --include` with
+`{ viewer { login } }`, at most once a minute (`graphqlProbe`, one try, 1 point). When GitHub refuses it with a
+rate-limit error (`isRateLimited`: "rate limit" or `RATE_LIMITED` in gh's output), `probeRefusal` reads
+`gh api rate_limit` once and records the refusal as `refusal`, `{ at, limit, retryAfter }`, also when the panel's own
+`rate_limit` read failed:
+
+- `limit` is `refusalKind` in `lib/github-limit.ts`: a message that says "secondary" is the per-minute limit; else 0
+  hourly points left is the hourly limit, and points left (or no count) is the per-minute limit. The kind is decided
+  when the refusal is seen, so a later hourly reset cannot change it.
+- `retryAfter` is the seconds in the refusal's own `retry-after` header (`retryAfterSeconds`), which `--include`
+  brings in; `null` when GitHub named none.
+- A refusal stays on the page for ten minutes (`PER_MINUTE_WINDOW_S`), whatever later calls GitHub answers.
+  `recentRefusal` drops it after that, and drops an hourly refusal as soon as GitHub's hourly window has reset after
+  it (`refusal.at < reset - 3600`), so "Hourly limit reached" never shows over a fresh 5,000.
+
+`tests/github-limit.test.ts` holds `refusalKind`, `retryAfterSeconds`, `recentRefusal` and `clearsText`.
+`tests/limits-panel.test.ts` holds the two rows, the 90% bar, each refusal in its own row, the probe's `--include`
+and classification, and the drop of an hourly refusal from before the current reset.
 
 ## The AI usage rows
 
