@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { ServiceHealthPanel, type Svc } from "@/components/services";
-import { type Checked, serviceLogLines } from "@/lib/server/services";
+import { describe, expect, it, vi } from "vitest";
+import { ServiceHealthPanel, ServiceRows, type Svc } from "@/components/services";
+import { type Checked, check, serviceLogLines } from "@/lib/server/services";
 
 const EMPTY = "No services in config.json yet.";
 const render = (svc: Svc[] | null) => renderToStaticMarkup(createElement(ServiceHealthPanel, { svc }));
@@ -43,5 +43,37 @@ describe("Service health panel on the Dashboard", () => {
     expect(html).toContain("1 of 2");
     expect(html).toContain("slowest Site at 900 ms");
     expect(html).not.toContain(EMPTY);
+  });
+});
+
+describe("a service row's hosting (collector#262)", () => {
+  const svc = (hosting: string | null): Svc => ({
+    name: "ZeroPhase",
+    url: "https://zerophase.app",
+    status: "online",
+    ms: 120,
+    error: null,
+    hosting,
+  });
+  const renderRows = (hosting: string | null) =>
+    renderToStaticMarkup(createElement(ServiceRows, { list: [svc(hosting)] }));
+
+  it("shows where the service is hosted, after its url", () => {
+    const html = renderRows("Vercel");
+    expect(html).toContain("Vercel");
+    expect(html.indexOf("Vercel")).toBeGreaterThan(html.indexOf("zerophase.app"));
+  });
+
+  it("reads Self-hosted for a service that sends no platform header, the Projects panel's wording", () => {
+    expect(renderRows(null)).toContain("Self-hosted");
+  });
+
+  it("reads the hosting off the response's own headers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { headers: { "x-vercel-id": "fra1::abc" } })),
+    );
+    expect((await check({ name: "Site", url: "https://example.com" })).hosting).toBe("Vercel");
+    vi.unstubAllGlobals();
   });
 });

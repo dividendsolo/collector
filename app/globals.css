@@ -727,6 +727,9 @@
   .health .sub a.roast {
     white-space: nowrap;
   }
+  .health .sub .host {
+    white-space: nowrap;
+  }
   .health .right {
     display: flex;
     align-items: center;

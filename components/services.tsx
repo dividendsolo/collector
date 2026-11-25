@@ -57,6 +57,8 @@ export function ServiceRows({ list }: { list: Svc[] }) {
               <a href={x.url} target="_blank" rel="noopener">
                 {x.url.replace(/^https?:\/\//, "")}
               </a>
+              {" · "}
+              <span className="host">{x.hosting ?? "Self-hosted"}</span>
               {x.roast ? (
                 <>
                   {" · "}
