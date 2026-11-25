@@ -1,5 +1,5 @@
 import type { Check } from "./checks";
-import { AI_LOW_PERCENT, limitLow, resetText } from "./format";
+import { AI_LOW_PERCENT, clockText, limitLow, resetText } from "./format";
 import { jumpHref } from "./jump";
 import { webUrl } from "./links";
 
@@ -316,22 +316,30 @@ function resetWhen(iso: string | null, now: number): string {
   const at = new Date(Math.round(new Date(iso as string).getTime() / 60_000) * 60_000);
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  return dayKey(at) === dayKey(tomorrow) ? `${text} tomorrow` : text;
+  return dayKey(at) === dayKey(tomorrow) ? `${clockText(at)} tomorrow` : text;
 }
 
-function resetClause(usedUp: { label: string; resets: string | null }[], now: number): string {
-  const when = resetWhen(lastReset(usedUp), now);
+const atOrOn = (when: string) => (/^\d/.test(when) ? "at" : "on");
+
+function resetClause(usedUp: { label: string; resets: string | null }[], when: string): string {
   if (!when) return "";
   const names = usedUp.map(limitName).join(" and ");
   const verb = usedUp.length > 1 ? "limits reset" : "limit resets";
-  return ` until the ${names} ${verb} ${/^\d/.test(when) ? "at" : "on"} ${when}`;
+  return ` until the ${names} ${verb} ${atOrOn(when)} ${when}`;
 }
 
-export function creditBar(ai: AiIn[] | null | undefined, now = Date.now()): { text: string; href: string } | null {
+export function creditBar(
+  ai: AiIn[] | null | undefined,
+  now = Date.now(),
+): { text: string; short: string; href: string } | null {
   const a = (ai || []).find((x) => x.provider === "nous");
   if (!a || !onTopupCredits(a)) return null;
+  const usedUp = usedUpLimits(a);
+  const when = resetWhen(lastReset(usedUp), now);
+  const left = a.left ? ` ${a.left} left.` : "";
   return {
-    text: `Nous: on top-up credits${resetClause(usedUpLimits(a), now)}.${a.left ? ` ${a.left} left.` : ""}`,
+    text: `Nous: on top-up credits${resetClause(usedUp, when)}.${left}`,
+    short: `Nous: top-up${when ? ` until ${when}` : ""}.${left}`,
     href: a.link || jumpHref("dashboard", "ai-plans"),
   };
 }

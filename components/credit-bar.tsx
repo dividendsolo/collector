@@ -11,7 +11,12 @@ export function CreditBar() {
   return (
     <div className="credit-bar" role="status">
       <a className="plain" href={bar.href}>
-        <BlurText text={bar.text} />
+        <span className="credit-bar-long">
+          <BlurText text={bar.text} />
+        </span>
+        <span className="credit-bar-short">
+          <BlurText text={bar.short} />
+        </span>
       </a>
     </div>
   );

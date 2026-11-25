@@ -640,9 +640,14 @@ so it is not a toast any more: it is a thin bar at the bottom of every page, rea
   the credits at 0 (`Nous credits are out`, with its Top up button).
 - `components/credit-bar.tsx` draws it, mounted in the Shell (`components/app.tsx`), so it is on every page: a
   `role="status"` link to the AI panel, muted, one line, no motion, readable at 425 px.
+- At 600 px and narrower the bar shows `creditBar`'s `short` line instead (`Nous: top-up until 7:22 AM tomorrow.
+  $16.37 left.`), so it stays one line at 425 px; `white-space: nowrap` and an ellipsis hold it to one line on any
+  width.
 - `.credit-bar` (`app/globals.css`) is a sticky bottom bar inside `.shell` — the shell is a flex column now, so a
   short page still holds the bar at the bottom — and the toast stack lifts above it (`bottom: calc(48px + env(safe-area-inset-bottom, 0px))`).
-- `tests/ai-alerts.test.ts` holds the line, the reset wording, the plural limits, and the absence of the bar once
+  In that flex column `.content` needs `width: 100%`: its `margin: 0 auto` would otherwise stop it from stretching,
+  and every page would shrink to the width of its content.
+- `tests/ai-alerts.test.ts` holds the line and its short form, the reset wording, the plural limits, and the absence of the bar once
   the limit is not used up, while keep-going is off, or with no credits left.
 
 ## A job's notices (card #82)

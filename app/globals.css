@@ -1171,6 +1171,7 @@
   }
 
   .content {
+    width: 100%;
     max-width: 1440px;
     margin: 0 auto;
     padding: 32px 24px 64px;
@@ -2125,13 +2126,25 @@
     color: var(--muted);
     font-size: 12px;
     text-align: center;
+    white-space: nowrap;
+  }
+  .credit-bar a {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .credit-bar-short {
+    display: none;
   }
   body:has(.credit-bar) .toasts {
     bottom: calc(48px + env(safe-area-inset-bottom, 0px));
   }
   @media (max-width: 600px) {
-    body:has(.credit-bar) .toasts {
-      bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+    .credit-bar-long {
+      display: none;
+    }
+    .credit-bar-short {
+      display: inline;
     }
   }
   .toast {

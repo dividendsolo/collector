@@ -250,21 +250,29 @@ describe("the Nous plan limits and their on-top-up bar", () => {
     expect(aiToasts([on], now)).toEqual([]);
     expect(creditBar([on], now)).toEqual({
       text: "Nous: on top-up credits until the daily limit resets at 11:05 AM. $25.07 left.",
+      short: "Nous: top-up until 11:05 AM. $25.07 left.",
       href: "https://portal.nousresearch.com",
     });
   });
 
   it("says the reset is tomorrow when it is", () => {
     const tomorrow = new Date(2026, 10, 13, 7, 22).getTime();
-    expect(creditBar([nous(10000, true, 16.37, 1868, tomorrow)], now)?.text).toBe(
-      "Nous: on top-up credits until the daily limit resets at 7:22 AM tomorrow. $16.37 left.",
-    );
+    const bar = creditBar([nous(10000, true, 16.37, 1868, tomorrow)], now);
+    expect(bar?.text).toBe("Nous: on top-up credits until the daily limit resets at 7:22 AM tomorrow. $16.37 left.");
+    expect(bar?.short).toBe("Nous: top-up until 7:22 AM tomorrow. $16.37 left.");
+  });
+
+  it("keeps the narrow line short enough for one line at 425 px, with the reset and the amount", () => {
+    const tomorrow = new Date(2026, 10, 13, 10, 22).getTime();
+    const short = creditBar([nous(10000, true, 1234.56, 1868, tomorrow)], now)?.short ?? "";
+    expect(short).toBe("Nous: top-up until 10:22 AM tomorrow. $1234.56 left.");
+    expect(short.length).toBeLessThanOrEqual(56);
   });
 
   it("names every used-up limit, and uses the last reset", () => {
-    expect(creditBar([nous(10000, true, 25, 10000)], now)?.text).toBe(
-      "Nous: on top-up credits until the daily and weekly limits reset on Nov 19. $25.00 left.",
-    );
+    const bar = creditBar([nous(10000, true, 25, 10000)], now);
+    expect(bar?.text).toBe("Nous: on top-up credits until the daily and weekly limits reset on Nov 19. $25.00 left.");
+    expect(bar?.short).toBe("Nous: top-up until Nov 19. $25.00 left.");
   });
 
   it("gives no bar once the limit is not used up, while keep-going is off, or with no credits left", () => {
@@ -313,6 +321,7 @@ describe("the on-top-up bar follows the page's money conventions", () => {
 
   it("draws its line through the blur text, so the eye toggle covers the balance", () => {
     expect(src).toMatch(/<BlurText text=\{bar\.text\} \/>/);
+    expect(src).toMatch(/<BlurText text=\{bar\.short\} \/>/);
   });
 
   it("carries the amount in the line the panel already shows", () => {
