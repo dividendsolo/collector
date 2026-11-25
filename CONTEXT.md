@@ -625,6 +625,26 @@ fix it but wait for the reset; it shows again when the limit runs out. Priority 
 The sidebar's Network item counts the ports open to the internet across every machine (`internetPortCount`), the
 same number the toast and Priority tasks name.
 
+## The Nous on-top-up status bar (collector#246)
+
+James, 2026-11-25: "I don't want the toast notification, but maybe we just have like a status bar at the bottom
+... telling us like, hey, you're going to be using Nous top-up credits until the daily limit is reset tomorrow at
+whatever time." The state "a Nous limit is used up, keep-going is on and the top-up still has money" lasts hours,
+so it is not a toast any more: it is a thin bar at the bottom of every page, reading
+`Nous: on top-up credits until the daily limit resets at 7:22 AM tomorrow. $16.37 left.` — the viewer's own time,
+`tomorrow` when the reset falls on the next local day, and the amount left when the read carries one.
+
+- `lib/toasts.ts`'s `creditBar(ai, now)` is that one line (null unless the state holds). `onTopupCredits` is the
+  single predicate `aiToasts` and `creditBar` share, so `aiToasts` draws no Nous toast while the bar is up.
+- The toasts that need James stay: the used-up limit with keep-going off (`Hermes waits for the reset …`), and
+  the credits at 0 (`Nous credits are out`, with its Top up button).
+- `components/credit-bar.tsx` draws it, mounted in the Shell (`components/app.tsx`), so it is on every page: a
+  `role="status"` link to the AI panel, muted, one line, no motion, readable at 425 px.
+- `.credit-bar` (`app/globals.css`) is a sticky bottom bar inside `.shell` — the shell is a flex column now, so a
+  short page still holds the bar at the bottom — and the toast stack lifts above it (`bottom: calc(48px + env(safe-area-inset-bottom, 0px))`).
+- `tests/ai-alerts.test.ts` holds the line, the reset wording, the plural limits, and the absence of the bar once
+  the limit is not used up, while keep-going is off, or with no credits left.
+
 ## A job's notices (card #82)
 
 A job's good news has a path into the page now. The weekly `directory-listings` check (agent-stack#306) appends one
