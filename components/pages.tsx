@@ -10,6 +10,7 @@ import type { ClosedRow } from "@/lib/work";
 import { AiPanels } from "./ai";
 import { CardRef } from "./card-link";
 import { useApi, useLive } from "./data";
+import { useSide } from "./side";
 import { BlurToggle, Count, Icon, Money, PanelHead, SkelItems, SkelRows } from "./ui";
 
 function DaysCell({ days, warnAt, failAt }: { days: number | null; warnAt: number; failAt: number }) {
@@ -830,6 +831,8 @@ function ProposalForm({ draft, onSaved, onCancel }: { draft: Draft; onSaved: (d:
 export function ProposalsPage() {
   const { data, mutate } = useApi("/api/proposals");
   const [form, setForm] = useState<Draft | null>(null);
+  const mac = useSide() === "mac";
+  const cols = mac ? 8 : 7;
   const list: Proposal[] = data?.proposals || [];
   const open: { currency: string; total: number }[] = data?.pipeline || [];
   const saved = (d: any) => {
@@ -849,11 +852,13 @@ export function ProposalsPage() {
         <PanelHead icon="brief">
           <Count n={list.length} />
           <span className="sub">kept in proposals.json beside config.json</span>
-          <div className="tools">
-            <button className="btn" type="button" onClick={() => setForm(BLANK)}>
-              Add proposal
-            </button>
-          </div>
+          {mac ? (
+            <div className="tools">
+              <button className="btn" type="button" onClick={() => setForm(BLANK)}>
+                Add proposal
+              </button>
+            </div>
+          ) : null}
         </PanelHead>
         {data?.why ? (
           <p className="err wide" role="alert">
@@ -883,12 +888,12 @@ export function ProposalsPage() {
                 <th>Sent</th>
                 <th>Decided</th>
                 <th>Notes</th>
-                <th />
+                {mac ? <th /> : null}
               </tr>
             </thead>
             <tbody>
               {!data ? (
-                <SkelRows n={4} cols={8} />
+                <SkelRows n={4} cols={cols} />
               ) : list.length ? (
                 list.map((p) => (
                   <tr key={p.id}>
@@ -914,29 +919,31 @@ export function ProposalsPage() {
                         <span className="sub">—</span>
                       )}
                     </td>
-                    <td className="actions">
-                      <button
-                        className="btn ghost"
-                        type="button"
-                        aria-label={`Edit ${p.title}`}
-                        onClick={() => setForm(asDraft(p))}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn ghost"
-                        type="button"
-                        aria-label={`Delete ${p.title}`}
-                        onClick={() => remove(p)}
-                      >
-                        Delete
-                      </button>
-                    </td>
+                    {mac ? (
+                      <td className="actions">
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          aria-label={`Edit ${p.title}`}
+                          onClick={() => setForm(asDraft(p))}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          aria-label={`Delete ${p.title}`}
+                          onClick={() => remove(p)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={cols}>
                     <div className="soon">
                       <b>No proposals yet.</b>
                       <span>Add the first one: its client, its title and what it is worth.</span>
@@ -948,7 +955,7 @@ export function ProposalsPage() {
           </table>
         </div>
       </section>
-      {form ? (
+      {mac && form ? (
         <ProposalForm key={form.id ?? "new"} draft={form} onSaved={saved} onCancel={() => setForm(null)} />
       ) : null}
     </div>

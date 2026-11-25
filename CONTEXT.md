@@ -1118,7 +1118,8 @@ phone's Status list leaves the done lanes out.
 **The phone's layout.** `app/page.tsx` reads the request's own headers on the server and hands the side to the app
 (`SideProvider`, `useSide`); the app div carries `data-side`, which is how a served page says which it is. On the
 phone the Dashboard shows Priority tasks, then Current work, then a Briefs panel (the Mac has no Briefs panel; its
-Briefs page is in the sidebar), and the Mac-only buttons are not drawn. Under 900px the paired panels are one column
+Briefs page is in the sidebar), and the Mac-only buttons are not drawn. The Projects page draws no `Choose repos`,
+and the Proposals page no `Add proposal`, `Edit` or `Delete` (nor its actions column): both pages still read. Under 900px the paired panels are one column
 and every panel can shrink (`min-width: 0`), so nothing pushes the page sideways at 412px.
 
 **The home-screen app** is `public/manifest.webmanifest` (`display: standalone`, icons 192 and 512 at
@@ -1126,7 +1127,8 @@ and every panel can shrink (`min-width: 0`), so nothing pushes the page sideways
 drawn once and committed as PNGs.
 
 `tests/phone.test.ts` holds the side and the refusals, `tests/card-move.test.ts` the move, `tests/phone-layout.test.ts`
-the phone Dashboard and the 412px rules, and `tests/manifest.test.ts` the manifest and its two icons.
+the phone Dashboard and the 412px rules, `tests/phone-pages.test.ts` the Projects and Proposals pages, and
+`tests/manifest.test.ts` the manifest and its two icons.
 
 
 ## Every outbound call has a deadline, and a bounded retry (repo standard S2)
