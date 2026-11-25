@@ -7,7 +7,7 @@ import { briefsRow, fullRepo, p0Rows, priorityOrder, TRIAGE_LANE, transitionName
 import { AGENT_STACK_ALL, waitingList } from "@/lib/statuses";
 import { checkTicket, newTicket, TICKET_PRIORITIES, TICKET_TYPES, type TicketDraft, ticketRequest } from "@/lib/ticket";
 import { transitionName, transitionOut } from "@/lib/view-transition";
-import { acked, setAck, useAcks } from "./acks";
+import { acked, recentlyAcked, setAck, useAcks, useAckTimes } from "./acks";
 import { AddProviderButton, AddProviderForm, AiPlan, byAiOrder, useAi } from "./ai";
 import { useBriefs } from "./briefs";
 import { CardRef } from "./card-link";
@@ -240,6 +240,7 @@ function PriorityTasks() {
   const [fixed, setFixed] = useState<{ post: string; at: number } | null>(null);
   const shown = fixed && state && state.at > fixed.at ? null : fixed;
   const acks = useAcks();
+  const ackTimes = useAckTimes();
   const waiting = useWaiting();
   const triage = waiting ? triageRow(waiting.list) : null;
   const { data: briefs } = useBriefs();
@@ -251,7 +252,10 @@ function PriorityTasks() {
     ...(unread ? [unread] : []),
   ]);
   const w = all.filter((x) => !acked(x, acks));
-  const done = all.filter((x) => acked(x, acks));
+  const done = recentlyAcked(
+    all.filter((x) => acked(x, acks)),
+    ackTimes,
+  );
   const names = new Map(transitionNames(all).map((n, i) => [all[i], n]));
   const hot = w.some((x) => x.level === "error");
   return (

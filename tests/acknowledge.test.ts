@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acked } from "@/components/acks";
+import { acked, recentlyAcked } from "@/components/acks";
 import { ackKey, failingJobs, status } from "@/lib/format";
 import { warnings } from "@/lib/server/warnings";
 
@@ -73,5 +73,19 @@ describe("the Could not list tickets row", () => {
 
   it("is no row at all when the next ticket read works, acknowledged or not", () => {
     expect(find(null)).toBeUndefined();
+  });
+});
+
+describe("an acknowledged row in Priority tasks", () => {
+  const now = Date.parse("2026-11-25T12:00:00Z");
+  const row = (key: string) => ({ ack: { key } });
+  it("shows for one day after it was acknowledged, then leaves the list", () => {
+    const fresh = row("a");
+    const old = row("b");
+    const at = { a: now - 23 * 3600_000, b: now - 25 * 3600_000 };
+    expect(recentlyAcked([fresh, old], at, now)).toEqual([fresh]);
+  });
+  it("leaves the list at once when it was acknowledged before the time was kept", () => {
+    expect(recentlyAcked([row("c")], {}, now)).toEqual([]);
   });
 });
