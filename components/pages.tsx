@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { daysAgo, money, monthly, prio } from "@/lib/format";
+import { clearsText } from "@/lib/github-limit";
 import { PROPOSAL_STATUSES, type Proposal, type ProposalStatus } from "@/lib/proposals";
 import { statusPill } from "@/lib/status-colors";
 import { vendorOrder } from "@/lib/vendors";
@@ -210,9 +211,11 @@ function GithubLimit() {
   );
 }
 
+const clock = (s: number) => new Date(s * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
 function LimitStat({ label, x }: { label: string; x?: { used: number; limit: number; reset: number } }) {
   if (!x) return null;
-  const reset = new Date(x.reset * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const reset = clock(x.reset);
   const pct = Math.min(100, Math.round((x.used / x.limit) * 100));
   return (
     <div className="stat">
@@ -232,21 +235,35 @@ function LimitStat({ label, x }: { label: string; x?: { used: number; limit: num
 
 export function GraphqlLimit({ g }: { g?: any }) {
   if (!g) return null;
-  const refused =
-    g.refused &&
-    new Date(g.refused * 1000).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const refusal = g.refusal || null;
   return (
     <>
-      {refused ? (
-        <div className="alert error">
-          <Icon name="alert" />
-          <span>GitHub is refusing calls · last refused {refused}</span>
+      {refusal?.limit === "hourly" ? (
+        <div className="stat">
+          <span className="label">Hourly (board reads)</span>
+          <span className="value">
+            Hourly limit reached {g.graphql ? <small>· resets {clock(g.graphql.reset)}</small> : null}
+          </span>
         </div>
-      ) : null}
-      <LimitStat label="GraphQL (board reads)" x={g.graphql} />
+      ) : (
+        <LimitStat label="Hourly (board reads)" x={g.graphql} />
+      )}
+      <div className="stat">
+        <span className="label">Per minute</span>
+        <span className="value">
+          {refusal?.limit === "minute" ? (
+            <>
+              Too many calls in one minute{" "}
+              <small>
+                · refused {clock(refusal.at)} · {clearsText(refusal.retryAfter)}
+              </small>
+            </>
+          ) : (
+            "OK"
+          )}
+        </span>
+        <span className="sub">GitHub does not publish this count.</span>
+      </div>
     </>
   );
 }

@@ -1,10 +1,12 @@
 import fs from "node:fs";
+import { type GithubRefusal, recentRefusal, refusalKind, retryAfterSeconds } from "../github-limit";
 import { swr } from "./cache";
 import { type Config, config, type Machine, type Watch } from "./config";
 import { type JogUsage, jogUsage } from "./jog";
 import { withHostNames } from "./names";
 import { COLLECT, HOME } from "./paths";
-import { run } from "./run";
+import { run, runText } from "./run";
+import { once } from "./store";
 
 const SSH = [
   "ssh",
@@ -48,7 +50,7 @@ export interface GithubLimit {
   graphql?: { used: number; limit: number; reset: number };
   core?: { used: number; limit: number; reset: number };
   actions?: ActionsUsage;
-  refused?: number | null;
+  refusal?: GithubRefusal | null;
 }
 
 export interface ActionsUsage {
@@ -87,22 +89,40 @@ const actionsUsage = swr<ActionsUsage>("actions-usage", 5 * 60_000, async () => 
 
 export const isRateLimited = (error: string | null | undefined) => /rate limit|RATE_LIMITED/i.test(error ?? "");
 
-const graphqlProbe = swr<{ refused: number | null }>("graphql-probe", 60_000, async () => {
-  const [, err] = await run(["gh", "api", "graphql", "-f", "query={ viewer { login } }"], { timeout: 10, attempts: 1 });
-  return { refused: isRateLimited(err) ? Math.floor(Date.now() / 1000) : null };
+export async function probeRefusal(): Promise<GithubRefusal | null> {
+  const at = Math.floor(Date.now() / 1000);
+  const r = await runText(["gh", "api", "graphql", "--include", "-f", "query={ viewer { login } }"], {
+    timeout: 10,
+    attempts: 1,
+  });
+  const text = `${r.stdout}\n${r.error ?? ""}`;
+  if (r.ok || !isRateLimited(text)) return null;
+  const [rate] = await run<{ resources?: { graphql?: { remaining?: number } } }>(["gh", "api", "rate_limit"], {
+    timeout: 10,
+  });
+  const remaining = rate?.resources?.graphql?.remaining ?? null;
+  return { at, limit: refusalKind(text, remaining), retryAfter: retryAfterSeconds(text) };
+}
+
+const lastRefusal = once<{ value: GithubRefusal | null }>("github-refusal", () => ({ value: null }));
+
+const graphqlProbe = swr<GithubRefusal | null>("graphql-probe", 60_000, async () => {
+  const refused = await probeRefusal();
+  if (refused) lastRefusal.value = refused;
+  return lastRefusal.value;
 });
 
 export async function githubLimit(): Promise<GithubLimit> {
-  const [[data, err], probe] = await Promise.all([
+  const [[data, err], probed] = await Promise.all([
     run(["gh", "api", "rate_limit"], { timeout: 10 }),
-    graphqlProbe.get().catch(() => ({ refused: null })),
+    graphqlProbe.get().catch(() => null),
   ]);
-  const refused = probe.refused;
-  if (!data) return { error: err, refused };
+  const refusal = recentRefusal(probed, Math.floor(Date.now() / 1000), data?.resources?.graphql?.reset);
+  if (!data) return { error: err, refusal };
   const r = data.resources;
   const pick = (k: string) => ({ used: r[k].used, limit: r[k].limit, reset: r[k].reset });
   const actions = await actionsUsage.get().catch((e) => ({ error: String(e) }));
-  return { graphql: pick("graphql"), core: pick("core"), actions, refused };
+  return { graphql: pick("graphql"), core: pick("core"), actions, refusal };
 }
 
 export interface Snapshot {
