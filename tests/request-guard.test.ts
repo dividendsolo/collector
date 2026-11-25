@@ -251,6 +251,7 @@ describe("every route in the repo", () => {
     expect(writes).toEqual([
       "app/api/ai-providers/route.ts",
       "app/api/briefs/route.ts",
+      "app/api/card-move/route.ts",
       "app/api/debug-fix/route.ts",
       "app/api/hermes/route.ts",
       "app/api/model-login/route.ts",

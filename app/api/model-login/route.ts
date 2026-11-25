@@ -1,5 +1,5 @@
 import { config } from "@/lib/server/config";
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import { snapshot } from "@/lib/server/machines";
 import { loginCommand, startLogin } from "@/lib/server/model-login";
 import { json } from "@/lib/server/respond";
@@ -7,7 +7,7 @@ import { json } from "@/lib/server/respond";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const body = await req.json().catch(() => ({}));
   const machine = (config().machines || []).find((m) => m.name === body.machine);

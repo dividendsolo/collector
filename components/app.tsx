@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { failingJobs } from "@/lib/format";
+import type { Side } from "@/lib/phone";
 import { briefsRow, p0Rows, triageRow } from "@/lib/priority";
 import { internetPortCount } from "@/lib/toasts";
 import { vendorHit } from "@/lib/vendors";
@@ -20,6 +21,7 @@ import { ApisPage, ClosedPage, DomainsPage, ProposalsPage, SubscriptionsPage, us
 import { KeysPage, ProjectPage, ProjectsPage } from "./projects";
 import { runningTipProps, useRunning } from "./running";
 import { ServicesPage, ServicesWatcher } from "./services";
+import { SideProvider, useSide } from "./side";
 import { Toasts } from "./toasts";
 import { Icon, type IconName, Sprite } from "./ui";
 
@@ -294,11 +296,12 @@ function TopOfPage() {
 
 function Shell() {
   const hash = useHash();
+  const side = useSide();
   useJump();
   const r = route(hash);
   const at = pageOf(hash);
   return (
-    <div className="app">
+    <div className="app" data-side={side}>
       <TopOfPage key={at} />
       <Sidebar lit={r.lit} />
       <div className="shell">
@@ -311,14 +314,16 @@ function Shell() {
   );
 }
 
-export function App() {
+export function App({ side = "mac" }: { side?: Side } = {}) {
   return (
     <LiveProvider>
-      <Sprite />
-      <ServicesWatcher />
-      <Shell />
-      <CardTip />
-      <Toasts />
+      <SideProvider side={side}>
+        <Sprite />
+        <ServicesWatcher />
+        <Shell />
+        <CardTip />
+        <Toasts />
+      </SideProvider>
     </LiveProvider>
   );
 }

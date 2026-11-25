@@ -9,13 +9,14 @@ import { checkTicket, newTicket, TICKET_PRIORITIES, TICKET_TYPES, type TicketDra
 import { transitionName, transitionOut } from "@/lib/view-transition";
 import { acked, recentlyAcked, setAck, useAcks, useAckTimes } from "./acks";
 import { AddProviderButton, AddProviderForm, AiPlan, byAiOrder, useAi } from "./ai";
-import { useBriefs } from "./briefs";
+import { briefDay, useBriefs } from "./briefs";
 import { CardRef } from "./card-link";
 import { CrewPanel } from "./crew";
 import { useApi, useLive } from "./data";
 import { GraphqlLimit, JogMinutes } from "./pages";
 import { CurrentWork } from "./running";
 import { ServiceHealthPanel, useServices } from "./services";
+import { useSide } from "./side";
 import { BlurText, BlurToggle, Icon, PanelHead, Pill, SkelPlans, SkelRows, SkelStat } from "./ui";
 import { withViewTransition } from "./view-transition";
 
@@ -258,6 +259,7 @@ function PriorityTasks() {
   );
   const names = new Map(transitionNames(all).map((n, i) => [all[i], n]));
   const hot = w.some((x) => x.level === "error");
+  const mac = useSide() === "mac";
   return (
     <section className="panel" id="attention">
       <PanelHead icon="alert" title="Priority tasks">
@@ -279,23 +281,23 @@ function PriorityTasks() {
                   <BlurText text={x.aside} />
                 </span>
               ) : null}
-              {x.login ? (
+              {mac && x.login ? (
                 <LoginAction login={x.login} />
-              ) : x.action ? (
+              ) : mac && x.action ? (
                 <AlertAction action={x.action} done={() => setFixed({ post: x.action.post, at: Date.now() / 1000 })} />
-              ) : x.unblock ? (
+              ) : mac && x.unblock ? (
                 <span className="act">
                   <DebugFix debug={{ unblock: x.unblock }} label="Unblock" />
                 </span>
-              ) : x.triage ? (
+              ) : mac && x.triage ? (
                 <span className="act">
                   <DebugFix debug={{ triage: x.triage }} label="Triage" />
                 </span>
-              ) : x.fixMain ? (
+              ) : mac && x.fixMain ? (
                 <span className="act">
                   <DebugFix debug={{ fixMain: x.fixMain }} />
                 </span>
-              ) : x.debug ? (
+              ) : mac && x.debug ? (
                 <span className="act">
                   <DebugFix debug={x.debug} />
                 </span>
@@ -424,6 +426,7 @@ export function useWaiting() {
 }
 
 function ReleasePill({ t, done }: { t: any; done: () => void }) {
+  const mac = useSide() === "mac";
   const [busy, setBusy] = useState(false);
   const [why, setWhy] = useState("");
   const release = async () => {
@@ -447,16 +450,18 @@ function ReleasePill({ t, done }: { t: any; done: () => void }) {
     <span className="release">
       <Pill cls={t.lane === "ready-for-human" ? "human" : "warning"} dot={false}>
         {t.lane}
-        <button
-          type="button"
-          className="release-btn"
-          onClick={release}
-          disabled={busy}
-          title="Ready for agent"
-          aria-label={`Move ${t.repo}#${t.number} to ready-for-agent`}
-        >
-          <Icon name="check" />
-        </button>
+        {mac ? (
+          <button
+            type="button"
+            className="release-btn"
+            onClick={release}
+            disabled={busy}
+            title="Ready for agent"
+            aria-label={`Move ${t.repo}#${t.number} to ready-for-agent`}
+          >
+            <Icon name="check" />
+          </button>
+        ) : null}
       </Pill>
       {why ? <span className="why">{why}</span> : null}
     </span>
@@ -464,6 +469,7 @@ function ReleasePill({ t, done }: { t: any; done: () => void }) {
 }
 
 function TriagePill({ t }: { t: any }) {
+  const mac = useSide() === "mac";
   const card = { repo: fullRepo(t), number: Number(t.number) };
   const { data, mutate } = useFixes();
   const open = data?.fixes?.triage;
@@ -496,16 +502,18 @@ function TriagePill({ t }: { t: any }) {
     <span className="release">
       <Pill cls="warning" dot={false}>
         {mine ? "triaging" : t.lane}
-        <button
-          type="button"
-          className="release-btn"
-          onClick={click}
-          disabled={busy || Boolean(open)}
-          title={title}
-          aria-label={`Triage ${card.repo}#${card.number} with James`}
-        >
-          <Icon name="split" />
-        </button>
+        {mac ? (
+          <button
+            type="button"
+            className="release-btn"
+            onClick={click}
+            disabled={busy || Boolean(open)}
+            title={title}
+            aria-label={`Triage ${card.repo}#${card.number} with James`}
+          >
+            <Icon name="split" />
+          </button>
+        ) : null}
       </Pill>
       {why ? <span className="why">{why}</span> : null}
     </span>
@@ -866,7 +874,49 @@ function ServiceHealth() {
   return <ServiceHealthPanel svc={useServices()} />;
 }
 
+const briefHref = (b: { machine: string; file: string }) =>
+  `#/briefs/${encodeURIComponent(b.machine)}/${encodeURIComponent(b.file)}`;
+
+function BriefsPanel() {
+  const { data } = useBriefs();
+  const inbox = data?.inbox || [];
+  const unread = inbox.filter((b) => !b.read).length;
+  return (
+    <section className="panel" id="briefs-panel">
+      <PanelHead icon="inbox" title="Briefs">
+        <span className={`count${unread ? " hot" : ""}`}>{inbox.length}</span>
+        <a className="more" href="#/briefs">
+          All briefs &rarr;
+        </a>
+      </PanelHead>
+      <div className="alerts">
+        {!data ? (
+          <div className="alert skel-row">
+            <span className="skel w2" />
+          </div>
+        ) : inbox.length ? (
+          inbox.slice(0, 5).map((b) => (
+            <div className={`alert${b.read ? "" : " info"}`} key={`${b.machine}/${b.file}`}>
+              <Icon name="inbox" />
+              <a className="plain row-link" href={briefHref(b)}>
+                {b.brief || b.subject || b.file}
+              </a>
+              <span className="since">{briefDay(b.sent_at)}</span>
+            </div>
+          ))
+        ) : (
+          <div className="empty">
+            <Icon name="check" />
+            No briefs in the inbox.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function Dashboard() {
+  const phone = useSide() === "phone";
   return (
     <div className="page">
       <div className="pair">
@@ -874,6 +924,7 @@ export function Dashboard() {
         <CrewPanel />
       </div>
       <CurrentWork />
+      {phone ? <BriefsPanel /> : null}
       <WorkPanel />
       <Waiting />
       <LimitsPanel />

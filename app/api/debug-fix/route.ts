@@ -17,7 +17,7 @@ import {
   WORK_LOOP,
   workLoopPrompt,
 } from "@/lib/server/debug-fix";
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import { snapshot } from "@/lib/server/machines";
 import { json } from "@/lib/server/respond";
 import { brokenStep, warnings } from "@/lib/server/warnings";
@@ -25,7 +25,7 @@ import { brokenStep, warnings } from "@/lib/server/warnings";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const body = await req.json().catch(() => null);
   if (body?.triage) {
@@ -111,13 +111,13 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   return json({ fixes: await openFixes() });
 }
 
 export async function DELETE(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const body = await req.json().catch(() => null);
   const key = typeof body?.key === "string" ? body.key : "";
