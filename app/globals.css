@@ -1239,6 +1239,9 @@
   }
   .panel-head .tools {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .alerts {
@@ -2466,6 +2469,71 @@
   }
   .plans .note {
     padding: 6px 16px 14px;
+  }
+  .provider-x {
+    margin-left: auto;
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--faint);
+    cursor: pointer;
+    transition:
+      transform 160ms var(--ease-out),
+      background 160ms var(--ease-out),
+      color 160ms var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .provider-x:hover {
+      color: var(--text);
+      background: var(--hover);
+    }
+  }
+  .provider-x:active {
+    transform: scale(0.94);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .provider-x:active {
+      transform: scale(0.99);
+    }
+  }
+  .provider-x[aria-expanded="true"] {
+    color: var(--text);
+    background: var(--hover);
+  }
+  .provider-confirm {
+    display: grid;
+    gap: 6px;
+    width: min(420px, 100%);
+    margin-left: auto;
+    padding: 10px 16px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--panel-2);
+  }
+  .provider-confirm p {
+    margin: 0;
+  }
+  .provider-confirm .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+  }
+  .provider-confirm .btn.danger:disabled {
+    opacity: 1;
+    border-color: var(--line-2);
+    background: transparent;
+    color: var(--faint);
+  }
+  td.actions .provider-x {
+    margin-left: 0;
+  }
+  tr.confirm-row > td {
+    padding: 0;
   }
 
   .briefs-panel,

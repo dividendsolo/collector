@@ -249,6 +249,7 @@ describe("every route in the repo", () => {
       .filter((f) => handlersIn(fs.readFileSync(f, "utf8")).some((h) => !h.endsWith("GET")))
       .map((f) => path.relative(process.cwd(), f));
     expect(writes).toEqual([
+      "app/api/ai-providers/route.ts",
       "app/api/briefs/route.ts",
       "app/api/debug-fix/route.ts",
       "app/api/hermes/route.ts",

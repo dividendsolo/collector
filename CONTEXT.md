@@ -3,8 +3,9 @@
 One local page showing every cron job and agent run across machines, live. Next.js (App Router) + TypeScript on
 Bun, no database, no auth. It reads only, apart from the two buttons you click yourself — Start Tailscale and Start
 Hermes, each acting on the machine it runs on — the projects list it writes to `config.json`, the release and triage
-pills in Waiting on you, and the New card form there, which creates GitHub issues and moves them on the board
-(collector#229).
+pills in Waiting on you, the New card form there, which creates GitHub issues and moves them on the board
+(collector#229), and the profile fallback chains, which the AI usage panel's X and Add provider buttons change on a
+confirmed click (collector#218).
 
 `AGENTS.md` holds the stack, the commands and the dangers; this file holds the code's layout, how the running one is
 built, restarted and served, and how its features work.
@@ -839,6 +840,43 @@ GitHub answers clears it. `tests/limits-panel.test.ts` holds the gauge, the 90% 
   share of the current $25 top-up used, because James always tops up $25 (`NOUS_TOPUP_USD` in
   `lib/server/ai.ts`); a balance over $25 says how many more full top-ups wait behind it. The Nous API has no
   top-up history, so the count of top-ups this month is not shown.
+- A provider whose plan lapsed shows the provider's own reason, and counts as out. MiniMax answers
+  `{"base_resp": {"status_code": 2062, "status_msg": "no active token plan subscription"}}` with no
+  `model_remains`, and the row read "MiniMax returned no plan" until collector#218: `minimaxReading` turns a
+  non-zero `base_resp.status_code` into the reason for the code it knows (2062 is "No active MiniMax Coding
+  Plan") or the provider's `status_msg`, with `out: true`, so "Every AI plan is out" counts it.
+- A row's `removal` (`lib/providers.ts`'s `removalPlan`) is what its X would touch: the profiles and machines the
+  confirmation names, the profiles whose `model.provider` is that provider (the Remove button stays off, and the
+  confirmation names them), and the profiles left with no fallback (named too).
+
+## The AI usage panel changes the profile fallbacks (collector#218)
+
+James, 2026-11-17: "if a user wants to add or remove providers, we need an interface to do that." So the AI usage
+panel's X removes a provider from the `fallback_providers` chain of every Hermes profile on every machine, and Add
+provider appends one. A write happens only on the confirmation's own button.
+
+- `fallbacks.py` (repo root, `FALLBACKS` in `lib/server/paths.ts`) is the writer, standard library only, and it is
+  sent over ssh the way `collect.py` is (`python3 - remove <provider>...`, `python3 - add <provider> <model>`), by
+  `lib/server/fallbacks.ts`. `collect.py` stays read only. One seam starts both: `pythonOver` in
+  `lib/server/machines.ts` (local, or `ssh <host> python3 -` with the file on stdin).
+- The script touches the `fallback_providers` key only: the entries it is asked about go, the other entries keep
+  their order, and every other byte of the file stays. An entry already in a chain is not added twice. A chain left
+  empty is written the way Hermes's own default config writes it, `fallback_providers: []`. A value that is neither
+  that nor a block of entries is refused rather than rewritten. A profile with no `fallback_providers` key gains one,
+  so an add-then-remove round trip leaves that file with Hermes's own empty list.
+- The day's first change to a file also writes a copy beside it, `config.yaml.<YYYY-MM-DD>`, so a later change the
+  same day cannot overwrite the copy of what the file really was. Hermes's commented provider list inside each
+  `config.yaml` (`#   minimax      (MINIMAX_API_KEY)     — MiniMax`) is help text, not a setting, and no write
+  touches it: the check for a removed provider is `grep -l -- '- provider: minimax'`.
+- `lib/providers.ts` holds the rules both halves read: `providerSlug` (one row covers `anthropic` and every
+  `claude-*` login), `removalPlan`, `removalRefusal` and the confirmation's words. A provider that is some profile's
+  `model.provider` cannot be removed this way, and the route refuses it as well as the button.
+- `app/api/ai-providers/route.ts` is the panel's read and write: `GET` answers the provider and model list
+  `hermes model` offers (read through the hermes-agent venv, cached a day) and the machine names; `POST` runs the
+  script on every machine in `config.json`, answers what changed per machine, and forces the snapshot and the AI read
+  so the row moves on the next poll. It is a guarded write route, and `tests/request-guard.test.ts` lists it.
+- `tests/fallbacks.test.ts` holds the plan rules and drives the real `fallbacks.py` on a throwaway home: the order
+  kept, the dated copy, the refusal of a main provider, the add, and the round trip.
 
 ## Proposals, and the open pipeline (card #77)
 

@@ -27,6 +27,7 @@ export type IconName =
   | "eye-off"
   | "shield"
   | "split"
+  | "x"
   | "gauge";
 
 export const Icon = ({ name, className = "i" }: { name: IconName; className?: string }) => (
@@ -119,6 +120,9 @@ export function Sprite() {
       </symbol>
       <symbol id="i-eye-off" viewBox="0 0 24 24">
         <path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <path d="M6 6l12 12M18 6 6 18" />
       </symbol>
       <symbol id="i-gauge" viewBox="0 0 24 24">
         <path d="M12 14l4-4" />

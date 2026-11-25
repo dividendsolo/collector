@@ -23,6 +23,14 @@ const REMOTE_KEYS = ["launchd_prefixes", "ok_exits", "work_script", "watch", "ve
 
 export const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
+export function pythonOver(machine: Machine, script: string, args: string[]): { cmd: string[]; input?: string } {
+  if (!machine.ssh) return { cmd: ["python3", script, ...args] };
+  return {
+    cmd: [...SSH, machine.ssh, "python3", "-", ...args.map(shellQuote)],
+    input: fs.readFileSync(script, "utf8"),
+  };
+}
+
 export function watchFor(watch: unknown, machine: string, here: string): Watch[] {
   if (watch == null) return [];
   if (!Array.isArray(watch)) return machine === here ? (watch as Watch[]) : [];
@@ -31,11 +39,8 @@ export function watchFor(watch: unknown, machine: string, here: string): Watch[]
 
 export async function collect(machine: Machine, cfg: Config, brief?: string) {
   const remote = JSON.stringify(Object.fromEntries(REMOTE_KEYS.filter((k) => k in cfg).map((k) => [k, cfg[k]])));
-  const extra = brief ? ["brief", shellQuote(brief)] : [];
-  if (!machine.ssh) return run(["python3", COLLECT, remote, ...(brief ? ["brief", brief] : [])]);
-  return run([...SSH, machine.ssh, "python3", "-", shellQuote(remote), ...extra], {
-    input: fs.readFileSync(COLLECT, "utf8"),
-  });
+  const { cmd, input } = pythonOver(machine, COLLECT, [remote, ...(brief ? ["brief", brief] : [])]);
+  return run(cmd, input ? { input } : {});
 }
 
 export interface GithubLimit {
