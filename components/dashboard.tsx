@@ -8,7 +8,7 @@ import { AGENT_STACK_ALL, waitingList } from "@/lib/statuses";
 import { checkTicket, newTicket, TICKET_PRIORITIES, TICKET_TYPES, type TicketDraft, ticketRequest } from "@/lib/ticket";
 import { transitionName, transitionOut } from "@/lib/view-transition";
 import { acked, setAck, useAcks } from "./acks";
-import { AiPlan, byAiOrder, useAi } from "./ai";
+import { AddProviderButton, AddProviderForm, AiPlan, byAiOrder, useAi } from "./ai";
 import { useBriefs } from "./briefs";
 import { CardRef } from "./card-link";
 import { CrewPanel } from "./crew";
@@ -807,17 +807,20 @@ function AiUsage() {
   const rows: any[] = data?.providers || [];
   const plans = rows.filter((a) => a.kind !== "usage");
   const usage = rows.filter((a) => a.kind === "usage");
+  const [adding, setAdding] = useState(false);
   return (
     <section className="panel">
       <PanelHead icon="gauge" title="AI usage">
         <span className="sub fetched" title={data?.at ? new Date(data.at * 1000).toLocaleString() : undefined}>
           {fetchedText(data?.at)}
         </span>
+        <AddProviderButton onClick={() => setAdding(true)} />
         <BlurToggle />
         <a className="more" href="#/subscriptions">
           All providers &rarr;
         </a>
       </PanelHead>
+      {adding ? <AddProviderForm onClose={() => setAdding(false)} /> : null}
       <div id="ai-dash" className="plans">
         {!data ? (
           <SkelPlans />

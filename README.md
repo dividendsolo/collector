@@ -92,7 +92,10 @@ The Dashboard answers these questions at a glance:
    through Claude Code's own login in the macOS keychain (read only, never renewed), the MiniMax coding plan through
    `MINIMAX_API_KEY` in `~/.hermes/.env`, and Grok as a login check (xAI has no usage API for subscriptions).
    Pay-as-you-go credits (Nous, through Hermes's portal login) show the balance. Under $5, under 10% left, or a
-   failed login goes to Priority tasks. The Subscriptions page has both panels on top, then your subscriptions, with annual
+   failed login goes to Priority tasks. A provider whose plan lapsed says why, in the provider's own words. Each
+   row's X removes that provider from the `fallback_providers` of every Hermes profile on every machine, and an
+   **Add provider** button appends one; each does it only on its own confirmation. The Subscriptions page has both
+   panels on top, then your subscriptions, with annual
    charges counted as a twelfth a month and the day each one renews (`subscriptions[].renews`); every eye button blurs every amount, so you can share the screen.
 6. **Work:** open cards on the board, cards closed as done today and in 30 days, deploys today per repo (production
    GitHub deployments, or successful CI jobs named "deploy" on pushes to main). The Waiting on you panel lists every ticket in the waiting statuses (`statuses.waiting`, the old `tickets.each`), with one filter button per status; its red
@@ -138,8 +141,10 @@ port listed here. The same read says whether sshd takes password logins or root 
 the internet gets one error row in Priority tasks naming them, so one busy machine cannot bury every other warning.
 A port open only to the local network is no warning.
 
-It reads only. It never changes a job or a card on its own: the two buttons you click yourself (Start Tailscale,
-Start Hermes) act on the machine Collector runs on. Its other write is your repo choice, saved to `config.json`.
+It reads only, apart from what you click yourself. The two buttons (Start Tailscale, Start Hermes) act on the
+machine Collector runs on, your repo choice is saved to `config.json`, and the AI usage panel's X and **Add
+provider** write the `fallback_providers` chain of your Hermes profiles, each only on its own confirmation. It
+never changes a job or a card.
 
 ## Settings
 

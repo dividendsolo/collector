@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { type ChainMachine, providerSlug, type RemovalPlan, removalPlan } from "../providers";
 import { swr } from "./cache";
 import { hermesEnv } from "./env";
 import { bearer, getJson, why } from "./http";
@@ -26,9 +27,10 @@ export interface AiRow {
   out?: boolean;
   alert?: string;
   waits?: boolean;
+  removal?: RemovalPlan;
   windows?: { label: string; used: number; resets: string | null; low?: boolean; left?: string; limit?: boolean }[];
 }
-type Reading = Omit<AiRow, "provider" | "profiles" | "link" | "kind">;
+type Reading = Omit<AiRow, "provider" | "profiles" | "link" | "kind" | "removal">;
 
 const NOUS_SCRIPT = `
 import json, os, sys
@@ -130,16 +132,22 @@ export function nousReading(data: any): Reading {
   };
 }
 
-async function minimax(): Promise<Reading> {
-  const key = hermesEnv().MINIMAX_API_KEY;
-  if (!key) return { note: "No MINIMAX_API_KEY in ~/.hermes/.env" };
-  let d: any;
-  try {
-    d = await getJson("https://api.minimax.io/v1/api/openplatform/coding_plan/remains", bearer(key));
-  } catch (e) {
-    return { note: `Could not read the MiniMax plan: ${why(e).slice(0, 80)}` };
-  }
-  const m = (d.model_remains || []).find((x: any) => x.model_name === "general");
+export const MINIMAX_REASONS: Record<number, string> = {
+  2062: "No active MiniMax Coding Plan",
+};
+
+export function minimaxNote(plan: any): string {
+  const code = plan?.status_code;
+  if (typeof code === "number" && MINIMAX_REASONS[code]) return MINIMAX_REASONS[code];
+  const msg = typeof plan?.status_msg === "string" ? plan.status_msg.trim() : "";
+  return msg || "MiniMax returned no plan";
+}
+
+export function minimaxReading(d: any): Reading {
+  const plan = d?.base_resp;
+  if (plan && typeof plan.status_code === "number" && plan.status_code !== 0)
+    return { note: minimaxNote(plan), out: true };
+  const m = (d?.model_remains || []).find((x: any) => x.model_name === "general");
   if (!m) return { note: "MiniMax returned no plan" };
   const now = m.current_interval_remaining_percent;
   const week = m.current_weekly_remaining_percent;
@@ -155,6 +163,18 @@ async function minimax(): Promise<Reading> {
     low: Math.min(now ?? 100, week ?? 100) < AI_LOW_PERCENT,
     out: Math.min(now ?? 100, week ?? 100) <= 0,
   };
+}
+
+async function minimax(): Promise<Reading> {
+  const key = hermesEnv().MINIMAX_API_KEY;
+  if (!key) return { note: "No MINIMAX_API_KEY in ~/.hermes/.env" };
+  let d: any;
+  try {
+    d = await getJson("https://api.minimax.io/v1/api/openplatform/coding_plan/remains", bearer(key));
+  } catch (e) {
+    return { note: `Could not read the MiniMax plan: ${why(e).slice(0, 80)}` };
+  }
+  return minimaxReading(d);
 }
 
 export function kimiReading(d: any): Reading {
@@ -265,7 +285,7 @@ export function profilesByProvider(
     for (const prof of m.profiles || [])
       for (const provider of new Set([prof.provider, ...(prof.fallbacks || [])])) {
         if (!provider) continue;
-        const slug = provider.startsWith("claude") ? "anthropic" : provider;
+        const slug = providerSlug(provider);
         users.set(slug, (users.get(slug) || new Set()).add(prof.name));
       }
   return [...users].map(([slug, names]): [string, number] => [slug, names.size]).sort((a, b) => b[1] - a[1]);
@@ -285,6 +305,7 @@ async function readAll(): Promise<{ at: number; providers: AiRow[] }> {
         profiles,
         link: LINKS[slug] || LINKS[base],
         kind: KIND[slug] || "plan",
+        removal: removalPlan(snap.machines as ChainMachine[], slug),
       } as AiRow;
     }),
   );
