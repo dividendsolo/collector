@@ -22,9 +22,17 @@ curl -fsSL https://raw.githubusercontent.com/dividendsolo/collector/main/install
 
 It clones Collector into `~/collector`, installs [Bun](https://bun.sh) when you do not have it, installs the app's
 packages, builds it and starts it on http://127.0.0.1:4000. Another folder or port: `COLLECTOR_DIR` and
-`COLLECTOR_PORT`, or `install.sh --help`. When it installs Bun, Bun goes into `~/.bun` and its installer adds itself
-to your `PATH` in your shell's startup file. Apart from that it writes nothing outside the Collector folder (only
-`node_modules` and `.next` inside it): no settings file, no `.env`, and nothing at all on the machines it reads.
+`COLLECTOR_PORT`, or `install.sh --help`. When it installs Bun, Bun goes into `~/.bun`, and `install.sh` runs it from
+there for the whole install. Bun's own installer adds it to your `PATH` only where your shell already has a startup
+file to edit; on an account that has none — which is what a new Mac account is — it prints the line instead, and the
+next terminal needs it:
+
+```bash
+export PATH="$HOME/.bun/bin:$PATH"
+```
+
+Apart from that it writes nothing outside the Collector folder (only `node_modules` and `.next` inside it): no settings
+file, no `.env`, and nothing at all on the machines it reads.
 
 In a checkout you already have, the same script is in the folder:
 
@@ -48,21 +56,63 @@ the server reads it every 10 seconds and pushes each change to the page (server-
 within about 10 seconds. No page waits on a slow reader: each panel shows skeleton rows, then fills. After a rebuild
 and a restart, an open page reloads itself.
 
-To start it at login on macOS, copy `launchd/com.example.collector.plist` to `~/Library/LaunchAgents/`, set the
-path to your Collector folder, and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.collector.plist`.
-Then `launchd/com.example.collector-rebuild.plist` the same way: every five minutes it checks whether the build the
-page serves is behind `main` and, when it is, pulls it and builds into `.next-rebuild` beside the served `.next`. A
-finished build is swapped in and the server restarts on it, so open pages reload onto the new build with no click: at
-most once per new commit, and never twice within five minutes. A failed build is logged (`[rebuild] build failed`),
-the served `.next` is left as it was, and nothing restarts. `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check. Once a
-checkout is the one being served, leave it alone: `install.sh` builds into the `.next` that server is reading, so
-updates go through `main` and the rebuild job.
+To start it at login on macOS, and to fill in the plists the way a stranger's machine needs them, see
+[Set it up on a Mac](#set-it-up-on-a-mac). Once a checkout is the one being served, leave it alone: `install.sh`
+builds into the `.next` that server is reading, so updates go through `main` and the rebuild job.
+
+## Set it up on a Mac
+
+Three steps, and one thing a new Mac needs first.
+
+**The one thing.** On macOS `git` and `python3` come from the Command Line Tools, and a new account has neither until
+it installs them: both are shims that print `xcode-select: note: No developer tools were found` and exit 1. One
+command, one dialog, a few minutes:
+
+```bash
+xcode-select --install
+```
+
+**1. Install it.** The [one command](#install) above clones Collector into `~/collector`, installs Bun, builds it and
+serves it at http://127.0.0.1:4000. It runs in the foreground: press Ctrl-C once the page has answered, since the last
+step starts it as a login job instead of in a terminal.
+
+**2. Write its settings file.** `config.json` is optional: with none, Collector reads the Hermes cron jobs, the
+launchd jobs, the coding-agent sessions and the network of this Mac by itself. [SETUP.md](SETUP.md) holds one prompt
+for a coding agent — Claude Code, Codex, Hermes — that reads your machine read-only and writes the file from what it
+finds. Do not copy [config.example.json](config.example.json) as it stands: it is one person's file, so its two
+machines, its `example.com` sites and its subscription land on your page as rows that are not yours. Copy it only to
+edit it down to something you have.
+
+**3. Start it at login.** The plists in `launchd/` are templates with `/path/to/collector` in them. Fill them in and
+load them with one command, which takes the checkout, the Bun binary that runs it and the port from the machine it
+runs on (`export PATH="$HOME/.bun/bin:$PATH"` first in a terminal that has never seen Bun):
+
+```bash
+bun scripts/launchd.ts            # serve this checkout at login, on http://127.0.0.1:4000
+bun scripts/launchd.ts --rebuild  # and the job that keeps it on main, below
+bun scripts/launchd.ts --uninstall
+```
+
+`--port 4001` serves another port; `--print` writes nothing and shows the jobs it would load. Both jobs write their
+output to `/tmp/collector.log`.
+
+The rebuild job is the second one: every five minutes it checks whether the build the page serves is behind `main`
+and, when it is, pulls it and builds into `.next-rebuild` beside the served `.next`. A finished build is swapped in and
+the server restarts on it, so open pages reload onto the new build with no click: at most once per new commit, and
+never twice within five minutes. A failed build is logged (`[rebuild] build failed`), the served `.next` is left as it
+was, and nothing restarts. `bun scripts/rebuild-if-stale.ts --check` is the read-only form of that check.
 
 ## Requirements
 
+- macOS: the Command Line Tools (`xcode-select --install`). `git` and `python3` come from them, and a new account has
+  neither until it runs that: both are shims that print `xcode-select: note: No developer tools were found` and exit 1,
+  which stops the [one command](#install) at its `git clone`.
 - [Bun](https://bun.sh) 1.4 or later, which `install.sh` installs when it is missing. Collector is a Next.js app
   (TypeScript); `bun install` gets the rest.
 - Python 3.9 or later, standard library only, on this machine and on each remote machine: `collect.py` reads each one.
+  On a new Mac this is the Command Line Tools' Python.
+- `git`, on the machine that installs, and on any machine that runs the rebuild job: it downloads the checkout and
+  keeps it on `main`.
 - SSH access (key-based) to each remote machine, with `python3` on it. Reach each machine over a private network such
   as Tailscale, with its SSH port closed to the public internet: Collector only ever connects out from this machine to
   the servers, and a server never needs to reach this machine, so the laptop is never opened to a server.

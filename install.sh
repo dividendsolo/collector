@@ -69,6 +69,18 @@ case "$0" in
 esac
 is_checkout() { [ -f "$1/package.json" ] && [ -f "$1/collect.py" ] && [ -f "$1/install.sh" ]; }
 
+no_dev_tools() {
+  [ "$(uname -s 2>/dev/null)" = Darwin ] || return 1
+  command -v xcode-select >/dev/null 2>&1 || return 1
+  xcode-select -p >/dev/null 2>&1 && return 1
+  return 0
+}
+
+if no_dev_tools; then
+  say "note: this Mac has no Command Line Tools yet, so git and python3 are not installed: both are shims until then."
+  say "      run xcode-select --install, and when the install finishes, run this again."
+fi
+
 if [ -n "$here" ] && is_checkout "$here"; then
   src="$here"
   say "Collector is here: $src"
@@ -87,7 +99,7 @@ else
   else
     say "Downloading Collector into $src"
     git clone --depth 1 --branch "$REF" "$REPO_URL" "$src" ||
-      die "could not clone $REPO_URL (branch $REF)"
+      die "could not clone $REPO_URL (branch $REF): check your network, and on a Mac run xcode-select --install first when it has no Command Line Tools"
   fi
 fi
 
