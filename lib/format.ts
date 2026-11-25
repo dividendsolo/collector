@@ -154,13 +154,17 @@ export const AI_LOW_PERCENT = 10;
 
 export const limitLow = (used: number) => 100 - used <= AI_LOW_PERCENT;
 
+export function clockText(t: Date): string {
+  const h = t.getHours() % 12 || 12;
+  const m = t.getMinutes();
+  return `${h}${m ? `:${String(m).padStart(2, "0")}` : ""} ${t.getHours() < 12 ? "AM" : "PM"}`;
+}
+
 export function resetText(iso: string | null | undefined, now = Date.now()): string {
   const raw = new Date(iso || "").getTime();
   if (Number.isNaN(raw)) return "";
   const t = new Date(Math.round(raw / 60_000) * 60_000);
-  const h = t.getHours() % 12 || 12;
-  const m = t.getMinutes();
-  const time = `${h}${m ? `:${String(m).padStart(2, "0")}` : ""} ${t.getHours() < 12 ? "AM" : "PM"}`;
+  const time = clockText(t);
   const ahead = t.getTime() - now;
   if (ahead < 864e5) return time;
   if (ahead > 6 * 864e5) return t.toLocaleDateString("en-US", { month: "short", day: "numeric" });

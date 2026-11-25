@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { resetText } from "@/lib/format";
+import { moneyParts, resetText } from "@/lib/format";
 import { claudeReading, nousReading } from "@/lib/server/ai";
 import { warnings } from "@/lib/server/warnings";
-import { aiToasts } from "@/lib/toasts";
+import { aiToasts, creditBar } from "@/lib/toasts";
 
 const base = { github: {}, cfg: {}, services: [], domains: [], ticketsError: null, x: null, machines: [] } as any;
 const row = (provider: string, low: boolean, extra: Record<string, unknown> = {}) =>
@@ -153,7 +155,7 @@ describe("the Claude toast says only why it is up", () => {
   });
 });
 
-describe("the Nous toast on plan limits", () => {
+describe("the Nous plan limits and their on-top-up bar", () => {
   const now = new Date(2026, 10, 12, 9, 0).getTime();
   const dayReset = new Date(2026, 10, 12, 11, 5).getTime();
   const weekReset = new Date(2026, 10, 19, 0, 0).getTime();
@@ -189,19 +191,8 @@ describe("the Nous toast on plan limits", () => {
     expect(t.action).toBeUndefined();
   });
 
-  it("has no Top up while keep-going runs on a top-up that still has money", () => {
-    const [t] = aiToasts([nous(10000, true)], now);
-    expect(t.title).toBe("Nous: the daily limit is used up");
-    expect(t.text).toBe("Hermes keeps going on the top-up: $25.07 left.");
-    expect(t.action).toBeUndefined();
-  });
-
-  it("keeps one dismissal while the top-up is spent, until the limit resets", () => {
-    const [before] = aiToasts([nous(10000, true)], now);
-    const [after] = aiToasts([nous(10000, true, 12.5)], now);
-    expect(after.state).toBe(before.state);
-    const [nextDay] = aiToasts([nous(10000, true, 12.5, 1868, dayReset + 86_400_000)], now);
-    expect(nextDay.state).not.toBe(before.state);
+  it("gives no toast while keep-going runs on a top-up that still has money", () => {
+    expect(aiToasts([nous(10000, true)], now)).toEqual([]);
   });
 
   it("has no Top up on a nearly used-up limit with keep-going on", () => {
@@ -253,6 +244,45 @@ describe("the Nous toast on plan limits", () => {
     const [used] = aiToasts([nous(10000)], now);
     expect(used.state).not.toBe(low.state);
   });
+
+  it("draws the on-top-up state as one status-bar line, not a toast (collector#246)", () => {
+    const on = nous(10000, true);
+    expect(aiToasts([on], now)).toEqual([]);
+    expect(creditBar([on], now)).toEqual({
+      text: "Nous: on top-up credits until the daily limit resets at 11:05 AM. $25.07 left.",
+      short: "Nous: top-up until 11:05 AM. $25.07 left.",
+      href: "https://portal.nousresearch.com",
+    });
+  });
+
+  it("says the reset is tomorrow when it is", () => {
+    const tomorrow = new Date(2026, 10, 13, 7, 22).getTime();
+    const bar = creditBar([nous(10000, true, 16.37, 1868, tomorrow)], now);
+    expect(bar?.text).toBe("Nous: on top-up credits until the daily limit resets at 7:22 AM tomorrow. $16.37 left.");
+    expect(bar?.short).toBe("Nous: top-up until 7:22 AM tomorrow. $16.37 left.");
+  });
+
+  it("keeps the narrow line short enough for one line at 425 px, with the reset and the amount", () => {
+    const tomorrow = new Date(2026, 10, 13, 10, 22).getTime();
+    const short = creditBar([nous(10000, true, 1234.56, 1868, tomorrow)], now)?.short ?? "";
+    expect(short).toBe("Nous: top-up until 10:22 AM tomorrow. $1234.56 left.");
+    expect(short.length).toBeLessThanOrEqual(56);
+  });
+
+  it("names every used-up limit, and uses the last reset", () => {
+    const bar = creditBar([nous(10000, true, 25, 10000)], now);
+    expect(bar?.text).toBe("Nous: on top-up credits until the daily and weekly limits reset on Nov 19. $25.00 left.");
+    expect(bar?.short).toBe("Nous: top-up until Nov 19. $25.00 left.");
+  });
+
+  it("gives no bar once the limit is not used up, while keep-going is off, or with no credits left", () => {
+    expect(creditBar([nous(0, true)], now)).toBeNull();
+    expect(creditBar([nous(9500, true)], now)).toBeNull();
+    expect(creditBar([nous(10000)], now)).toBeNull();
+    expect(creditBar([nous(10000, true, 0)], now)).toBeNull();
+    expect(creditBar([], now)).toBeNull();
+    expect(creditBar(undefined, now)).toBeNull();
+  });
 });
 
 describe("the Anthropic reading", () => {
@@ -283,5 +313,22 @@ describe("the Anthropic reading", () => {
     );
     expect(r.windows?.map((w) => w.label)).toEqual(["5-hour session", "Week"]);
     expect(r.left).toBe("60%");
+  });
+});
+
+describe("the on-top-up bar follows the page's money conventions", () => {
+  const src = readFileSync(path.join(process.cwd(), "components", "credit-bar.tsx"), "utf8");
+
+  it("draws its line through the blur text, so the eye toggle covers the balance", () => {
+    expect(src).toMatch(/<BlurText text=\{bar\.text\} \/>/);
+    expect(src).toMatch(/<BlurText text=\{bar\.short\} \/>/);
+  });
+
+  it("carries the amount in the line the panel already shows", () => {
+    expect(
+      moneyParts("Nous: on top-up credits. $16.37 left.")
+        .filter((p) => p.money)
+        .map((p) => p.text),
+    ).toEqual(["$16.37"]);
   });
 });

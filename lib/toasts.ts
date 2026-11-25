@@ -1,5 +1,5 @@
 import type { Check } from "./checks";
-import { AI_LOW_PERCENT, limitLow, resetText } from "./format";
+import { AI_LOW_PERCENT, clockText, limitLow, resetText } from "./format";
 import { jumpHref } from "./jump";
 import { webUrl } from "./links";
 
@@ -290,30 +290,72 @@ function whyLow(a: AiIn, now: number, low = (a.windows || []).filter((w) => 100 
     .join(" ");
 }
 
+function usedUpLimits(a: AiIn) {
+  return (a.windows || []).filter((w) => w.limit && w.used >= 100);
+}
+
+function onTopupCredits(a: AiIn): boolean {
+  return usedUpLimits(a).length > 0 && !a.waits && !a.out && a.left !== "$0.00";
+}
+
+function lastReset(usedUp: { label: string; resets: string | null }[]): string | null {
+  if (usedUp.some((w) => !w.resets)) return null;
+  return (
+    usedUp
+      .map((w) => w.resets as string)
+      .sort()
+      .at(-1) ?? null
+  );
+}
+
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+function resetWhen(iso: string | null, now: number): string {
+  const text = resetText(iso, now);
+  if (!text) return "";
+  const at = new Date(Math.round(new Date(iso as string).getTime() / 60_000) * 60_000);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return dayKey(at) === dayKey(tomorrow) ? `${clockText(at)} tomorrow` : text;
+}
+
+const atOrOn = (when: string) => (/^\d/.test(when) ? "at" : "on");
+
+function resetClause(usedUp: { label: string; resets: string | null }[], when: string): string {
+  if (!when) return "";
+  const names = usedUp.map(limitName).join(" and ");
+  const verb = usedUp.length > 1 ? "limits reset" : "limit resets";
+  return ` until the ${names} ${verb} ${atOrOn(when)} ${when}`;
+}
+
+export function creditBar(
+  ai: AiIn[] | null | undefined,
+  now = Date.now(),
+): { text: string; short: string; href: string } | null {
+  const a = (ai || []).find((x) => x.provider === "nous");
+  if (!a || !onTopupCredits(a)) return null;
+  const usedUp = usedUpLimits(a);
+  const when = resetWhen(lastReset(usedUp), now);
+  const left = a.left ? ` ${a.left} left.` : "";
+  return {
+    text: `Nous: on top-up credits${resetClause(usedUp, when)}.${left}`,
+    short: `Nous: top-up${when ? ` until ${when}` : ""}.${left}`,
+    href: a.link || jumpHref("dashboard", "ai-plans"),
+  };
+}
+
 function nousLimitToast(a: AiIn, now: number): Pick<Toast, "state" | "title" | "text"> | null {
   const limits = (a.windows || []).filter((w) => w.limit);
   const usedUp = limits.filter((w) => w.used >= 100);
   if (a.waits && usedUp.length) {
-    const last = usedUp.some((w) => !w.resets)
-      ? null
-      : usedUp
-          .map((w) => w.resets as string)
-          .sort()
-          .at(-1);
-    const reset = resetText(last, now);
+    const reset = resetText(lastReset(usedUp), now);
     return {
       state: `out:${usedUp.map((w) => w.label).join(",")}`,
       title: `Nous: ${theLimits(usedUp)} used up`,
       text: `Hermes waits for the reset${reset ? ` ${/^\d/.test(reset) ? "at" : "on"} ${reset}` : ""}.`,
     };
   }
-  if (a.left === "$0.00") return null;
-  if (usedUp.length)
-    return {
-      state: `on:${usedUp.map((w) => `${w.label}@${w.resets ?? ""}`).join(",")}`,
-      title: `Nous: ${theLimits(usedUp)} used up`,
-      text: `Hermes keeps going on the top-up: ${a.left ?? "?"} left.`,
-    };
+  if (a.out || a.left === "$0.00") return null;
   const low = limits.filter((w) => limitLow(w.used));
   if (!low.length) return null;
   return {
@@ -328,6 +370,7 @@ export function aiToasts(ai: AiIn[] | null | undefined, now = Date.now()): Toast
   for (const a of ai || []) {
     const t = AI_TOASTS[a.provider];
     if (!t || !a.low) continue;
+    if (a.provider === "nous" && onTopupCredits(a)) continue;
     const limit = a.provider === "nous" ? nousLimitToast(a, now) : null;
     if (limit) {
       out.push({

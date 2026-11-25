@@ -974,6 +974,8 @@
   .shell {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .topbar {
@@ -1169,6 +1171,7 @@
   }
 
   .content {
+    width: 100%;
     max-width: 1440px;
     margin: 0 auto;
     padding: 32px 24px 64px;
@@ -2108,6 +2111,41 @@
     display: grid;
     gap: 8px;
     width: min(380px, calc(100vw - 32px));
+  }
+  .credit-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin-top: auto;
+    display: flex;
+    justify-content: center;
+    padding: 7px 16px;
+    padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .credit-bar a {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .credit-bar-short {
+    display: none;
+  }
+  body:has(.credit-bar) .toasts {
+    bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  }
+  @media (max-width: 600px) {
+    .credit-bar-long {
+      display: none;
+    }
+    .credit-bar-short {
+      display: inline;
+    }
   }
   .toast {
     display: grid;

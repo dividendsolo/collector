@@ -10,6 +10,7 @@ import { acked, useAcks } from "./acks";
 import { AgentPage, AgentsPage } from "./agents";
 import { BriefPage, BriefsPage, useBriefs } from "./briefs";
 import { CardTip } from "./card-tip";
+import { CreditBar } from "./credit-bar";
 import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
 import { LiveProvider, useLive } from "./data";
@@ -309,6 +310,7 @@ function Shell() {
         <main className="content">
           <Page r={r} />
         </main>
+        <CreditBar />
       </div>
     </div>
   );
