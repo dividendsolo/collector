@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resetText } from "@/lib/format";
-import { nousReading } from "@/lib/server/ai";
+import { claudeReading, nousReading } from "@/lib/server/ai";
 import { warnings } from "@/lib/server/warnings";
 import { aiToasts } from "@/lib/toasts";
 
@@ -252,5 +252,36 @@ describe("the Nous toast on plan limits", () => {
     const [low] = aiToasts([nous(9500)], now);
     const [used] = aiToasts([nous(10000)], now);
     expect(used.state).not.toBe(low.state);
+  });
+});
+
+describe("the Anthropic reading", () => {
+  const login = { subscriptionType: "max", rateLimitTier: "default_claude_max_5x" };
+  const week = { utilization: 32, resets_at: "2026-11-27T02:59:59Z" };
+  const profile = { organization: { organization_type: "claude_max", rate_limit_tier: "default_claude_max_20x" } };
+
+  it("names the plan Anthropic reports now, not the one saved at login", () => {
+    expect(claudeReading({ five_hour: null, seven_day: week }, profile, login).plan).toBe("Claude Max (20x)");
+  });
+
+  it("falls back to the saved login when the profile cannot be read", () => {
+    expect(claudeReading({ five_hour: null, seven_day: week }, null, login).plan).toBe("Claude Max (5x)");
+  });
+
+  it("shows no 5-hour panel when Anthropic reports no 5-hour limit", () => {
+    const r = claudeReading({ five_hour: null, seven_day: week }, profile, login);
+    expect(r.windows?.map((w) => w.label)).toEqual(["Week"]);
+    expect(r.left).toBe("68%");
+    expect(r.detail).not.toContain("5-hour");
+  });
+
+  it("still shows the 5-hour session when Anthropic reports one", () => {
+    const r = claudeReading(
+      { five_hour: { utilization: 40, resets_at: "2026-11-25T18:00:00Z" }, seven_day: week },
+      profile,
+      login,
+    );
+    expect(r.windows?.map((w) => w.label)).toEqual(["5-hour session", "Week"]);
+    expect(r.left).toBe("60%");
   });
 });
