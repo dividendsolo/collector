@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { FIX_STEPS, parseFixes, stepState } from "@/lib/server/debug-fix";
+import { FIX_STEPS, parseFixes, STALL_S, stepState } from "@/lib/server/debug-fix";
 
 const css = readFileSync(path.join(process.cwd(), "app", "globals.css"), "utf8");
 const dashboard = readFileSync(path.join(process.cwd(), "components", "dashboard.tsx"), "utf8");
@@ -55,6 +55,39 @@ describe("a session that ends resolves the row", () => {
 
   it("lets James close a done or stuck row, so it leaves Priority tasks", () => {
     expect(dashboard).toMatch(/Close|Dismiss/);
+  });
+});
+
+describe("a step that stopped moving is not reported as working", () => {
+  it("stamps each step with the time it was set, so the page can tell a run from a stall", () => {
+    const fixes = parseFixes("%2|ezio/abc|fixing|ui-day · ezio|1795000000 fixing\n");
+    expect(fixes["ezio/abc"].since).toBe(1795000000);
+  });
+
+  it("calls a step that has not moved for 20 minutes stalled, so no spinner runs for ever", () => {
+    const set = 1795000000;
+    expect(stepState("fixing", set, set + 19 * 60).kind).toBe("working");
+    expect(stepState("fixing", set, set + 21 * 60)).toEqual({
+      kind: "stalled",
+      label: "fixing (no change for 21 m)",
+    });
+  });
+
+  it("drops a stamp left over from an earlier step, so the clock restarts when the step moves", () => {
+    const fixes = parseFixes("%2|ezio/abc|shipping|ui-day · ezio|1795000000 fixing\n");
+    expect(fixes["ezio/abc"].since).toBeUndefined();
+    expect(fixes["ezio/abc"].state).toBe("working");
+  });
+
+  it("leaves a done or stuck step alone however old it is: it is already resolved", () => {
+    const set = 1795000000;
+    expect(stepState("done: the job ran ok", set, set + 86400).kind).toBe("done");
+    expect(stepState("stuck", set, set + 86400).kind).toBe("stuck");
+  });
+
+  it("shows no spinner on a stalled button, and lets James close it", () => {
+    expect(dashboard).toMatch(/state === "working"/);
+    expect(STALL_S).toBe(20 * 60);
   });
 });
 

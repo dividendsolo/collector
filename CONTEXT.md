@@ -812,6 +812,21 @@ worker, not by card, so "is a builder free" and "did the foreman tick" read at a
 - Under 600px the Crew table wraps its cells at spaces, commas and the hyphens of a profile name (`table.crew`), and
   a card reference never wraps, so it fits a 425px screen without a sideways scroll and no word breaks between letters.
 
+## The Services panel says where each service is hosted (collector#262)
+
+Each row's `sub` line reads `zerophase.app · Self-hosted · Roast 72 · Nov 16`: the hosting sits after the url,
+before the roast score and the error, on the Dashboard's Service health panel and on the Services page (one
+component, `components/services.tsx`). The value was already on the wire — `lib/server/services.ts`'s
+`hostFromHeaders` reads the platform's own response header (`x-vercel-id`, `fly-request-id`, `x-nf-request-id`,
+`x-railway-request-id`, `x-render-origin-server`) — and the row now draws it. A service that answers with no such
+header reads `Self-hosted`, the Projects panel's own word, so the same fact is never named two ways.
+
+`Self-hosted` is the expected reading for a service behind Cloudflare's proxy, which strips the platform header: on
+2026-11-25 dividendsolo.com, zerophase.app, repsheet.fit and pageroast.dividendsolo.com all answered
+`server: cloudflare` with no platform header, so the panel names no platform for them, while a service answering on
+its own platform's edge (vercel.com, nextjs.org) reads `Vercel`. The panel names a platform only when the service
+itself sends one.
+
 ## Each service shows its latest PageRoast score (collector#185)
 
 James, 2026-11-16: "in the service section on the dash i want the latest pageroast score showing for those as well."
