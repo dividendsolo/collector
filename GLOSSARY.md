@@ -21,3 +21,19 @@ _Avoid_: seen, opened, done
 **Archived**:
 A Brief James has finished and archived. It leaves the Inbox for the Archived section and is never counted again. Only James archives a Brief; a skill never does.
 _Avoid_: processed, acknowledged, marked as read, deleted
+
+### Inbox
+
+The sidebar's Inbox link is every Message Hermes or a job sent James on Signal. The Briefs page has an Inbox of its own, above.
+
+**Message**:
+One thing Hermes or a job sent James on Signal, kept as one line in `~/.hermes/inbox/*.jsonl` on the machine that sent it and shown as one row on the Inbox page.
+_Avoid_: notification, alert, signal message
+
+**Source**:
+The job or profile that sent a Message.
+_Avoid_: sender, origin, from
+
+**Handled**:
+A Message James has finished with. It leaves the top of the Inbox for the Handled section and is not counted again. Only James handles a Message; a skill never does.
+_Avoid_: read, done, acknowledged, archived

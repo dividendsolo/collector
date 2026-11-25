@@ -2543,7 +2543,15 @@
   .briefs-panel .btn,
   .briefs-panel .mono,
   .briefs-panel h2,
-  .briefs-panel .count {
+  .briefs-panel .count,
+  .inbox-panel,
+  .inbox-panel th,
+  .inbox-panel td,
+  .inbox-panel .sub,
+  .inbox-panel .btn,
+  .inbox-panel .mono,
+  .inbox-panel h2,
+  .inbox-panel .count {
     font-size: 16px;
   }
   .brief-panel {
@@ -2570,6 +2578,23 @@
   }
   .briefs tr.read td {
     opacity: 0.6;
+  }
+  table.inbox td.from {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.inbox tr.unread td.wide {
+    font-weight: 600;
+  }
+  table.inbox tr.handled td {
+    opacity: 0.6;
+  }
+  table.inbox td.actions {
+    text-align: right;
+  }
+  table.inbox td.actions .btn {
+    padding: 3px 12px;
   }
   .section-head {
     padding: 0;

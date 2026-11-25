@@ -253,6 +253,7 @@ describe("every route in the repo", () => {
       "app/api/briefs/route.ts",
       "app/api/debug-fix/route.ts",
       "app/api/hermes/route.ts",
+      "app/api/inbox/route.ts",
       "app/api/model-login/route.ts",
       "app/api/projects/route.ts",
       "app/api/proposals/route.ts",

@@ -2406,8 +2406,8 @@ NOTICE_TAIL = 64 * 1024
 NOTICE_SCHEMES = ("http://", "https://")
 
 
-def notice_time(at):
-    """The epoch second a notice line's `at` names, or None when it is missing or unreadable."""
+def iso_epoch(at):
+    """The epoch second an ISO `at` names, or None when it is missing or unreadable."""
     try:
         return datetime.fromisoformat(str(at).replace("Z", "+00:00")).timestamp()
     except (TypeError, ValueError):
@@ -2442,7 +2442,7 @@ def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
                 continue
             if notice_resolved(entry, entries[i + 1:]):
                 continue
-            at = notice_time(entry.get("at"))
+            at = iso_epoch(entry.get("at"))
             if at is not None and now.timestamp() - at > keep_s:
                 continue
             href = str(entry["href"]) if entry.get("href") else ""
@@ -2458,6 +2458,54 @@ def notices_rows(now, home=HOME, keep_s=NOTICE_KEEP_S):
             if entry.get("machine") and entry.get("provider"):
                 row["login"] = {"machine": str(entry["machine"]), "provider": str(entry["provider"])}
             rows.append(row)
+    return sorted(rows, key=lambda r: r["at"] or 0)
+
+
+INBOX = os.path.join(".hermes", "inbox")
+INBOX_TAIL = 512 * 1024
+INBOX_SCHEMES = ("http://", "https://")
+
+
+def inbox_id(entry):
+    """The row's own identity: the `id` its writer set, else a digest of the line's own facts.
+
+    Handled is kept per id, so a line the writer gave no id still reads as the same row every time the machine is
+    read. A writer's own id wins, since it is the writer that knows one message from another.
+    """
+    given = str(entry.get("id") or "").strip()
+    if given:
+        return given
+    seed = "\x1f".join(str(entry.get(key) or "") for key in ("at", "source", "text"))
+    return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def inbox_rows(home=HOME, tail=INBOX_TAIL):
+    """One row per message line under `<home>/.hermes/inbox/*.jsonl` (collector#250), oldest first.
+
+    Every message Hermes or a job sends James on Signal is one line here, and the page shows one row per line until
+    it is Handled. Nothing here is another job's failure: a file that is not there, a line that is not JSON, a line
+    that is not an object and a line with no `text` are each skipped, so one bad file cannot take a machine's whole
+    read down. A line with no readable `at` is kept — a job that wrote one meant it — and sorts as the oldest.
+    """
+    rows = []
+    for path in sorted(glob.glob(os.path.join(home, INBOX, "*.jsonl"))):
+        for line in tail_text(path, tail).splitlines():
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict) or not str(entry.get("text") or "").strip():
+                continue
+            href = str(entry["href"]) if entry.get("href") else ""
+            if not href.lower().startswith(INBOX_SCHEMES):
+                href = None
+            rows.append({
+                "id": inbox_id(entry),
+                "source": str(entry.get("source") or ""),
+                "text": str(entry["text"]),
+                "href": href,
+                "at": iso_epoch(entry.get("at")),
+            })
     return sorted(rows, key=lambda r: r["at"] or 0)
 
 
@@ -2480,6 +2528,7 @@ def main():
         "network": network_read(),
         "watch": watch_rows(now),
         "notices": notices_rows(now),
+        "inbox": inbox_rows(),
         "running": running,
         "crew": crew_read(running, work_steps()),
         "host_broken": host_broken(),

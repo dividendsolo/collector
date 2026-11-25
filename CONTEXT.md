@@ -979,6 +979,44 @@ is that folder, worked the way an email inbox works.
   briefs: a line break inside a paragraph or a list item is drawn as a line break (the briefs write one fact per line),
   and a list nested inside an item is read as a list of its own.
 
+## The Inbox: every Signal message, unread until handled (collector#250)
+
+Every message Hermes and our jobs send James on Signal is also one line in `~/.hermes/inbox/*.jsonl` on the machine
+that sent it, and Collector shows those lines as rows: unread first, newest first, a Handled button on each. Signal
+keeps sending the same messages for now.
+
+- `collect.py`'s `inbox_rows` reads every `<home>/.hermes/inbox/*.jsonl` on every machine, on the same read as
+  everything else, so it costs no extra ssh: the newest 512 KB of each file (`INBOX_TAIL`), oldest first, as
+  `{id, source, text, href, at}`. The line is
+  `{"at": "<ISO time>", "id": "<the row's identity>", "source": "<the job or profile>", "text": "<the message>",
+  "href": "<optional link>"}`. A file that is not there, a line that is not JSON, a line that is not an object and a
+  line with no `text` are each skipped, so one bad file cannot take a machine's whole read down (the clean-machine
+  rule of card #55). `href` is kept only as an `http`/`https` address — the same allowlist the page keeps through
+  `lib/links.ts`'s `webUrl` — and an `id` the writer did not set is a digest of the line's own facts (`inbox_id`), so
+  a row keeps one identity however many times the machine is read. A line with no readable `at` is kept and sorts as
+  the oldest.
+- `lib/inbox.ts` is the shared rule set: `keyOf` is the machine and the id, which is one row's whole identity;
+  `isInboxId` refuses anything that is not one plain id; `inboxRows` puts the unhandled first and the newest first;
+  `unhandled` counts them; `inboxTime` shows a time in the viewer's own zone (`moveTime`'s rule, the day in front
+  when it was not today).
+- Handled is kept on this machine, in `inbox.json` beside `config.json` (`INBOX_PATH`; the `briefs.json` pattern, a
+  temp file then a rename), so a browser reset and a Collector restart both leave it in place. A file that does not
+  parse refuses a write with a 409 whose `why` names it and stays byte for byte. Handled is per row id, so the same
+  id on another machine is a row of its own.
+- `inboxView()` works the two together from the cached snapshot — no extra ssh — and adds one plain `why` line when a
+  machine could not be read, so an empty Inbox is never a lie.
+- The page (`components/inbox.tsx`) is `#/inbox`: the unhandled rows, a **Handled** button on each, then the handled
+  rows dimmed under a full-width **Handled** row of the same table (the Briefs page's Archived row). The button on a
+  handled row is **Undo**, which puts the row back; the sidebar's Inbox link carries the unhandled count as a number.
+  The Inbox wears the tray icon and the Briefs link wears the brief icon (the two read apart at a glance).
+- The writers live where the senders live, not here: every Signal message James gets leaves by `hermes send -t
+  signal` (the agents by their own SOUL rule, the jobs and the scripts the same way), and each sender appends its
+  line beside that call. That work is agent-stack's — `deploy-watch.py`, `hermes-signal-profiles.sh` and the cron
+  prompts — and it is agent-stack#547, which names every sender and the append that goes next to it. Until it lands,
+  the Inbox reads empty.
+- `tests/inbox.test.ts` and `tests/inbox.driver.py` drive the real `collect.py` on a throwaway home, and hold the
+  page's own test: one line is one unhandled row, and Handled moves it out of unhandled.
+
 ## The rail opens for a pointer that hovers, or for the keyboard (collector#165)
 
 Navigation is by hash (`#/cron`), so a tap on a sidebar icon never reloads the page, and a phone left the rail open
@@ -1031,6 +1069,7 @@ Status. Status starts at needs-triage and Priority at none; James changes them o
 | `/api/network` | Every listening port on each machine with who it is accessible to (the internet, the local network, the tailnet, the machine alone), the networks that machine is on and its sshd's password and root settings; and every connection it has going out (remote end, host name, process, bytes sent and received, and whether those bytes are the socket's or the process's), the knocks from its local network among them — the read an agent asks to answer "is anything open that should not be?" |
 | `/api/proposals` | The client proposals, newest first, and the open pipeline per currency worked out from them (`GET`); the page's one write route adds (`POST`), edits (`PUT`) and removes (`DELETE ?id=`) one, every field parsed on the server, and answers the list and the pipeline as they stand after the change. |
 | `/api/briefs` | The Briefs page: the Inbox (every brief that is not archived, oldest first) and the Archived section (newest first), read off the machine snapshot every other page already reads (`GET`); the page's one write (`POST`) sets one brief's read or archived state, on this machine, and answers both lists as they stand after it. |
+| `/api/inbox` | The Inbox page: every Message the machines sent James on Signal, unhandled first and newest first, read off the same snapshot (`GET`); the page's one write (`POST`) sets one row's Handled by its machine and id, on this machine, and answers the rows as they stand after it. |
 | `/api/ticket` | The live roster for the New card form (`GET`), and the form's write (`POST`): create the issue, set its status and priority, poll the board; a failure names its step and, once the issue exists, its URL. |
 | `/api/brief` | One brief read whole, over the ssh the snapshot uses (`GET ?machine=&file=`): its front matter, its Markdown and whether it is read or archived here. |
 
