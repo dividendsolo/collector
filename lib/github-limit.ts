@@ -18,9 +18,18 @@ export function retryAfterSeconds(text: string | null | undefined): number | nul
   return m ? Number(m[1]) : null;
 }
 
-export function recentRefusal(refusal: GithubRefusal | null | undefined, now: number): GithubRefusal | null {
+export const HOURLY_WINDOW_S = 3600;
+
+export function recentRefusal(
+  refusal: GithubRefusal | null | undefined,
+  now: number,
+  hourlyReset?: number | null,
+): GithubRefusal | null {
   if (!refusal) return null;
-  return now - refusal.at <= PER_MINUTE_WINDOW_S ? refusal : null;
+  if (now - refusal.at > PER_MINUTE_WINDOW_S) return null;
+  const hourlyWindowStart = hourlyReset == null ? null : hourlyReset - HOURLY_WINDOW_S;
+  if (refusal.limit === "hourly" && hourlyWindowStart != null && refusal.at < hourlyWindowStart) return null;
+  return refusal;
 }
 
 export function clearsText(retryAfter: number | null | undefined): string {

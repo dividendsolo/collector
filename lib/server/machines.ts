@@ -117,7 +117,7 @@ export async function githubLimit(): Promise<GithubLimit> {
     run(["gh", "api", "rate_limit"], { timeout: 10 }),
     graphqlProbe.get().catch(() => null),
   ]);
-  const refusal = recentRefusal(probed, Math.floor(Date.now() / 1000));
+  const refusal = recentRefusal(probed, Math.floor(Date.now() / 1000), data?.resources?.graphql?.reset);
   if (!data) return { error: err, refusal };
   const r = data.resources;
   const pick = (k: string) => ({ used: r[k].used, limit: r[k].limit, reset: r[k].reset });

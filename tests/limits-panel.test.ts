@@ -162,4 +162,23 @@ describe("the GraphQL probe on the GitHub limit read (collector#219)", () => {
     expect(g.refusal?.retryAfter).toBe(60);
     expect(g.refusal?.at).toBeGreaterThanOrEqual(before);
   });
+
+  it("drops an hourly refusal from before the current reset, so the hourly row shows the normal bar", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const probe = (globalThis as any)["__collector:swr:graphql-probe"];
+    probe.value = { at: now - 120, limit: "hourly", retryAfter: null };
+    probe.at = Date.now();
+    gh.text = {};
+    gh.answers = {
+      "gh api rate_limit": [
+        { resources: { graphql: { used: 3, limit: 5000, remaining: 4997, reset: now + 3540 }, core: graphql(10) } },
+        null,
+      ],
+    };
+    const g = await githubLimit();
+    expect(g.refusal).toBeNull();
+    const html = render(g);
+    expect(html).not.toContain("Hourly limit reached");
+    expect(html).toContain("of 5,000 used");
+  });
 });

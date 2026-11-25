@@ -58,6 +58,25 @@ describe("how long a refusal shows (collector#219)", () => {
     expect(recentRefusal({ at: now - PER_MINUTE_WINDOW_S - 1, limit: "minute", retryAfter: null }, now)).toBeNull();
     expect(recentRefusal(null, now)).toBeNull();
   });
+
+  it("forgets an hourly refusal once the hourly limit has reset", () => {
+    const refusedAt = now - 120;
+    const resetAfterRefusal = refusedAt + 60;
+    expect(
+      recentRefusal({ at: refusedAt, limit: "hourly", retryAfter: null }, now, resetAfterRefusal + 3600),
+    ).toBeNull();
+  });
+
+  it("keeps an hourly refusal while its hourly window is still the current one", () => {
+    const refusedAt = now - 120;
+    const reset = now + 600;
+    expect(recentRefusal({ at: refusedAt, limit: "hourly", retryAfter: null }, now, reset)?.limit).toBe("hourly");
+  });
+
+  it("keeps a per-minute refusal across an hourly reset", () => {
+    const refusedAt = now - 120;
+    expect(recentRefusal({ at: refusedAt, limit: "minute", retryAfter: null }, now, now + 3600)?.limit).toBe("minute");
+  });
 });
 
 describe("when a per-minute refusal clears (collector#219)", () => {
