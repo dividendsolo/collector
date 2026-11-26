@@ -25,6 +25,17 @@ const cadence = (job: any) =>
 const filled = (job: any) => `${job.agent ? "agent" : "script"}, ${cadence(job)}`;
 const clock = (when: string) =>
   new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+const line = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(", ");
+const foremanNow = (job: any, nowMs: number) =>
+  line(
+    job?.last_run_at ? `last tick ${ago(job.last_run_at, nowMs)}` : "no tick yet",
+    job?.next_run_at ? `next ${clock(job.next_run_at)}` : null,
+  );
+const waitingNow = (job: any) =>
+  line(
+    job?.last_run_at ? `last run ${clock(job.last_run_at)}` : "no run yet",
+    job?.next_run_at ? `next ${clock(job.next_run_at)}` : null,
+  );
 
 function slotNow(s: any, paused: boolean): Pick<CrewRow, "now" | "card" | "elapsed"> {
   if (paused) return { now: "paused" };
@@ -63,13 +74,13 @@ function machineRows(m: any, nowMs: number): CrewRow[] {
   if (foreman || (down && !m.crew))
     rows.push(
       row("foreman", TIPS.foreman, foreman ? filled(foreman) : "script", {
-        now: foreman?.last_run_at ? `last tick ${ago(foreman.last_run_at, nowMs)}` : "no tick yet",
+        now: foremanNow(foreman, nowMs),
       }),
     );
   if (waiting)
     rows.push(
       row("waiting crew", TIPS.waiting, filled(waiting), {
-        now: waiting.next_run_at ? `next run ${clock(waiting.next_run_at)}` : "no run planned",
+        now: waitingNow(waiting),
       }),
     );
   return rows;
