@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import {
   addProposal,
   addSchema,
@@ -39,7 +39,7 @@ function refused<T>(work: () => T): T | Response {
 export const GET = async (req: Request) => guard(req) ?? json(proposalsRead());
 
 export async function POST(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const parsed = addSchema.safeParse(await body(req));
   if (!parsed.success) return json({ why: issue(parsed.error) }, 400);
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const parsed = editSchema.safeParse(await body(req));
   if (!parsed.success) return json({ why: issue(parsed.error) }, 400);
@@ -59,7 +59,7 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const id = new URL(req.url).searchParams.get("id") || "";
   const next = refused(() => deleteProposal(id));

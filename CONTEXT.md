@@ -10,6 +10,13 @@ confirmed click (collector#218).
 `AGENTS.md` holds the stack, the commands and the dangers; this file holds the code's layout, how the running one is
 built, restarted and served, and how its features work.
 
+## The goal (James, 2026-11-25)
+
+A solo developer owns their own stack: free or as cheap as it can be, full control, secure, and a huge amount of work
+done. Collector and the agent stack stay on machines we own (altair, ezio), never a hosted service. Credentials stay
+local to those machines. Integrations other people use, such as Slack, are worth adding when they are optional.
+Every feature is judged against this (collector#238).
+
 ## Installing it: one command, and what a clean machine needs (card #55)
 
 A stranger with none of our files installs it with one line, from the README:
@@ -29,10 +36,20 @@ note, not a failure: the page starts and every machine row stays empty until it 
 
 Two rules shape the script. It writes `node_modules` and `.next` inside that folder and nothing else — no
 `config.json`, no `.env`, nothing on any remote machine — apart from Bun when it installs it: Bun goes into `~/.bun`
-and its installer adds itself to `PATH` in the shell's startup file (the README says so). And it holds no path, host name, user name or job label of
+and its installer adds itself to `PATH` in the shell's startup file where one exists (a new Mac account has none, so it
+prints the line instead and the README gives it). And it holds no path, host name, user name or job label of
 ours. Its usage text is `printf` lines rather than a heredoc, because `sh` reads a piped script from stdin and the
 heredoc's body would have to come from the same stream. `tests/install.test.ts` holds both rules, runs `sh -n` over
 it, and pipes it in as `sh -s -- --help` the way `curl | sh` does.
+
+A new Mac has no Command Line Tools, so `git` and `python3` are shims that print `xcode-select: note: No developer
+tools were found` and exit 1, and the one command fails at its `git clone`. `install.sh` says so before it tries
+(its `no_dev_tools`, naming `xcode-select --install`); the same account also has no shell startup file, so Bun's
+installer leaves no `PATH` line behind and the next terminal needs `export PATH="$HOME/.bun/bin:$PATH"`. The README's
+[Set it up on a Mac](README.md) section is the three steps a stranger follows, and `docs/252/clean-mac.md` is that
+section run on a clean macOS account (the tart test VM): both failures above, then the one command installing Bun,
+building and serving, with `/api/state` answering the machine it runs on, and the login job serving the page.
+`tests/install.test.ts` runs the script on a stubbed Darwin that has no developer tools.
 
 **A machine with none of the tools reads empty, not an error.** On 2026-11-02 a clean Debian container — no `ps`, no
 `git`, no `docker`, no `gh`, no `~/.hermes` — answered `Could not read this machine: FileNotFoundError: 'ps'`: three
@@ -795,6 +812,21 @@ worker, not by card, so "is a builder free" and "did the foreman tick" read at a
 - Under 600px the Crew table wraps its cells at spaces, commas and the hyphens of a profile name (`table.crew`), and
   a card reference never wraps, so it fits a 425px screen without a sideways scroll and no word breaks between letters.
 
+## The Services panel says where each service is hosted (collector#262)
+
+Each row's `sub` line reads `zerophase.app · Self-hosted · Roast 72 · Nov 16`: the hosting sits after the url,
+before the roast score and the error, on the Dashboard's Service health panel and on the Services page (one
+component, `components/services.tsx`). The value was already on the wire — `lib/server/services.ts`'s
+`hostFromHeaders` reads the platform's own response header (`x-vercel-id`, `fly-request-id`, `x-nf-request-id`,
+`x-railway-request-id`, `x-render-origin-server`) — and the row now draws it. A service that answers with no such
+header reads `Self-hosted`, the Projects panel's own word, so the same fact is never named two ways.
+
+`Self-hosted` is the expected reading for a service behind Cloudflare's proxy, which strips the platform header: on
+2026-11-25 dividendsolo.com, zerophase.app, repsheet.fit and pageroast.dividendsolo.com all answered
+`server: cloudflare` with no platform header, so the panel names no platform for them, while a service answering on
+its own platform's edge (vercel.com, nextjs.org) reads `Vercel`. The panel names a platform only when the service
+itself sends one.
+
 ## Each service shows its latest PageRoast score (collector#185)
 
 James, 2026-11-16: "in the service section on the dash i want the latest pageroast score showing for those as well."
@@ -1112,6 +1144,64 @@ the tailnet or kickstarts the Hermes gateway.
 `config.json` and `.env` are gitignored and stay that way: the repo is public and `config.json` holds real host
 names, job names and board ids.
 
+## The phone reaches it over Tailscale, and may do only two things (collector#232)
+
+James reads Collector from his phone (the Pixel 8 Pro), and the page tells the two apart (a grill with James,
+2026-11-25). Collector stays on altair: the Mac asleep means the phone cannot reach it, and that is fine. The route
+in is Tailscale Serve, and only his phone is allowed by a Tailscale policy rule (collector#217, #233 turn those on).
+There is no separate phone page: the same pages, laid out for a phone.
+
+**How the two are told apart.** `lib/server/guard.ts`'s `caller(req)` is the one place: a loopback `Host` is the Mac;
+a `Host` that ends in `.ts.net` (altair's tailnet name, what Tailscale Serve forwards) with Serve's
+`Tailscale-User-Login` header is the phone; anything else is refused, as it was before. The `.ts.net` name is what
+keeps the DNS-rebinding protection of card #69 whole: a page that rebinds its own domain to 127.0.0.1 can set that
+header, but it cannot set its `Host` to a name under Tailscale's own domain.
+
+**What the phone may do.** It reads every page, and it may Acknowledge an alert and change one card's status or
+priority. Everything else stays on the Mac, and the server refuses those routes as well as hiding the buttons —
+hiding a button alone is not enough:
+
+| Stays on the Mac | The route | Refused with |
+|---|---|---|
+| Start Tailscale, Start Hermes | `POST /api/tailscale`, `POST /api/hermes` | `guard(req) ?? refusePhone(req)` |
+| Debug and fix, Triage, Unblock, and the Close that ends one | `POST`/`DELETE /api/debug-fix` | the same |
+| the release pill | `POST /api/release` | the same |
+| the model login | `POST /api/model-login` | the same |
+| project edits | `POST /api/projects` | the same |
+| proposals | `POST`/`PUT`/`DELETE /api/proposals` | the same |
+| New card | `POST /api/ticket` | the same |
+| Add provider, Remove a provider | `POST /api/ai-providers` | the same |
+| archiving a brief | `POST /api/briefs` with `archived` | `refusePhone` when the body sets `archived` |
+| closing a card | `POST /api/card-move` with a done status | `403` from the route itself |
+
+`refusePhone` answers `403` and `this action stays on the Mac`. The reads stay open to the phone, `GET /api/debug-fix`
+too (the Dashboard polls it for the Triage pill), and so does `POST /api/briefs` with only `read`: opening a brief
+marks it read, on the phone as on the Mac. `lib/phone.ts` names the two sides (`mac`, `phone`) and is client-safe;
+each component that draws a Mac-only button asks `useSide()`. `tests/request-guard.test.ts` holds every write route
+to `refusePhone`, except `card-move`, which checks the phone itself.
+
+**Changing a card's status or priority** is `POST /api/card-move` (`lib/card-move.ts` holds the check): a status from
+the agent stack's list, a priority of `none`/`P0`/`P1`/`P2`, or both, run through `~/.local/bin/status set` and
+`status priority`, then `poll("card-move")`. A phone may do all of it except a done status, which is closing a card.
+The control is on a card's journey page (`#/card/<repo>/<n>`, the Move the card panel), so one card at a time; the
+phone's Status list leaves the done lanes out.
+
+**The phone's layout.** `app/page.tsx` reads the request's own headers on the server and hands the side to the app
+(`SideProvider`, `useSide`); the app div carries `data-side`, which is how a served page says which it is. On the
+phone the Dashboard shows Priority tasks, then Current work, then a Briefs panel (the Mac has no Briefs panel; its
+Briefs page is in the sidebar), and the Mac-only buttons are not drawn. The Projects page draws no `Choose repos`,
+and the Proposals page no `Add proposal`, `Edit` or `Delete` (nor its actions column): both pages still read. Under 900px the paired panels are one column
+and every panel can shrink (`min-width: 0`), so nothing pushes the page sideways at 412px.
+
+**The home-screen app** is `public/manifest.webmanifest` (`display: standalone`, icons 192 and 512 at
+`public/icons/`), linked from `app/layout.tsx`; the icons are a plain dark rounded square with the theme's blue ring,
+drawn once and committed as PNGs.
+
+`tests/phone.test.ts` holds the side and the refusals, `tests/card-move.test.ts` the move, `tests/phone-layout.test.ts`
+the phone Dashboard and the 412px rules, `tests/phone-pages.test.ts` the Projects and Proposals pages, and
+`tests/manifest.test.ts` the manifest and its two icons.
+
+
 ## Every outbound call has a deadline, and a bounded retry (repo standard S2)
 
 Collector is a local, read-only page, so "outbound" is narrow and known: the HTTP GETs its readers make, the
@@ -1218,9 +1308,14 @@ What the removed comments held that an operator needs is here:
 - `ci.yml` has no trigger but `workflow_dispatch`: agent-stack's `vps/scripts/ci-merge.py` starts it on the PR branch
   right before the merge and merges only when it passes (James, 2026-11-09). A push runs nothing (Actions minutes). The
   repo is public, so it runs on GitHub's runners, not Jog.
-- `launchd/com.example.collector.plist` serves a build: run `bun run build` first, and set `WorkingDirectory` and the
-  bun path to the checkout. `launchd/com.example.collector-rebuild.plist` is the rebuild job: set both paths, and
-  `--label` to the serving job's label.
+- `scripts/launchd.ts` is the login job, one command and no hand-edited file (card #252): it fills this checkout's
+  and this Bun's paths into `launchd/com.example.collector.plist` (and the rebuild plist with `--rebuild`), writes
+  them to `~/Library/LaunchAgents/` and loads them with `launchctl bootstrap gui/<uid>`, booting an older job out
+  first. The two plists stay templates with `/path/to/collector` and `/path/to/.bun/bin/bun` in them, and the script
+  refuses a template carrying a `/path/to` path it does not fill, rather than loading a job that cannot run. `--port`
+  picks the port in the job, `--print` writes nothing, `--uninstall` stops it, and `--launchctl <command>` replaces
+  launchctl, which is how `tests/launchd-install.test.ts` reads the exact bootout and bootstrap it runs. The serving
+  job runs `bun start`, so the checkout needs a build in `.next` first (`install.sh` makes one).
 - `bun scripts/rebuild-if-stale.ts [--dir <checkout>] [--label <launchd label>] [--check] [--restart "<command>"]` and
   `bun scripts/apply-update.ts [--dir <checkout>] [--label <launchd label>] [--restart "<command>"]`: `--dir` defaults
   to the script's own checkout, and `--restart` replaces the launchd restart (tests use `echo restarted`). Their

@@ -1,5 +1,5 @@
 import { poll, readStatusRepos } from "@/lib/server/board";
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import { expandHome } from "@/lib/server/paths";
 import { json } from "@/lib/server/respond";
 import { runText } from "@/lib/server/run";
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const input = await req.json().catch(() => ({}));
   const check = checkTicket(input, (await readStatusRepos()) || []);

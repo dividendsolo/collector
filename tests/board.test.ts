@@ -152,6 +152,11 @@ describe("workCards", () => {
     expect(workCards(rows, ["agent-in-progress", "needs-triage"], ["needs-triage"]).map((c) => c.number)).toEqual([1]);
     expect(workCards(rows, ["agent-in-progress", "closed", "code-review"], []).map((c) => c.number)).toEqual([1, 2, 3]);
   });
+
+  it("holds each card once when a board read returns it more than once (agent-stack#475 three times, 2026-11-25)", () => {
+    const rows = [row(475, "scheduled"), row(1, "agent-in-progress"), row(475, "scheduled"), row(475, "scheduled")];
+    expect(workCards(rows, ["agent-in-progress", "scheduled"], []).map((c) => c.number)).toEqual([475, 1]);
+  });
 });
 
 describe("looksLikeEmptyGlitch", () => {

@@ -1,5 +1,5 @@
 import { poll } from "@/lib/server/board";
-import { guard } from "@/lib/server/guard";
+import { guard, refusePhone } from "@/lib/server/guard";
 import { expandHome } from "@/lib/server/paths";
 import { json } from "@/lib/server/respond";
 import { runText } from "@/lib/server/run";
@@ -8,7 +8,7 @@ import { AGENT_STACK_STATUSES } from "@/lib/statuses";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const refusal = guard(req);
+  const refusal = guard(req) ?? refusePhone(req);
   if (refusal) return refusal;
   const body = await req.json().catch(() => ({}));
   const { repo, number, from } = body as { repo?: unknown; number?: unknown; from?: unknown };

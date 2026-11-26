@@ -251,6 +251,7 @@ describe("every route in the repo", () => {
     expect(writes).toEqual([
       "app/api/ai-providers/route.ts",
       "app/api/briefs/route.ts",
+      "app/api/card-move/route.ts",
       "app/api/debug-fix/route.ts",
       "app/api/hermes/route.ts",
       "app/api/inbox/route.ts",
@@ -261,5 +262,13 @@ describe("every route in the repo", () => {
       "app/api/tailscale/route.ts",
       "app/api/ticket/route.ts",
     ]);
+  });
+
+  it("refuses the phone on every one of them, except the card move, which checks the phone itself", () => {
+    const writes = routeFiles().filter((f) => handlersIn(fs.readFileSync(f, "utf8")).some((h) => !h.endsWith("GET")));
+    const open = writes
+      .filter((f) => !fs.readFileSync(f, "utf8").includes("refusePhone("))
+      .map((f) => path.relative(process.cwd(), f));
+    expect(open).toEqual(["app/api/card-move/route.ts"]);
   });
 });

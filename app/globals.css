@@ -727,6 +727,9 @@
   .health .sub a.roast {
     white-space: nowrap;
   }
+  .health .sub .host {
+    white-space: nowrap;
+  }
   .health .right {
     display: flex;
     align-items: center;
@@ -1311,6 +1314,12 @@
   .alert .act .btn.fixing.done {
     border-color: var(--green-line, var(--line-2));
     color: var(--green, var(--text));
+    opacity: 1;
+  }
+  .alert .act .btn.fixing.stalled {
+    background: var(--amber-bg, var(--panel-2));
+    border-color: var(--amber-line, var(--line-2));
+    color: var(--amber, var(--text));
     opacity: 1;
   }
   .alert .act .btn.fixing.stuck {
