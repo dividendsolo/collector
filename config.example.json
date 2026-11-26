@@ -61,7 +61,8 @@
   "services": [
     {
       "name": "My app",
-      "url": "https://example.com"
+      "url": "https://example.com",
+      "paid": true
     },
     {
       "name": "My API",

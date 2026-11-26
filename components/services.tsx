@@ -12,6 +12,7 @@ export interface Svc {
   ms: number;
   error: string | null;
   hosting: string | null;
+  paid: boolean;
   roast?: Roast | null;
 }
 
@@ -39,6 +40,12 @@ export const sortServices = (svc: Svc[]) => {
   const order: Record<string, number> = { down: 0, slow: 1, online: 2 };
   return [...svc].sort((a, b) => order[a.status] - order[b.status] || b.ms - a.ms);
 };
+
+export const serviceSections = (svc: Svc[]) =>
+  [
+    { title: "Paid", list: sortServices(svc.filter((x) => x.paid)) },
+    { title: "Non-paid", list: sortServices(svc.filter((x) => !x.paid)) },
+  ].filter((s) => s.list.length);
 
 export function ServiceRows({ list }: { list: Svc[] }) {
   if (!list.length)
@@ -121,14 +128,28 @@ export function ServiceHealthPanel({ svc }: { svc: Svc[] | null }) {
 
 export function ServicesPage() {
   const svc = useServices();
+  const sections = svc ? serviceSections(svc) : [];
   return (
     <div className="page">
-      <section className="panel">
-        <PanelHead icon="server">
-          <span className="count">{svc?.length ?? 0}</span>
-        </PanelHead>
-        <ul className="health">{svc ? <ServiceRows list={sortServices(svc)} /> : <SkelItems n={5} />}</ul>
-      </section>
+      {sections.length ? (
+        sections.map((s) => (
+          <section className="panel" key={s.title}>
+            <PanelHead icon="server" title={s.title}>
+              <span className="count">{s.list.length}</span>
+            </PanelHead>
+            <ul className="health">
+              <ServiceRows list={s.list} />
+            </ul>
+          </section>
+        ))
+      ) : (
+        <section className="panel">
+          <PanelHead icon="server">
+            <span className="count">0</span>
+          </PanelHead>
+          <ul className="health">{svc ? <ServiceRows list={[]} /> : <SkelItems n={5} />}</ul>
+        </section>
+      )}
     </div>
   );
 }
