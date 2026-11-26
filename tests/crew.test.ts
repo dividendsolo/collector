@@ -11,6 +11,7 @@ const FOREMAN = {
   agent: false,
   schedule_raw: "* * * * *",
   last_run_at: "2026-11-23T13:59:20-05:00",
+  next_run_at: "2026-11-23T14:01:00",
 };
 const WAITING = {
   scheduler: "Hermes (waiting-crew)",
@@ -19,7 +20,8 @@ const WAITING = {
   agent: true,
   schedule: "every 60m",
   schedule_raw: "every 60m",
-  next_run_at: "2026-11-23T14:54:00-05:00",
+  last_run_at: "2026-11-23T10:22:00",
+  next_run_at: "2026-11-23T14:54:00",
 };
 const free = (slot: string, role: string) => ({ slot, role, state: "free" });
 const ALTAIR = {
@@ -64,12 +66,12 @@ describe("the Crew panel's rows (collector#231)", () => {
       ["altair", "builder 1", "agent, situation-builder", "situation#920, 34 min"],
       ["altair", "builder 2", "agent", "free"],
       ["altair", "reviewer", "agent, collector-reviewer", "collector#55, 6 min"],
-      ["altair", "foreman", "script, every minute", "last tick 40 s ago"],
-      ["altair", "waiting crew", "agent, hourly", expect.stringMatching(/^next run \d\d:\d\d$/)],
+      ["altair", "foreman", "script, every minute", "last tick 40 s ago, next 14:01"],
+      ["altair", "waiting crew", "agent, hourly", "last run 10:22, next 14:54"],
       ["ezio", "builder 1", "agent", "free"],
       ["ezio", "builder 2", "agent", "free"],
       ["ezio", "reviewer", "agent", "free"],
-      ["ezio", "foreman", "script, every minute", "last tick 20 s ago"],
+      ["ezio", "foreman", "script, every minute", "last tick 20 s ago, next 14:01"],
     ]);
     expect(rows[0].card).toEqual({ repo: "situation", number: 920 });
     expect(rows[1].card).toBeUndefined();
@@ -94,7 +96,7 @@ describe("the Crew panel's rows (collector#231)", () => {
   it("reads paused on the builder and reviewer rows of a paused machine", () => {
     const rows = crewRows([{ ...ALTAIR, crew: { ...ALTAIR.crew, paused: true } }], NOW);
     expect(rows.slice(0, 3).map((r) => r.now)).toEqual(["paused", "paused", "paused"]);
-    expect(rows[3].now).toBe("last tick 40 s ago");
+    expect(rows[3].now).toBe("last tick 40 s ago, next 14:01");
   });
 
   it("gives a machine with no waiting-crew profile no waiting-crew row", () => {
@@ -108,6 +110,42 @@ describe("the Crew panel's rows (collector#231)", () => {
   it("says busy for a held slot whose card is not known", () => {
     const m = { ...EZIO, crew: { paused: false, slots: [{ slot: "build-1", role: "build", state: "held" }] } };
     expect(crewRows([m], NOW)[0].now).toBe("busy");
+  });
+});
+
+describe("the foreman and waiting crew rows say the last run and the next (collector#266)", () => {
+  const timed = (jobs: object[]) =>
+    crewRows([{ name: "altair", jobs, crew: { paused: false, slots: [] } }], NOW).map((r) => r.now);
+
+  it("shows both for a job that has run and has a next run", () => {
+    expect(timed([FOREMAN, WAITING])).toEqual(["last tick 40 s ago, next 14:01", "last run 10:22, next 14:54"]);
+  });
+
+  it("shows the last part alone for a job with no next run", () => {
+    expect(
+      timed([
+        { ...FOREMAN, next_run_at: null },
+        { ...WAITING, next_run_at: null },
+      ]),
+    ).toEqual(["last tick 40 s ago", "last run 10:22"]);
+  });
+
+  it("shows the next run beside the job's own words when it has never run", () => {
+    expect(
+      timed([
+        { ...FOREMAN, last_run_at: null },
+        { ...WAITING, last_run_at: null },
+      ]),
+    ).toEqual(["no tick yet, next 14:01", "no run yet, next 14:54"]);
+  });
+
+  it("shows the job's own words alone when it has neither", () => {
+    expect(
+      timed([
+        { ...FOREMAN, last_run_at: null, next_run_at: null },
+        { ...WAITING, last_run_at: null, next_run_at: null },
+      ]),
+    ).toEqual(["no tick yet", "no run yet"]);
   });
 });
 
