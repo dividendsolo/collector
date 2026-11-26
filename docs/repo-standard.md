@@ -35,7 +35,8 @@ a one-line reason. If "Standard" above is behind the skill's current version, ru
 - [x] C13 docs/adr/ — done 2026-11-25 (collector#268), from the decisions that are hard to reverse, surprising
   without context and the result of a real trade-off: `0001` one local page for one person, `0002` a machine read is
   a script sent over ssh, `0003` every route answers this page only, `0004` a change reaches the running page only
-  through main, `0005` a hand-kept list is a plain file beside the config, `0006` the board costs one GraphQL point
+  through main, `0005` a hand-kept list is a plain file beside the config (the projects list in `config.json` not yet,
+  collector#291), `0006` the board costs one GraphQL point
   per read. The decisions CONTEXT.md records in prose (the guard, the update flow, the seen-list) are the first
   three of those.
 
