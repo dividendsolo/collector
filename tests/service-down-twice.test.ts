@@ -10,6 +10,7 @@ const row = (status: Checked["status"], error: string | null = null): Checked =>
   error,
   checked_at: 1794426137,
   hosting: null,
+  paid: false,
 });
 
 describe("a site's Down", () => {

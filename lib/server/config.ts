@@ -10,6 +10,7 @@ export interface Service {
   name: string;
   url: string;
   headers?: Record<string, string>;
+  paid?: boolean;
 }
 export interface Vendor {
   name: string;
@@ -162,6 +163,11 @@ export function badConfigValues(cfg: unknown): string[] {
     const { name, renews } = object(v) ?? {};
     if (renews != null && !isRenewsDate(renews))
       out.push(`subscriptions[${i}] (${who(name)}).renews ${JSON.stringify(renews)} is not a date (YYYY-MM-DD)`);
+  }
+  for (const [i, v] of list(c.services).entries()) {
+    const { name, paid } = object(v) ?? {};
+    if (paid != null && typeof paid !== "boolean")
+      out.push(`services[${i}] (${who(name)}).paid ${JSON.stringify(paid)} is not true or false`);
   }
   return out;
 }

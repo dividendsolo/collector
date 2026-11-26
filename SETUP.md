@@ -71,9 +71,10 @@ What to look at — read-only, and only what exists on this machine
   dependency manifests (`package.json`, `Gemfile`, `requirements.txt`, `go.mod`, `pyproject.toml`) and the deploy files
   (`vercel.json`, `fly.toml`, `netlify.toml`, `wrangler.toml`, `.kamal`, `config/deploy.yml`, `Dockerfile`,
   `docker-compose.yml`, `Procfile`); they name the sites and the vendors.
-  - `services`: the live sites and APIs of this person, `{"name": "My app", "url": "https://example.com"}` — a URL that
-    answers without a login. Check that it answers before you write it (`curl -s -o /dev/null -w '%{http_code}' <url>`
-    should print 200 or 308) and leave out anything that does not.
+  - `services`: the live sites and APIs of this person, `{"name": "My app", "url": "https://example.com", "paid": true}`
+    — a URL that answers without a login. Check that it answers before you write it (`curl -s -o /dev/null -w
+    '%{http_code}' <url>` should print 200 or 308) and leave out anything that does not. Set `"paid": true` on a
+    service that takes money (a checkout or a billing page in its repo); leave it out on one that does not.
   - `domains`: the domains those sites serve, one string each (`["example.com"]`). The Domains page reads the
     registrar, the expiry date and the certificate from there.
   - `vendors`: the outside services the repos depend on, `{"name": "Stripe", "url": "https://status.stripe.com",

@@ -827,6 +827,25 @@ header reads `Self-hosted`, the Projects panel's own word, so the same fact is n
 its own platform's edge (vercel.com, nextjs.org) reads `Vercel`. The panel names a platform only when the service
 itself sends one.
 
+## The Services page lists paid services first (collector#263)
+
+Every live service is on the Services page, in two panels: Paid on top, Non-paid under it. When something is down, the
+apps that take money are the ones to look at first.
+
+- `config.json`'s `services[].paid` (`true` or `false`) says whether a service takes money. A service with no `paid` is
+  non-paid: the one default, decided on the server, where `check()` puts `paid: service.paid === true` on every row.
+  A `paid` that is not `true` or `false` is refused by `badConfigValues` (`bun run check:config` and a Priority tasks
+  row), like the other hand-kept fields.
+- `serviceSections` in `components/services.tsx` splits the list and runs `sortServices` (down, slow, online, then the
+  slowest) inside each panel, so a down paid service still sorts above a healthy paid one. A panel with no services is
+  left out, heading and all; no services at all shows the one empty panel it always did.
+- The Dashboard's Service health panel stays one list of the five worst, by status: it is the health glance, and its
+  All services link opens the split page.
+- Paid on 2026-11-26, from each repo's own checkout or billing code: ZeroPhase, Situation, RepSheet, PageRoast,
+  Dividend Solo, Darndest. Non-paid: Abide, Analytics, Omarchy for Mac. The Vercel apps with no domain (Docket, Pointy,
+  Recall, Ledgar, BothYes) answer `402 DEPLOYMENT_DISABLED`, so they are not live and not listed; `fundamentals-api`
+  is retired and EchoForm is being archived (echo-form#86). `tests/service-sections.test.ts` holds the split.
+
 ## Each service shows its latest PageRoast score (collector#185)
 
 James, 2026-11-16: "in the service section on the dash i want the latest pageroast score showing for those as well."

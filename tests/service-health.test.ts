@@ -17,6 +17,7 @@ describe("the services log (collector#94)", () => {
     error,
     checked_at: 1794300000,
     hosting: null,
+    paid: false,
   });
 
   it("writes one stamped line per Slow or Down check, and none for an online one", () => {
@@ -37,8 +38,24 @@ describe("Service health panel on the Dashboard", () => {
 
   it("shows the summary and the rows when there are services", () => {
     const html = render([
-      { name: "API", url: "https://api.example.com", status: "online", ms: 120, error: null, hosting: null },
-      { name: "Site", url: "https://example.com", status: "down", ms: 900, error: "timeout", hosting: null },
+      {
+        name: "API",
+        url: "https://api.example.com",
+        status: "online",
+        ms: 120,
+        error: null,
+        hosting: null,
+        paid: false,
+      },
+      {
+        name: "Site",
+        url: "https://example.com",
+        status: "down",
+        ms: 900,
+        error: "timeout",
+        hosting: null,
+        paid: false,
+      },
     ]);
     expect(html).toContain("1 of 2");
     expect(html).toContain("slowest Site at 900 ms");
@@ -54,6 +71,7 @@ describe("a service row's hosting (collector#262)", () => {
     ms: 120,
     error: null,
     hosting,
+    paid: false,
   });
   const renderRows = (hosting: string | null) =>
     renderToStaticMarkup(createElement(ServiceRows, { list: [svc(hosting)] }));
