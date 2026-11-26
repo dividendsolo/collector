@@ -135,6 +135,8 @@ export function unblockPrompt(card: { repo: string; number: number; lane: string
 
 export const JOB_OPTION = "@collector_fix";
 export const STEP_OPTION = "@collector_step";
+export const SINCE_OPTION = "@collector_step_at";
+export const STALL_S = 20 * 60;
 const SEP = "|";
 
 export const FIX_STEPS = [
@@ -147,11 +149,13 @@ export const FIX_STEPS = [
   "stuck",
 ] as const;
 
-export type StepKind = "working" | "done" | "stuck";
+export type StepKind = "working" | "done" | "stuck" | "stalled";
 
-export function stepState(step: string): { kind: StepKind; label: string } {
+export function stepState(step: string, since?: number, now?: number): { kind: StepKind; label: string } {
   if (step === "stuck") return { kind: "stuck", label: "Stuck: needs you" };
   if (step.startsWith("done")) return { kind: "done", label: "Done" };
+  const age = since ? (now ?? Date.now() / 1000) - since : 0;
+  if (age > STALL_S) return { kind: "stalled", label: `${step} (no change for ${Math.round(age / 60)} m)` };
   return { kind: "working", label: step };
 }
 
@@ -236,21 +240,29 @@ export interface OpenFix {
   pane: string;
   step: string;
   state: StepKind;
+  since?: number;
   card?: { repo: string; number: number };
 }
 
-export async function openFixes(run = runText): Promise<Record<string, OpenFix>> {
+export async function openFixes(run = runText, now?: number): Promise<Record<string, OpenFix>> {
   const r = await run(
     [
       "tmux",
       "list-panes",
       "-a",
       "-F",
-      `#{pane_id}${SEP}#{${JOB_OPTION}}${SEP}#{${STEP_OPTION}}${SEP}#{${NAME_OPTION}}`,
+      `#{pane_id}${SEP}#{${JOB_OPTION}}${SEP}#{${STEP_OPTION}}${SEP}#{${NAME_OPTION}}${SEP}#{${SINCE_OPTION}}`,
     ],
     { timeout: 5 },
   );
-  return parseFixes(r.error ? "" : r.stdout);
+  const at = now ?? Date.now() / 1000;
+  const fixes = parseFixes(r.error ? "" : r.stdout, at);
+  for (const fix of Object.values(fixes))
+    if (!fix.since) {
+      await run(["tmux", "set", "-p", "-t", fix.pane, SINCE_OPTION, stamp(fix.step, at)], { timeout: 5 });
+      fix.since = Math.round(at);
+    }
+  return fixes;
 }
 
 function triageCard(name: string | undefined): { repo: string; number: number } | null {
@@ -258,12 +270,23 @@ function triageCard(name: string | undefined): { repo: string; number: number } 
   return m ? { repo: m[1], number: Number(m[2]) } : null;
 }
 
-export function parseFixes(out: string): Record<string, OpenFix> {
+export function stamp(step: string, at: number): string {
+  return `${Math.round(at)} ${step}`;
+}
+
+export function readStamp(value: string, step: string): number | undefined {
+  const [at, ...rest] = (value || "").split(" ");
+  const seconds = Number(at);
+  return seconds && rest.join(" ") === step ? seconds : undefined;
+}
+
+export function parseFixes(out: string, now?: number): Record<string, OpenFix> {
   const fixes: Record<string, OpenFix> = {};
-  const at = (step: string) => ({ step, state: stepState(step).kind });
   for (const line of out.split("\n")) {
-    const [pane, key, step, name] = line.split(SEP);
+    const [pane, key, step, name, setAt] = line.split(SEP);
     if (!pane || !key) continue;
+    const since = readStamp(setAt, (FIX_STEPS as readonly string[]).includes(step) ? step : "working");
+    const at = (s: string) => ({ step: s, state: stepState(s, since, now).kind, ...(since ? { since } : {}) });
     if (key === TRIAGE_KEY) {
       const card = triageCard(name);
       fixes[key] = { pane, ...at("triaging"), ...(card ? { card } : {}) };
