@@ -140,6 +140,7 @@ describe("a service row's roast score (collector#185)", () => {
     ms: 120,
     error: null,
     hosting: null,
+    paid: false,
     roast,
   });
   const render = (list: Svc[]) => renderToStaticMarkup(createElement(ServiceRows, { list }));

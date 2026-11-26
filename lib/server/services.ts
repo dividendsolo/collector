@@ -15,6 +15,7 @@ export interface Checked {
   error: string | null;
   checked_at: number;
   hosting: string | null;
+  paid: boolean;
   checked?: "online" | "slow" | "down";
   roast?: Roast | null;
   [key: string]: unknown;
@@ -71,6 +72,7 @@ export async function check(service: Service): Promise<Checked> {
     error,
     checked_at: Math.floor(Date.now() / 1000),
     hosting,
+    paid: service.paid === true,
   };
 }
 
