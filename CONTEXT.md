@@ -805,8 +805,11 @@ worker, not by card, so "is a builder free" and "did the foreman tick" read at a
   `git-*` locks are not positions. No `~/.hermes/foreman` folder: `crew` is null and the machine has no rows. ezio's
   crew rides in the same ssh read as the rest of its snapshot.
 - `lib/crew.ts`'s `crewRows` makes the rows: the three slots, then `foreman` (the default profile's Hermes job named
-  `foreman`, its schedule and its `last_run_at`) and `waiting crew` (a job in the `waiting-crew` profile, its cadence
-  and `next_run_at`) when the machine has them. Each position carries a one-sentence tip on hover.
+  `foreman`, its schedule, and its `last tick 24 s ago, next 11:23`) and `waiting crew` (a job in the `waiting-crew`
+  profile, its cadence, and its `last run 10:22, next 11:22`) when the machine has them. The two parts come from the
+  job's own `last_run_at` and `next_run_at`, each dropped when the job has none, so a job that never ran reads
+  `no tick yet, next 11:23` or `no run yet, next 11:22`, and both times are the viewer's own zone, 24-hour
+  (collector#266). Each position carries a one-sentence tip on hover.
 - A machine whose read failed reads `unreachable` on every row, never `free` (the foreman counts an unreachable ezio
   as full too). A paused machine reads `paused` on its builder and reviewer rows.
 - Under 600px the Crew table wraps its cells at spaces, commas and the hyphens of a profile name (`table.crew`), and
