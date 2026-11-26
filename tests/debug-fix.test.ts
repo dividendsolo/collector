@@ -139,8 +139,8 @@ describe("the button's step", () => {
           .replace(/#\{@collector_step\}/, step);
       return { ok: true, stdout: `${line("", "")}\n${line("ezio/671cc7c4cc4a", "finding the cause")}\n`, error: null };
     };
-    expect(await openFixes(tmuxNoLocale)).toEqual({
-      "ezio/671cc7c4cc4a": { pane: "%2", step: "finding the cause", state: "working" },
+    expect(await openFixes(tmuxNoLocale, 1795000000)).toEqual({
+      "ezio/671cc7c4cc4a": { pane: "%2", step: "finding the cause", state: "working", since: 1795000000 },
     });
   });
 
