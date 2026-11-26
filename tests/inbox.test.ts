@@ -214,6 +214,19 @@ describe("a message on the page", () => {
     expect(view.unhandled).toBe(1);
   });
 
+  it("lets the phone mark a row Handled, the way opening a brief marks it read", async () => {
+    fake.machines = [{ name: "altair", inbox: read(file(line())) }];
+    const phone = {
+      host: "altair.example.ts.net",
+      "tailscale-user-login": "james@example.com",
+      "sec-fetch-site": "same-origin",
+      "content-type": "application/json",
+    };
+    const answer = await post({ machine: "altair", id: "signal:1", handled: true }, phone);
+    expect(answer.status).toBe(200);
+    expect((await answer.json()).unhandled).toBe(0);
+  });
+
   it("puts a row back in the inbox on Undo", async () => {
     fake.machines = [{ name: "altair", inbox: read(file(line())) }];
     await post({ machine: "altair", id: "signal:1", handled: true });

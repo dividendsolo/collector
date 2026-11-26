@@ -1040,12 +1040,14 @@ keeps sending the same messages for now.
 - The page (`components/inbox.tsx`) is `#/inbox`: the unhandled rows, a **Handled** button on each, then the handled
   rows dimmed under a full-width **Handled** row of the same table (the Briefs page's Archived row). The button on a
   handled row is **Undo**, which puts the row back; the sidebar's Inbox link carries the unhandled count as a number.
-  The Inbox wears the tray icon and the Briefs link wears the brief icon (the two read apart at a glance).
-- The writers live where the senders live, not here: every Signal message James gets leaves by `hermes send -t
-  signal` (the agents by their own SOUL rule, the jobs and the scripts the same way), and each sender appends its
-  line beside that call. That work is agent-stack's — `deploy-watch.py`, `hermes-signal-profiles.sh` and the cron
-  prompts — and it is agent-stack#547, which names every sender and the append that goes next to it. Until it lands,
-  the Inbox reads empty.
+  The Inbox wears the tray icon, the Briefs link the doc icon and Proposals the brief icon, so every rail icon is
+  its own. At 600px and narrower each row stacks (source, message, then the time and the button on one line), so
+  nothing needs a sideways scroll on a phone. The phone may mark a row Handled, the way opening a brief marks it read.
+  `inbox.json` drops a Handled key once a machine that was read no longer holds that row.
+- The writer lives in agent-stack, not here: `vps/bin/signal-send` appends the line, then runs `hermes send -t
+  signal` (agent-stack#547, PR #596). Every sender goes through it: `deploy-watch.py`, `gateway-watch.py`, the
+  agents' SOUL rule (`hermes-signal-profiles.sh`) and ezio's `correct-weekly` cron. A sender that may retry passes a
+  stable `--id`, so a retry adds no second row.
 - `tests/inbox.test.ts` and `tests/inbox.driver.py` drive the real `collect.py` on a throwaway home, and hold the
   page's own test: one line is one unhandled row, and Handled moves it out of unhandled.
 
@@ -1176,9 +1178,10 @@ hiding a button alone is not enough:
 
 `refusePhone` answers `403` and `this action stays on the Mac`. The reads stay open to the phone, `GET /api/debug-fix`
 too (the Dashboard polls it for the Triage pill), and so does `POST /api/briefs` with only `read`: opening a brief
-marks it read, on the phone as on the Mac. `lib/phone.ts` names the two sides (`mac`, `phone`) and is client-safe;
+marks it read, on the phone as on the Mac. `POST /api/inbox` (Handled and Undo) is the Inbox's read, and stays open
+to the phone too. `lib/phone.ts` names the two sides (`mac`, `phone`) and is client-safe;
 each component that draws a Mac-only button asks `useSide()`. `tests/request-guard.test.ts` holds every write route
-to `refusePhone`, except `card-move`, which checks the phone itself.
+to `refusePhone`, except `card-move`, which checks the phone itself, and `inbox`.
 
 **Changing a card's status or priority** is `POST /api/card-move` (`lib/card-move.ts` holds the check): a status from
 the agent stack's list, a priority of `none`/`P0`/`P1`/`P2`, or both, run through `~/.local/bin/status set` and
