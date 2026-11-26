@@ -437,6 +437,14 @@ repo picker's Save writes (each repo keeping the stage it already had, so choosi
 plain list of `owner/repo` strings a config may already hold — `projectRepos` and `projectStage` read either, so an
 older config.json loses nothing. `lib/server/projects.ts` puts each project's `stage` on its row for the page.
 
+The Save never starts from a guess (collector#291). `config()` answers `{}` (or its last good copy) for a file that
+does not parse, which is right for a read and wrong for a write: a Save on that `{}` once could replace the machines,
+jobs and board ids with the projects alone. So `saveProjects` reads through `configToWrite`, which throws a
+`ConfigFileError` naming the file when `config.json` cannot be read, does not parse or is not an object (only a
+missing file reads as `{}`); `POST /api/projects` answers it as a 409 with that `why`, the picker shows it and stays
+open, and the file stays byte for byte. `writeConfig` writes a temp file beside it and renames it into place, the way
+the proposals and briefs files are written. `tests/projects-save.test.ts` holds it.
+
 The renewal row reads whole local calendar days (`renewalDays` in `lib/server/warnings.ts`, counted in
 `RENEWS_WARN_DAYS`, 7, at local noon so an hour of daylight saving never shifts the day): a renewal 3 days out makes
 the row, one 30 days out does not, and a past date is not a renewal still to come. Only an active subscription warns,

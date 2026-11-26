@@ -69,6 +69,7 @@ function Picker({ onClose }: { onClose: () => void }) {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
   const box = useRef<HTMLElement>(null);
   const search = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -97,13 +98,16 @@ function Picker({ onClose }: { onClose: () => void }) {
     setSaving(true);
     try {
       const list = reposToSave(chosen);
-      const d = await (
-        await fetch("/api/projects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ repos: list }),
-        })
-      ).json();
+      const r = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repos: list }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setRefused(d.why || `HTTP ${r.status}`);
+        return;
+      }
       mutate("/api/projects", d, { revalidate: false });
       onClose();
     } finally {
@@ -133,6 +137,11 @@ function Picker({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </PanelHead>
+      {refused ? (
+        <p className="err" role="alert">
+          Not saved: {refused}
+        </p>
+      ) : null}
       <ul className="picks">
         {error ? (
           <li className="err">Could not read repos: {error}</li>
