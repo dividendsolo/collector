@@ -2552,7 +2552,15 @@
   .briefs-panel .btn,
   .briefs-panel .mono,
   .briefs-panel h2,
-  .briefs-panel .count {
+  .briefs-panel .count,
+  .inbox-panel,
+  .inbox-panel th,
+  .inbox-panel td,
+  .inbox-panel .sub,
+  .inbox-panel .btn,
+  .inbox-panel .mono,
+  .inbox-panel h2,
+  .inbox-panel .count {
     font-size: 16px;
   }
   .brief-panel {
@@ -2579,6 +2587,58 @@
   }
   .briefs tr.read td {
     opacity: 0.6;
+  }
+  table.inbox td.from {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.inbox tr.unread td.wide {
+    font-weight: 600;
+  }
+  table.inbox tr.handled td {
+    opacity: 0.6;
+  }
+  table.inbox td.actions {
+    text-align: right;
+  }
+  table.inbox td.actions .btn {
+    padding: 3px 12px;
+  }
+  @media (max-width: 600px) {
+    table.inbox thead {
+      display: none;
+    }
+    table.inbox,
+    table.inbox tbody {
+      display: block;
+    }
+    table.inbox tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+    table.inbox td {
+      grid-column: 1 / -1;
+      border-bottom: 0;
+    }
+    table.inbox td.from {
+      max-width: none;
+      padding-bottom: 0;
+    }
+    table.inbox td.wide {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    table.inbox tr.row td.mono {
+      grid-column: 1;
+      padding-top: 0;
+    }
+    table.inbox tr.row td.actions {
+      grid-column: 2;
+      padding-top: 0;
+    }
   }
   .section-head {
     padding: 0;

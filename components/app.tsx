@@ -14,6 +14,7 @@ import { CronPage, JobPage } from "./cron";
 import { Dashboard, useWaiting } from "./dashboard";
 import { LiveProvider, useLive } from "./data";
 import { FlowPage } from "./flow";
+import { InboxPage, useInbox } from "./inbox";
 import { JourneyPage } from "./journey";
 import { useJump } from "./jump";
 import { NetworkPage } from "./network";
@@ -25,9 +26,10 @@ import { SideProvider, useSide } from "./side";
 import { Toasts } from "./toasts";
 import { Icon, type IconName, Sprite } from "./ui";
 
-const NAV: { page: string; href: string; icon: IconName; label: string; tag?: string; sep?: boolean }[] = [
+export const NAV: { page: string; href: string; icon: IconName; label: string; tag?: string; sep?: boolean }[] = [
   { page: "dashboard", href: "#/", icon: "dash", label: "Dashboard", tag: "attention" },
-  { page: "briefs", href: "#/briefs", icon: "inbox", label: "Briefs", tag: "briefs" },
+  { page: "briefs", href: "#/briefs", icon: "doc", label: "Briefs", tag: "briefs" },
+  { page: "inbox", href: "#/inbox", icon: "inbox", label: "Inbox", tag: "inbox" },
   { page: "agents", href: "#/agents", icon: "bot", label: "Agents", tag: "running" },
   { page: "work", href: "#/work", icon: "list", label: "Work", tag: "work" },
   { page: "cron", href: "#/cron", icon: "clock", label: "Cron Jobs", tag: "cron" },
@@ -43,6 +45,7 @@ const NAV: { page: string; href: string; icon: IconName; label: string; tag?: st
 const PAGES = new Set([
   "dashboard",
   "briefs",
+  "inbox",
   "agents",
   "work",
   "closed",
@@ -140,6 +143,7 @@ function useTags(): Record<string, Tag> {
   const vendors = useVendors();
   const acks = useAcks();
   const { data: briefs } = useBriefs();
+  const { data: inbox } = useInbox();
   const failing = state
     ? failingJobs(
         state.machines.flatMap((m: any) => m.jobs || []),
@@ -151,6 +155,7 @@ function useTags(): Record<string, Tag> {
   return {
     attention: attentionTag(state?.warnings || [], waiting?.list || [], acks, briefs?.inbox || []),
     briefs: briefsTag(briefs?.inbox?.length ?? 0),
+    inbox: briefsTag(inbox?.unhandled ?? 0),
     running: {
       text: running?.length ? String(running.length) : "",
       hot: false,
@@ -248,6 +253,8 @@ function Page({ r }: { r: ReturnType<typeof route> }) {
       return r.card ? <JourneyPage key={r.card.join("/")} repo={r.card[0]} number={r.card[1]} /> : null;
     case "briefs":
       return <BriefsPage />;
+    case "inbox":
+      return <InboxPage />;
     case "brief":
       return r.brief ? <BriefPage key={r.brief.join("/")} machine={r.brief[0]} file={r.brief[1]} /> : null;
     case "agents":

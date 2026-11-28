@@ -116,7 +116,7 @@ export function BriefsPage() {
   return (
     <div className="page">
       <section className="panel briefs-panel">
-        <PanelHead icon="inbox">
+        <PanelHead icon="doc">
           <Count n={inbox.length} title={`${inbox.length} in the inbox`} />
           <span className="sub">in the inbox</span>
         </PanelHead>
@@ -200,7 +200,7 @@ export function BriefPage({ machine, file }: { machine: string; file: string }) 
   return (
     <div className="page">
       <section className="panel briefs-panel brief-panel">
-        <PanelHead icon="inbox" title={head?.brief || "Brief"}>
+        <PanelHead icon="doc" title={head?.brief || "Brief"}>
           <span className="sub">{head ? `${head.machine} · ${day(head.sent_at)}` : ""}</span>
           <div className="tools">
             <a className="btn ghost back" href="#/briefs" title="Back to the inbox (Esc)">

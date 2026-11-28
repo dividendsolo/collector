@@ -8,6 +8,7 @@ export const FALLBACKS = path.join(ROOT, "fallbacks.py");
 export const CONFIG_PATH = process.env.COLLECTOR_CONFIG || path.join(ROOT, "config.json");
 export const PROPOSALS_PATH = path.join(path.dirname(CONFIG_PATH), "proposals.json");
 export const BRIEFS_PATH = path.join(path.dirname(CONFIG_PATH), "briefs.json");
+export const INBOX_PATH = path.join(path.dirname(CONFIG_PATH), "inbox.json");
 export const ENV_PATH = path.join(ROOT, ".env");
 export const HERMES_HOME = path.join(HOME, ".hermes");
 
