@@ -1,7 +1,7 @@
 import { webUrl } from "../links";
 import { billing } from "./billing";
 import { swr } from "./cache";
-import { accountsOf, config, projectRepos, projectStage, writeConfig } from "./config";
+import { accountsOf, config, configToWrite, projectRepos, projectStage, writeConfig } from "./config";
 import { datafast } from "./datafast";
 import { envFile } from "./env";
 import { ENV_PATH } from "./paths";
@@ -134,7 +134,7 @@ export async function projects(force = false) {
 }
 
 export function saveProjects(repos: unknown[]) {
-  const cfg = config();
+  const cfg = configToWrite();
   const before = cfg.projects;
   const kept = (repo: string) => {
     const entry = before && !Array.isArray(before) ? before[repo] : undefined;

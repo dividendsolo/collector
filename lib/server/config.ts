@@ -195,8 +195,32 @@ export function config(): Config {
   return cached.cfg;
 }
 
+export class ConfigFileError extends Error {}
+
+export function configToWrite(): Config {
+  let text: string;
+  try {
+    text = fs.readFileSync(CONFIG_PATH, "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw new ConfigFileError(`${CONFIG_PATH} could not be read (${(e as Error).message}); nothing was written`);
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (e) {
+    throw new ConfigFileError(
+      `${CONFIG_PATH} does not parse as JSON (${(e as Error).message}); fix it by hand, nothing was written`,
+    );
+  }
+  if (!object(raw)) throw new ConfigFileError(`${CONFIG_PATH} is not an object; fix it by hand, nothing was written`);
+  return raw as Config;
+}
+
 export function writeConfig(cfg: Config) {
-  fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(cfg, null, 2)}\n`);
+  const tmp = `${CONFIG_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(cfg, null, 2)}\n`);
+  fs.renameSync(tmp, CONFIG_PATH);
   cached = null;
 }
 

@@ -71,6 +71,45 @@ describe("saveProjects", () => {
     expect(stamp(REAL_CONFIG)).toBe(realBefore);
   });
 
+  it("refuses a config.json that does not parse, naming the file, and leaves it byte for byte", () => {
+    const broken = '{\n  "machines": [{ "name": "laptop" }],\n  "board": { "project_id": "PVT_example" },\n}\n';
+    fs.writeFileSync(TEST_CONFIG, broken);
+    expect(() => saveProjects(["acme/a"])).toThrow(TEST_CONFIG);
+    expect(fs.readFileSync(TEST_CONFIG, "utf8")).toBe(broken);
+  });
+
+  it("refuses a config.json that is not an object", () => {
+    fs.writeFileSync(TEST_CONFIG, '["acme/a"]\n');
+    expect(() => saveProjects(["acme/b"])).toThrow(TEST_CONFIG);
+    expect(fs.readFileSync(TEST_CONFIG, "utf8")).toBe('["acme/a"]\n');
+  });
+
+  it("answers the page's Save with a 409 whose why names the file, and writes nothing", async () => {
+    const broken = '{ "machines": [], }\n';
+    fs.writeFileSync(TEST_CONFIG, broken);
+    const { POST } = await import("@/app/api/projects/route");
+
+    const res = await POST(
+      new Request("http://127.0.0.1:4000/api/projects", {
+        method: "POST",
+        headers: { host: "127.0.0.1:4000", "content-type": "application/json", "sec-fetch-site": "same-origin" },
+        body: JSON.stringify({ repos: ["acme/a"] }),
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).why).toContain(TEST_CONFIG);
+    expect(fs.readFileSync(TEST_CONFIG, "utf8")).toBe(broken);
+  });
+
+  it("starts a config.json that is not there yet, and leaves no temp file beside it", () => {
+    fs.rmSync(TEST_CONFIG, { force: true });
+
+    expect(saveProjects(["acme/a"])).toEqual(["acme/a"]);
+    expect(JSON.parse(fs.readFileSync(TEST_CONFIG, "utf8"))).toEqual({ projects: { "acme/a": {} } });
+    expect(fs.readdirSync(dir)).toEqual(["config.json"]);
+  });
+
   it("keeps the stage a repo already had, so choosing repos never drops one", () => {
     fs.writeFileSync(
       TEST_CONFIG,

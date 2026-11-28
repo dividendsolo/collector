@@ -1,3 +1,4 @@
+import { ConfigFileError } from "@/lib/server/config";
 import { guard, refusePhone } from "@/lib/server/guard";
 import { projects, saveProjects } from "@/lib/server/projects";
 import { json } from "@/lib/server/respond";
@@ -16,6 +17,11 @@ export async function POST(req: Request) {
     return new Response("Bad request", { status: 400 });
   }
   if (!Array.isArray(repos)) return new Response("Bad request", { status: 400 });
-  saveProjects(repos);
+  try {
+    saveProjects(repos);
+  } catch (e) {
+    if (e instanceof ConfigFileError) return json({ why: e.message }, 409);
+    throw e;
+  }
   return json(await projects(true));
 }
